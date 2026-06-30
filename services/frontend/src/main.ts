@@ -66,6 +66,10 @@ export function startGame() {
 }
 
 // Inicializar y reescalar al cargar la página
+if ((window as any)._resizeGameArea) {
+  window.removeEventListener('resize', (window as any)._resizeGameArea);
+}
+(window as any)._resizeGameArea = resizeGameArea;
 window.addEventListener('resize', resizeGameArea);
 resizeGameArea();
 
