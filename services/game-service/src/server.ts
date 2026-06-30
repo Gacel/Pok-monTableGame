@@ -86,16 +86,12 @@ async function loadPokemonData(name: string): Promise<Pokemon> {
 async function initPokemon() {
   const p1Base = await loadPokemonData('charmander');
   const p2Base = await loadPokemonData('squirtle');
-  const p3Base = await loadPokemonData('bulbasaur');
 
   const p1: Pokemon = { ...p1Base, id: 'p1', playerId: 'player1' };
-  // Swap squirtle and bulbasaur to match previous logic (p2=bulba, p3=squirtle)
-  const p2: Pokemon = { ...p3Base, id: 'p2', playerId: 'player2' };
-  const p3: Pokemon = { ...p2Base, id: 'p3', playerId: 'player3' };
+  const p2: Pokemon = { ...p2Base, id: 'p2', playerId: 'player2' };
 
   board.setOccupant({ q: 0, r: 0 }, p1);
-  board.setOccupant({ q: 1, r: 1 }, p2);
-  board.setOccupant({ q: 2, r: 2 }, p3);
+  board.setOccupant({ q: 3, r: 3 }, p2); // Placed slightly further apart for testing
 }
 
 // Inicializar y luego arrancar servidor
@@ -123,6 +119,44 @@ app.post('/api/game/move', async (request, reply) => {
   }
 
   return { success: true, board: board.serialize() };
+});
+
+// --- Auth & Users API ---
+app.post('/api/auth/login', async (request, reply) => {
+  const { email, stytch_token } = request.body as any;
+  // MOCK STYTCH LOGIN
+  const mockId = `usr_${Buffer.from(email || 'test@test.com').toString('base64').substring(0, 10)}`;
+  
+  const db = await getDb();
+  let user = await db.get('SELECT * FROM users WHERE id = ?', mockId);
+  if (!user) {
+    await db.run('INSERT INTO users (id, level, coins) VALUES (?, ?, ?)', [mockId, 1, 0]);
+    user = await db.get('SELECT * FROM users WHERE id = ?', mockId);
+  }
+  
+  return { success: true, token: mockId, user };
+});
+
+app.post('/api/auth/register', async (request, reply) => {
+  const { token, username, avatarUrl } = request.body as any;
+  if (!token || !username || !avatarUrl) return reply.status(400).send({ error: 'Missing data' });
+  
+  const db = await getDb();
+  await db.run('UPDATE users SET username = ?, avatarUrl = ? WHERE id = ?', [username, avatarUrl, token]);
+  const user = await db.get('SELECT * FROM users WHERE id = ?', token);
+  return { success: true, user };
+});
+
+app.get('/api/users/me', async (request, reply) => {
+  const authHeader = request.headers.authorization;
+  if (!authHeader) return reply.status(401).send({ error: 'No token' });
+  
+  const token = authHeader.replace('Bearer ', '');
+  const db = await getDb();
+  const user = await db.get('SELECT * FROM users WHERE id = ?', token);
+  if (!user) return reply.status(404).send({ error: 'User not found' });
+  
+  return { success: true, user };
 });
 
 // Graceful shutdown

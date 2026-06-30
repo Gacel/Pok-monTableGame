@@ -23,12 +23,28 @@ export async function getDb(): Promise<Database> {
           movementPattern TEXT NOT NULL,
           raw_data TEXT
         );
+
+        CREATE TABLE IF NOT EXISTS users (
+          id TEXT PRIMARY KEY,
+          username TEXT,
+          avatarUrl TEXT,
+          level INTEGER DEFAULT 1,
+          coins INTEGER DEFAULT 0
+        );
       `);
       console.log('✅ SQLite database initialized at data/game.db');
       return db;
     });
   }
   return dbPromise;
+}
+
+export interface UserDBRecord {
+  id: string;
+  username: string | null;
+  avatarUrl: string | null;
+  level: number;
+  coins: number;
 }
 
 export interface PokemonDBRecord {
