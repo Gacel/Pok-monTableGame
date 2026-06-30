@@ -1,0 +1,21 @@
+{
+  "name": "@transcendence/hello",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Servicio temporal para validar el pipeline Docker/compose (C0.2). Se elimina al cerrar la Fase 0.",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "fastify": "^4.28.1"
+  },
+  "devDependencies": {
+    "tsx": "^4.16.2",
+    "typescript": "^5.5.3",
+    "@types/node": "^20.14.10"
+  }
+}

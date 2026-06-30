@@ -1,0 +1,27 @@
+# docker-compose.override.yml — ajustes SOLO para desarrollo local.
+# Compose lo carga automáticamente junto a docker-compose.yml.
+# Aquí: exposición de puertos al host y hot-reload por bind mount.
+
+services:
+  hello:
+    ports:
+      - '3000:3000'
+    volumes:
+      - ./services/_hello/src:/app/src
+    command: ['npm', 'run', 'dev']
+  game-service:
+    ports:
+      - '3001:3001'
+    volumes:
+      - ./services/game-service/src:/app/src
+      - ./services/game-service/data:/app/data
+    command: ['npm', 'run', 'dev']
+  frontend:
+    ports:
+      - '5173:5173'
+    volumes:
+      - ./services/frontend/src:/app/src
+      - ./services/frontend/public:/app/public
+      - ./services/frontend/index.html:/app/index.html
+      - ./services/frontend/vite.config.ts:/app/vite.config.ts
+    command: ['npm', 'run', 'dev', '--', '--host', '0.0.0.0']

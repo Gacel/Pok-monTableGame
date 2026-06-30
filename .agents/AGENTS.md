@@ -1,0 +1,3 @@
+# Reglas de Proyecto (Mandamientos)
+
+- **Docker Compose Volumes y Reinicios**: Cuando modifiques la estructura de volúmenes, puertos o variables de entorno en `docker-compose.yml` o `docker-compose.override.yml`, **SIEMPRE** debes recrear el contenedor utilizando `docker compose up -d <servicio>`. No utilices `docker compose restart`, ya que esto no aplica los cambios estructurales. Además, recuerda comprobar siempre que cualquier carpeta nueva (como `public/`, `assets/`, etc.) está correctamente montada en los volúmenes del override si quieres acceder a ella o que funcione el hot-reload en desarrollo.

@@ -1,0 +1,62 @@
+# docker-compose.yml — orquestación total (ver docs/LOCAL_DEV.md)
+# Fase 0: solo el servicio temporal `hello` para validar el pipeline.
+# A medida que avance el plan se añadirán: gateway, vault, auth-service, etc.
+
+services:
+  hello:
+    build:
+      context: ./services/_hello
+    container_name: transcendence-hello
+    environment:
+      PORT: 3000
+      LOG_LEVEL: info
+    networks:
+      - transcendence-net
+    restart: unless-stopped
+  gateway:
+    build:
+      context: ./gateway
+    container_name: transcendence-gateway
+    ports:
+      - "443:443"
+    depends_on:
+      - hello
+      - game-service
+      - frontend
+    networks:
+      - transcendence-net
+    restart: unless-stopped
+  game-service:
+    build:
+      context: ./services/game-service
+    container_name: transcendence-game-service
+    environment:
+      PORT: 3001
+      LOG_LEVEL: info
+    networks:
+      - transcendence-net
+    restart: unless-stopped
+  frontend:
+    build:
+      context: ./services/frontend
+    container_name: transcendence-frontend
+    networks:
+      - transcendence-net
+    restart: unless-stopped
+
+networks:
+  transcendence-net:
+    name: transcendence-net
+    driver: bridge
+
+# Volúmenes nombrados (uno por BD SQLite / dato persistente).
+# Se irán usando conforme se añadan servicios con estado.
+volumes:
+  auth-data:
+  user-data:
+  game-data:
+  status-data:
+  mail-data:
+  vault-data:
+  redis-data:
+  rabbitmq-data:
