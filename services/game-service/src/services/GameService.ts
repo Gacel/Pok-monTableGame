@@ -39,6 +39,10 @@ export interface MatchStateDTO {
   resources: Record<string, PlayerResources>;
   log: string[];
   combat: CombatState | null;
+  /** Alianzas 2v2 ([[p1,p3],[p2,p4]]); null en todos contra todos. */
+  alliances: string[][] | null;
+  /** Jugadores ya eliminados (sin Pokémon o que abandonaron). */
+  eliminated: string[];
 }
 
 export interface PlayResult {
@@ -72,13 +76,16 @@ export class GameService {
     private winner: string | null,
     private resources: Record<string, PlayerResources>,
     private log: string[],
-    private combat: CombatState | null = null
+    private combat: CombatState | null = null,
+    private alliances: string[][] | null = null,
+    private eliminated: string[] = []
   ) {}
 
   static create(
     id: string,
     board: Board,
-    placements: { hex: Hex; pokemon: Pokemon }[]
+    placements: { hex: Hex; pokemon: Pokemon }[],
+    alliances: string[][] | null = null
   ): GameService {
     const players: string[] = [];
     const resources: Record<string, PlayerResources> = {};
@@ -89,10 +96,27 @@ export class GameService {
         resources[pokemon.playerId] = emptyResources();
       }
     }
-    return new GameService(id, board, players, players[0]!, 1, 'active', null, resources, [
-      '¡Comienza la partida!',
-    ]);
+    return new GameService(
+      id,
+      board,
+      players,
+      players[0]!,
+      1,
+      'active',
+      null,
+      resources,
+      ['¡Comienza la partida!'],
+      null,
+      alliances
+    );
   }
+
+  /** Aliados en 2v2 (incluye a uno mismo); en FFA cada jugador va solo. */
+  private sameTeam = (a: string, b: string): boolean => {
+    if (a === b) return true;
+    if (!this.alliances) return false;
+    return this.alliances.some((team) => team.includes(a) && team.includes(b));
+  };
 
   getStateDTO(): MatchStateDTO {
     return {
@@ -106,6 +130,8 @@ export class GameService {
       resources: this.resources,
       log: this.log.slice(-30),
       combat: this.combat,
+      alliances: this.alliances,
+      eliminated: this.eliminated,
     };
   }
 
@@ -113,7 +139,7 @@ export class GameService {
     if (this.status !== 'active') return { moves: [], attacks: [] };
     const occ = this.board.getOccupant(hex);
     if (occ && occ.hasActed) return { moves: [], attacks: [] };
-    return getMoveOptions(hex, this.board);
+    return getMoveOptions(hex, this.board, this.sameTeam);
   }
 
   // ---------------------------------------------------------------- movimiento
@@ -138,7 +164,7 @@ export class GameService {
       return { ok: false, error: 'Esa pieza ya ha actuado en este turno', state: this.getStateDTO() };
     }
 
-    const opts = getMoveOptions(from, this.board);
+    const opts = getMoveOptions(from, this.board, this.sameTeam);
     const isMove = opts.moves.some((h) => hexEqual(h, to));
     const isAttack = opts.attacks.some((h) => hexEqual(h, to));
 
@@ -326,6 +352,11 @@ export class GameService {
     this.combat = null;
     this.status = 'active';
     this.checkWinCondition();
+    // Si el eliminado era el jugador de turno (p.ej. atacante que pierde su
+    // último Pokémon), el turno pasa al siguiente vivo.
+    if (this.status === 'active' && this.eliminated.includes(this.currentPlayer)) {
+      this.switchPlayer();
+    }
   }
 
   // --------------------------------------------------------------------- turnos
@@ -357,11 +388,27 @@ export class GameService {
       return { ok: false, error: 'La partida ya ha terminado', state: this.getStateDTO() };
     }
     const loser = playerId ?? this.currentPlayer;
-    this.status = 'finished';
-    const remaining = this.players.filter((x) => x !== loser);
-    this.winner = remaining[0] ?? null;
+    if (!this.players.includes(loser) || this.eliminated.includes(loser)) {
+      return { ok: false, error: 'Ese jugador no está en la partida', state: this.getStateDTO() };
+    }
+
+    // Si hay combate en curso se cancela: ambos Pokémon vuelven al tablero
+    // con su HP actual antes de retirar las piezas del que abandona.
+    if (this.combat) {
+      this.board.setOccupant(this.combat.attackerHex, { ...this.combat.attacker, hasActed: true });
+      this.board.setOccupant(this.combat.defenderHex, { ...this.combat.defender });
+      this.combat = null;
+      this.status = 'active';
+    }
+
+    // Abandonar = eliminación: se retiran todas sus piezas y la partida sigue
+    // para el resto (con 2 jugadores esto acaba la partida directamente).
+    for (const tile of this.board.tiles.values()) {
+      if (tile.occupant?.playerId === loser) this.board.setOccupant(tile.hex, null);
+    }
     this.log.push(`🏳️ ${loser} ha abandonado la partida.`);
-    this.log.push(`🏆 ${this.winner} gana por abandono.`);
+    this.checkWinCondition();
+    if (this.status === 'active' && this.currentPlayer === loser) this.switchPlayer();
     return { ok: true, state: this.getStateDTO() };
   }
 
@@ -409,19 +456,40 @@ export class GameService {
   }
 
   private checkWinCondition(): void {
+    // Eliminación: quedarse sin Pokémon te saca de la partida, pero esta sigue
+    // hasta que solo sobreviva un jugador (FFA) o un equipo (2v2).
     for (const p of this.players) {
-      if (this.countPokemon(p) === 0) {
-        this.status = 'finished';
-        this.winner = this.players.find((x) => x !== p) ?? null;
-        this.log.push(`🏆 ${this.winner} gana la partida.`);
-        return;
+      if (!this.eliminated.includes(p) && this.countPokemon(p) === 0) {
+        this.eliminated.push(p);
+        this.log.push(`💀 ${p} ha sido eliminado.`);
       }
+    }
+
+    const alive = this.players.filter((p) => !this.eliminated.includes(p));
+    if (alive.length === 0) {
+      this.status = 'finished';
+      this.winner = null;
+      this.log.push('🏁 La partida termina sin supervivientes.');
+      return;
+    }
+    const first = alive[0]!;
+    if (alive.every((p) => this.sameTeam(first, p))) {
+      this.status = 'finished';
+      this.winner = alive.join(' & ');
+      this.log.push(`🏆 ${this.winner} gana la partida.`);
     }
   }
 
   private switchPlayer(): void {
-    const idx = this.players.indexOf(this.currentPlayer);
-    this.currentPlayer = this.players[(idx + 1) % this.players.length]!;
+    let idx = this.players.indexOf(this.currentPlayer);
+    for (let i = 0; i < this.players.length; i++) {
+      idx = (idx + 1) % this.players.length;
+      const next = this.players[idx]!;
+      if (!this.eliminated.includes(next)) {
+        this.currentPlayer = next;
+        break;
+      }
+    }
     this.turn += 1;
   }
 
@@ -438,6 +506,8 @@ export class GameService {
       resources: this.resources,
       log: this.log,
       combat: this.combat,
+      alliances: this.alliances,
+      eliminated: this.eliminated,
     });
   }
 
@@ -454,7 +524,9 @@ export class GameService {
       d.winner,
       d.resources,
       d.log ?? [],
-      d.combat ?? null
+      d.combat ?? null,
+      d.alliances ?? null,
+      d.eliminated ?? []
     );
   }
 

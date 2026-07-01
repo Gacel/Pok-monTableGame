@@ -33,8 +33,13 @@ export interface MoveOptions {
  * - Los movimientos a casilla vacía respetan `canEnter` (p.ej. FIRE no entra a agua).
  * - Un enemigo alcanzable es un objetivo de ATAQUE (inicia combate), no un movimiento.
  * - Un aliado bloquea (ni movimiento ni ataque).
+ * - `sameTeam` define quién es aliado (modo 2v2); por defecto solo uno mismo.
  */
-export function getMoveOptions(hex: Hex, board: Board): MoveOptions {
+export function getMoveOptions(
+  hex: Hex,
+  board: Board,
+  sameTeam: (a: string, b: string) => boolean = (a, b) => a === b
+): MoveOptions {
   const pokemon = board.getOccupant(hex);
   if (!pokemon) return { moves: [], attacks: [] };
 
@@ -48,7 +53,7 @@ export function getMoveOptions(hex: Hex, board: Board): MoveOptions {
     if (!tile) return 'stop'; // fuera del tablero
     const key = `${target.q},${target.r}`;
     if (tile.occupant) {
-      if (tile.occupant.playerId !== pokemon.playerId) {
+      if (!sameTeam(tile.occupant.playerId, pokemon.playerId)) {
         if (!attackSet.has(key)) {
           attackSet.add(key);
           attacks.push(target);
@@ -122,7 +127,7 @@ export function getMoveOptions(hex: Hex, board: Board): MoveOptions {
         if (!nextTile || nextTile.biome !== 'WATER') continue; // solo dentro de agua
 
         if (nextTile.occupant) {
-           if (nextTile.occupant.playerId !== pokemon.playerId) {
+           if (!sameTeam(nextTile.occupant.playerId, pokemon.playerId)) {
              if (!attackSet.has(nextKey)) {
                attackSet.add(nextKey);
                attacks.push(nextHex);
