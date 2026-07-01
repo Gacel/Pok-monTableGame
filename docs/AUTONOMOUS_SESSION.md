@@ -124,4 +124,17 @@
 - **Verificación (Docker):** `tsc --noEmit` del frontend **limpio**.
 - **Commit:** `feat(frontend): authoritative-state UX (turns, move hints, combat, resources)`
 
+### F8 — Fix build Docker (.dockerignore) ✅
+- **Qué:** `.dockerignore` en `frontend` y `game-service` (excluye `node_modules`,
+  `dist`, `.env`). Sin ellos, `COPY . .` fallaba al copiar symlinks de `node_modules/.bin`.
+- **Verificación:** `docker compose up --build` levanta el stack completo; se comprobó
+  vía HTTPS que el gateway enruta a `game-service` y que PokeAPI carga (charmander).
+- **Commit:** `fix(docker): add .dockerignore to frontend and game-service`
+
+### F9 — Tests de integración de GameService ✅
+- **Qué:** `test/gameService.test.ts` cubre turnos, validación (turno/propiedad/origen),
+  recursos deterministas, combate con victoria y (de)serialización del estado.
+- **Verificación:** `vitest` → **22/22 tests OK**; `tsc --noEmit` limpio.
+- **Commit:** `test(game): GameService integration (turns, combat, resources, persistence)`
+
 <!-- Las siguientes entradas se añaden a medida que se completan. -->
