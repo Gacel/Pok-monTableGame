@@ -85,7 +85,7 @@ export class BoardView {
     const z = -x - y;
     let rx = Math.round(x);
     let ry = Math.round(y);
-    let rz = Math.round(z);
+    const rz = Math.round(z);
     const xDiff = Math.abs(rx - x);
     const yDiff = Math.abs(ry - y);
     const zDiff = Math.abs(rz - z);
