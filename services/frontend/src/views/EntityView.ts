@@ -15,7 +15,15 @@ export class EntityView {
 
   public render() {
     if (!this.entitiesLayer) return;
-    
+
+    // Durante el combate se muestra la escena de lucha (overlay): ocultamos los
+    // sprites del tablero, que si no se colarían por encima (z-index dinámico alto).
+    if (this.state.match?.status === 'combat') {
+      this.entitiesLayer.style.display = 'none';
+      return;
+    }
+    this.entitiesLayer.style.display = '';
+
     const sortedTiles = [...this.state.currentTiles].sort((a, b) => {
       const pA = this.boardView.hexToPixel(a.hex.q, a.hex.r);
       const pB = this.boardView.hexToPixel(b.hex.q, b.hex.r);
