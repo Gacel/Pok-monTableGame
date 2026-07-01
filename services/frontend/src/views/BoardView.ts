@@ -283,26 +283,55 @@ export class BoardView {
       this.drawHex(x, y, this.getBiomeTexture(tile.biome));
       this.drawBiomeTransitions(tile, x, y, tileMap);
 
-      if (this.state.selectedHex && this.state.selectedHex.q === tile.hex.q && this.state.selectedHex.r === tile.hex.r) {
-         this.ctx.save();
-         const points = [];
-         const isoScale = 0.55;
-         for (let i = 0; i < 6; i++) {
-           const angle_deg = 60 * i - 30;
-           const angle_rad = Math.PI / 180 * angle_deg;
-           points.push({ x: this.HEX_SIZE * Math.cos(angle_rad), y: this.HEX_SIZE * Math.sin(angle_rad) * isoScale });
-         }
-         this.ctx.beginPath();
-         this.ctx.moveTo(x + points[0].x, y + points[0].y);
-         for (let i = 1; i < 6; i++) this.ctx.lineTo(x + points[i].x, y + points[i].y);
-         this.ctx.closePath();
-         this.ctx.fillStyle = 'rgba(255, 255, 0, 0.4)';
-         this.ctx.fill();
-         this.ctx.lineWidth = 3;
-         this.ctx.strokeStyle = '#fff';
-         this.ctx.stroke();
-         this.ctx.restore();
+      const isSelected =
+        this.state.selectedHex &&
+        this.state.selectedHex.q === tile.hex.q &&
+        this.state.selectedHex.r === tile.hex.r;
+
+      if (isSelected) {
+        this.drawTileOverlay(x, y, 'rgba(255, 255, 0, 0.4)', '#fff', 3);
+      } else if (this.state.isAttackTarget(tile.hex)) {
+        this.drawTileOverlay(x, y, 'rgba(239, 68, 68, 0.45)', '#fca5a5', 2, true);
+      } else if (this.state.isMoveTarget(tile.hex)) {
+        this.drawTileOverlay(x, y, 'rgba(34, 197, 94, 0.35)', '#86efac', 2, true);
       }
+    }
+    this.ctx.restore();
+  }
+
+  /** Dibuja un overlay hexagonal (selección / movimiento / ataque). */
+  private drawTileOverlay(
+    x: number,
+    y: number,
+    fill: string,
+    stroke: string,
+    lineWidth: number,
+    dot = false
+  ): void {
+    const isoScale = 0.55;
+    const points: { x: number; y: number }[] = [];
+    for (let i = 0; i < 6; i++) {
+      const angle_rad = (Math.PI / 180) * (60 * i - 30);
+      points.push({
+        x: this.HEX_SIZE * Math.cos(angle_rad),
+        y: this.HEX_SIZE * Math.sin(angle_rad) * isoScale,
+      });
+    }
+    this.ctx.save();
+    this.ctx.beginPath();
+    this.ctx.moveTo(x + points[0].x, y + points[0].y);
+    for (let i = 1; i < 6; i++) this.ctx.lineTo(x + points[i].x, y + points[i].y);
+    this.ctx.closePath();
+    this.ctx.fillStyle = fill;
+    this.ctx.fill();
+    this.ctx.lineWidth = lineWidth;
+    this.ctx.strokeStyle = stroke;
+    this.ctx.stroke();
+    if (dot) {
+      this.ctx.beginPath();
+      this.ctx.arc(x, y, 5, 0, Math.PI * 2);
+      this.ctx.fillStyle = stroke;
+      this.ctx.fill();
     }
     this.ctx.restore();
   }

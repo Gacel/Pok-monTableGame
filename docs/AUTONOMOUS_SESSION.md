@@ -104,4 +104,24 @@
   `POST /api/game/reset` (además de `board` y `move` existentes).
 - **Commit:** `refactor(game): MVC layers + authoritative turns/combat/resources`
 
+### F7 — Overhaul de UX del frontend (consumo del estado autoritativo) ✅
+- **Qué:**
+  - **Tipado fuerte**: `Types.ts` con `Pokemon`, `Tile`, `MatchState`, `MoveOptions`
+    (se elimina `occupant: any`).
+  - `GameState` refleja el `MatchState` del servidor + opciones de movimiento y
+    helpers `isMoveTarget/isAttackTarget`.
+  - `GameController` reescrito: consume `GET /api/game/state`, resalta movimientos
+    legales pidiendo `GET /api/game/moves`, **gating por turno** (solo seleccionas la
+    pieza del jugador de turno), ejecuta `move`, muestra feedback de combate/errores
+    (toast) y reinicia partida.
+  - `BoardView`: resaltado de **movimientos** (verde) y **ataques** (rojo) + selección.
+  - `HUDView`: banner de turno con color por jugador, barras de HP con color según
+    vida, **panel de recursos** (🔥/💧/🌿), **log de eventos**, **overlay de victoria**
+    con revancha, y toasts.
+  - `index.html`: nuevos contenedores de HUD (banner, recursos, log, overlay, reset).
+- **Por qué:** era el objetivo explícito "mejorar la experiencia de usuario" y alinear
+  el cliente con el servidor autoritativo (turnos, combate, economía, victoria).
+- **Verificación (Docker):** `tsc --noEmit` del frontend **limpio**.
+- **Commit:** `feat(frontend): authoritative-state UX (turns, move hints, combat, resources)`
+
 <!-- Las siguientes entradas se añaden a medida que se completan. -->

@@ -22,30 +22,56 @@
         <div id="game-layer" class="absolute inset-0 z-10 hidden bg-black">
           <canvas id="game-canvas" width="1200" height="950" class="absolute inset-0 bg-gray-800 shadow-inner"></canvas>
           <div id="entities-layer" class="absolute inset-0 pointer-events-none"></div>
-    
+
           <div id="hud-container" class="absolute top-0 left-0 w-full p-4 flex justify-between items-start pointer-events-none z-50">
             <!-- Player 1 (Left) -->
             <div id="hud-p1" class="flex items-center gap-3 bg-gray-900 bg-opacity-80 p-2 rounded-lg border-2 border-gray-600 shadow-lg hidden">
               <img id="hud-p1-avatar" src="" class="w-16 h-16 object-contain bg-gray-800 rounded border border-gray-500 p-1" style="image-rendering: pixelated;" />
               <div class="flex flex-col">
                   <div class="text-xs text-yellow-400 mb-1 drop-shadow" style="font-family: 'Press Start 2P', monospace;" id="hud-p1-name">Player 1</div>
-                  <div class="w-48 h-5 bg-gray-700 rounded overflow-hidden border-2 border-gray-900 relative shadow-inner">
+                  <div class="w-48 h-6 bg-gray-700 rounded overflow-hidden border-2 border-gray-900 relative shadow-inner">
                     <div id="hud-p1-hp-bar" class="h-full bg-green-500 transition-all duration-300 w-full"></div>
-                    <div id="hud-p1-hp-text" class="absolute inset-0 flex items-center justify-center text-[10px] text-white drop-shadow-md" style="font-family: 'Press Start 2P', monospace;">100/100</div>
+                    <div id="hud-p1-hp-text" class="absolute inset-0 flex items-center justify-center text-[10px] leading-none pt-1 text-white drop-shadow-md" style="font-family: 'Press Start 2P', monospace;">100/100</div>
                   </div>
+                  <div id="hud-p1-res" class="mt-1 text-[8px] text-white flex gap-2" style="font-family: 'Press Start 2P', monospace;"></div>
               </div>
             </div>
-        
+
+            <!-- Turn banner (center) -->
+            <div id="turn-banner" class="hidden bg-black bg-opacity-70 border-2 border-yellow-400 rounded-lg px-4 py-2 text-center shadow-lg">
+              <div id="turn-player" class="text-[10px] text-yellow-400" style="font-family: 'Press Start 2P', monospace;">TURNO</div>
+              <div id="turn-number" class="text-[8px] text-gray-300 mt-1" style="font-family: 'Press Start 2P', monospace;">Turno 1</div>
+            </div>
+
             <!-- Player 2 (Right) -->
             <div id="hud-p2" class="flex items-center gap-3 bg-gray-900 bg-opacity-80 p-2 rounded-lg border-2 border-gray-600 shadow-lg hidden flex-row-reverse text-right">
               <img id="hud-p2-avatar" src="" class="w-16 h-16 object-contain bg-gray-800 rounded border border-gray-500 p-1" style="image-rendering: pixelated;" />
               <div class="flex flex-col items-end">
                   <div class="text-xs text-yellow-400 mb-1 drop-shadow" style="font-family: 'Press Start 2P', monospace;" id="hud-p2-name">Player 2</div>
-                  <div class="w-48 h-5 bg-gray-700 rounded overflow-hidden border-2 border-gray-900 relative shadow-inner flex justify-end">
+                  <div class="w-48 h-6 bg-gray-700 rounded overflow-hidden border-2 border-gray-900 relative shadow-inner flex justify-end">
                     <div id="hud-p2-hp-bar" class="h-full bg-green-500 transition-all duration-300 w-full"></div>
-                    <div id="hud-p2-hp-text" class="absolute inset-0 flex items-center justify-center text-[10px] text-white drop-shadow-md" style="font-family: 'Press Start 2P', monospace;">100/100</div>
+                    <div id="hud-p2-hp-text" class="absolute inset-0 flex items-center justify-center text-[10px] leading-none pt-1 text-white drop-shadow-md" style="font-family: 'Press Start 2P', monospace;">100/100</div>
                   </div>
+                  <div id="hud-p2-res" class="mt-1 text-[8px] text-white flex gap-2 justify-end" style="font-family: 'Press Start 2P', monospace;"></div>
               </div>
+            </div>
+          </div>
+
+          <!-- Event log (bottom-left) -->
+          <div id="event-log" class="absolute bottom-4 left-4 w-72 max-h-40 overflow-hidden bg-black bg-opacity-70 border-2 border-gray-600 rounded-lg p-2 text-[8px] text-gray-200 leading-relaxed pointer-events-none z-50" style="font-family: 'Press Start 2P', monospace;"></div>
+
+          <!-- Toast feedback (bottom-center) -->
+          <div id="toast" class="absolute bottom-6 left-1/2 -translate-x-1/2 hidden bg-red-700 border-2 border-red-300 text-white text-[10px] px-4 py-2 rounded-lg shadow-lg z-50" style="font-family: 'Press Start 2P', monospace;"></div>
+
+          <!-- Reset button (bottom-right) -->
+          <button id="btn-reset" class="absolute bottom-4 right-4 bg-gray-800 hover:bg-gray-700 text-white text-[8px] px-3 py-2 rounded border-b-4 border-gray-900 active:border-b-0 active:mt-1 z-50" style="font-family: 'Press Start 2P', monospace;">REINICIAR</button>
+
+          <!-- Win overlay -->
+          <div id="win-overlay" class="absolute inset-0 hidden items-center justify-center bg-black bg-opacity-80 z-[60]">
+            <div class="bg-blue-900 border-4 border-yellow-400 rounded-lg p-8 text-center shadow-2xl">
+              <div class="text-2xl text-yellow-400 mb-4" style="font-family: 'Press Start 2P', monospace; text-shadow: 2px 2px 0 #000;">¡VICTORIA!</div>
+              <div id="win-text" class="text-xs text-white mb-6" style="font-family: 'Press Start 2P', monospace;"></div>
+              <button id="btn-rematch" class="bg-green-600 hover:bg-green-500 text-white text-xs px-6 py-3 rounded border-b-4 border-green-800 active:border-b-0 active:mt-1" style="font-family: 'Press Start 2P', monospace;">REVANCHA</button>
             </div>
           </div>
         </div>
