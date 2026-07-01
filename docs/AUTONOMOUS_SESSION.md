@@ -162,4 +162,35 @@
 - **Verificación (Docker):** `tsc --noEmit` del frontend limpio.
 - **Commit:** `feat(frontend): live WSS state sync (WsClient)`
 
-<!-- Las siguientes entradas se añaden a medida que se completan. -->
+### F13 — Verificación de integración end-to-end ✅
+- **Qué:** `docker compose up --build` del stack completo y pruebas a través del gateway:
+  - HTTPS `/health` (→ hello) y `/api/game/state` (→ game-service) OK.
+  - **WSS a través del gateway** `wss://localhost/ws`: conecta y recibe el estado
+    inicial (`GATEWAY_WSS_OK`). Confirma terminación SSL + upgrade WSS + routing.
+- **Sin commit propio** (verificación); resultados anotados aquí.
+
+---
+
+## Resumen del estado al cierre de la sesión
+
+**Hecho y verificado (Docker):**
+- Seguridad: purga de API key del historial de la rama (rotación pendiente por el usuario).
+- Backend `game-service` en **MVC** limpio con SQLite (sqlite3): modelos, servicios,
+  controladores, rutas, `app`/`server`.
+- Reglas **autoritativas**: turnos, validación por patrón, combate por turnos,
+  modificadores de terreno, economía (Catan), condición de victoria, persistencia +
+  graceful shutdown.
+- **WSS** (sync de tablero + chat) con difusión autoritativa, enrutado por el gateway.
+- Frontend (TS + Tailwind, MVC): render del tablero, turnos, resaltado de
+  movimientos/ataques, panel de recursos, log, combate, victoria y **sync en vivo por WSS**.
+- 22 tests unitarios/integración verdes; typechecks limpios; `docker compose up` OK.
+
+**Pendiente (Fases 1/3/4 del plan) — no abordado esta noche:**
+- `auth-service` real (JWT/OAuth2/2FA), `user-service`, `pokeapi-proxy` + Redis,
+  `status-service`, `mail-service`, RabbitMQ, Vault, ModSecurity (WAF), IA, pruebas de carga.
+- El auth actual es **mock** (transición) en `game-service`: no usar en producción.
+
+**Acción requerida por el usuario:**
+1. 🔴 Rotar/revocar la Google API Key que estaba en `.agents/mcp.json` (ver F1.5).
+2. Revisar la rama `feat/overnight-improvements` y mergear a `main` si procede
+   (recordando que `main` local aún contiene el commit con el secreto).
