@@ -14,8 +14,14 @@
 export const SHARED_VERSION = '0.1.0';
 
 /** Biomas del tablero (lógica Catan). */
-export const BIOMES = ['fire', 'water', 'forest'] as const;
+export const BIOMES = ['fire', 'water', 'forest', 'sand', 'ice'] as const;
 export type Biome = (typeof BIOMES)[number];
+
+/** Tipos de Pokémon disponibles. */
+export const POKEMON_TYPES = [
+  'fire', 'water', 'grass', 'poison', 'flying', 'dragon', 'psychic', 'normal', 'electric', 'ice', 'fairy'
+] as const;
+export type PokemonType = (typeof POKEMON_TYPES)[number];
 
 /** Patrones de movimiento (lógica Ajedrez). */
 export const MOVEMENT_PATTERNS = ['flyer', 'tank', 'speedster'] as const;

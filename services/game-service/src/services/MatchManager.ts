@@ -1,34 +1,35 @@
 import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { Board, Pokemon, Tile } from '../engine/board.js';
 import { MapLoader, TiledMapData } from '../engine/mapLoader.js';
+import { generateEcosystem } from '../engine/mapGenerator.js';
+import { largestLandComponent, pickOppositeSpawns, pickCornerSpawns } from '../engine/spawns.js';
+import { hashStringToSeed } from '../engine/rng.js';
 import { GameService } from './GameService.js';
 import { PokemonService } from './PokemonService.js';
 import { PokemonTemplate } from '../models/PokemonModel.js';
 import { MatchModel } from '../models/MatchModel.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 const DEFAULT_MATCH_ID = 'default';
-const MAP_PATH = process.env.GAME_MAP_PATH ?? path.join(__dirname, '../../data/sample_map.json');
+/** Solo se usa si se define GAME_MAP_PATH (mapa Tiled manual, opt-in). */
+const MAP_PATH = process.env.GAME_MAP_PATH;
+/** Seed estable ⇒ mismo ecosistema en cada partida nueva; las guardadas no regeneran. */
+const MAP_SEED = process.env.GAME_MAP_SEED ?? 'transcendence-default';
+const MAP_RADIUS = Number(process.env.GAME_MAP_RADIUS ?? 20);
 const TEAM_SIZE = 3;
 
-/** Pool de 12 Pokémon para el draft (mezcla de tipos y patrones de movimiento). */
+/** Pool de Pokémon para el draft (mezcla de todos los tipos elementales y patrones). */
 export const ROSTER_NAMES = [
-  'charmander',
-  'charizard',
-  'vulpix',
-  'growlithe', // FIRE → FLYING
-  'squirtle',
-  'blastoise',
-  'psyduck',
-  'poliwag', // WATER → TANK
-  'bulbasaur',
-  'oddish',
-  'bellsprout',
-  'tangela', // GRASS → SPEEDSTER
+  'charmander', 'charizard', 'vulpix', 'growlithe', // FIRE
+  'squirtle', 'blastoise', 'psyduck', 'poliwag', // WATER
+  'bulbasaur', 'oddish', 'bellsprout', 'tangela', // GRASS
+  'ekans', 'zubat', // POISON
+  'pidgeot', 'aerodactyl', // FLYING
+  'dratini', 'dragonite', // DRAGON
+  'abra', 'mewtwo', // PSYCHIC
+  'snorlax', 'eevee', // NORMAL
+  'pikachu', 'jolteon', // ELECTRIC
+  'lapras', 'articuno', // ICE
+  'clefairy', 'jigglypuff', // FAIRY
 ];
 
 /**
@@ -57,17 +58,16 @@ export class MatchManager {
     return this.rosterCache;
   }
 
-  /** Colocaciones iniciales: los primeros N tiles para P1 y los últimos N para P2. */
+  /**
+   * Colocaciones iniciales: spawns en las esquinas de la mayor componente
+   * de tierra conectada (equipos alcanzables, ningún Pokémon nace en agua).
+   */
   private placements(
     board: Board,
-    team1: PokemonTemplate[],
-    team2: PokemonTemplate[]
+    teams: PokemonTemplate[][]
   ): { hex: Tile['hex']; pokemon: Pokemon }[] {
-    const tiles = Array.from(board.tiles.values()).sort(
-      (a, b) => a.hex.r - b.hex.r || a.hex.q - b.hex.q
-    );
-    const p1Tiles = tiles.slice(0, TEAM_SIZE);
-    const p2Tiles = tiles.slice(-TEAM_SIZE).reverse();
+    const component = largestLandComponent(board);
+    const hexClusters = pickCornerSpawns(board, component, TEAM_SIZE, teams.length);
 
     const build = (tpl: PokemonTemplate, playerId: string, i: number): Pokemon => ({
       ...tpl,
@@ -76,23 +76,33 @@ export class MatchManager {
       level: 1,
     });
 
-    return [
-      ...team1.map((tpl, i) => ({ hex: p1Tiles[i]!.hex, pokemon: build(tpl, 'player1', i) })),
-      ...team2.map((tpl, i) => ({ hex: p2Tiles[i]!.hex, pokemon: build(tpl, 'player2', i) })),
-    ];
+    const result: { hex: Tile['hex']; pokemon: Pokemon }[] = [];
+    teams.forEach((team, tIdx) => {
+      const playerId = `player${tIdx + 1}`;
+      const cluster = hexClusters[tIdx] ?? [];
+      team.forEach((tpl, i) => {
+        if (cluster[i]) {
+          result.push({ hex: cluster[i]!, pokemon: build(tpl, playerId, i) });
+        }
+      });
+    });
+
+    return result;
   }
 
   private async buildDefault(): Promise<GameService> {
     const board = this.loadBoard();
     const roster = await this.getRoster();
-    // Por defecto: P1 tres de fuego, P2 tres de agua/planta.
+    // Por defecto: 4 jugadores
     const team1 = roster.filter((p) => p.type === 'FIRE').slice(0, TEAM_SIZE);
-    const team2 = [...roster.filter((p) => p.type === 'WATER'), ...roster.filter((p) => p.type === 'GRASS')].slice(0, TEAM_SIZE);
-    return GameService.create(DEFAULT_MATCH_ID, board, this.placements(board, team1, team2));
+    const team2 = roster.filter((p) => p.type === 'WATER').slice(0, TEAM_SIZE);
+    const team3 = roster.filter((p) => p.type === 'GRASS').slice(0, TEAM_SIZE);
+    const team4 = [...roster.filter((p) => p.type === 'ELECTRIC'), ...roster.filter((p) => p.type === 'NORMAL')].slice(0, TEAM_SIZE);
+    return GameService.create(DEFAULT_MATCH_ID, board, this.placements(board, [team1, team2, team3, team4]));
   }
 
   /** Crea una partida a partir de los equipos elegidos en el draft. */
-  async startMatch(teams: { player1: string[]; player2: string[] }): Promise<GameService> {
+  async startMatch(teams: Record<string, string[]>): Promise<GameService> {
     const roster = await this.getRoster();
     const byName = new Map(roster.map((p) => [p.name, p]));
     const resolve = (names: string[]): PokemonTemplate[] =>
@@ -102,21 +112,35 @@ export class MatchManager {
         return tpl;
       });
 
-    const team1 = resolve(teams.player1);
-    const team2 = resolve(teams.player2);
+    const teamArrays: PokemonTemplate[][] = [];
+    for (let i = 1; i <= 4; i++) {
+      const names = teams[`player${i}`];
+      if (names && names.length > 0) {
+        teamArrays.push(resolve(names));
+      }
+    }
+    if (teamArrays.length < 2) {
+      throw new Error('Se necesitan al menos 2 equipos para iniciar la partida');
+    }
+
     const board = this.loadBoard();
-    this.match = GameService.create(DEFAULT_MATCH_ID, board, this.placements(board, team1, team2));
+    this.match = GameService.create(DEFAULT_MATCH_ID, board, this.placements(board, teamArrays));
     await this.persist();
     return this.match;
   }
 
   private loadBoard(): Board {
-    try {
-      const mapData = JSON.parse(fs.readFileSync(MAP_PATH, 'utf8')) as TiledMapData;
-      return MapLoader.loadTiledMap(mapData);
-    } catch {
-      return Board.generateBasic(4);
+    // Opt-in: mapa Tiled manual si se define GAME_MAP_PATH.
+    if (MAP_PATH) {
+      try {
+        const mapData = JSON.parse(fs.readFileSync(MAP_PATH, 'utf8')) as TiledMapData;
+        return MapLoader.loadTiledMap(mapData);
+      } catch {
+        // Si el Tiled indicado falla, caemos al ecosistema procedural.
+      }
     }
+    // Por defecto: ecosistema procedural grande y coherente (seed estable).
+    return generateEcosystem(hashStringToSeed(MAP_SEED), { radius: MAP_RADIUS });
   }
 
   get(): GameService {

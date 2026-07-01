@@ -23,8 +23,11 @@ describe('GameService · turnos y recursos', () => {
     // Movimiento legal adyacente a casilla vacía (1,0).
     const res = game.play('player1', { q: 0, r: 0 }, { q: 1, r: 0 });
     expect(res.ok).toBe(true);
-    s = res.state;
-    expect(s.currentPlayer).toBe('player2'); // cambió el turno
+    // El movimiento marca hasActed=true pero no cambia el turno.
+    expect(res.state.currentPlayer).toBe('player1');
+    game.endTurn('player1');
+    s = game.getStateDTO();
+    expect(s.currentPlayer).toBe('player2'); // cambió el turno al finalizar
     expect(s.turn).toBe(2);
     // (1,0) es WATER y (2,0) es GRASS en generateBasic → recursos deterministas.
     expect(s.resources['player1']?.WATER_CANDY).toBe(1);
@@ -158,8 +161,10 @@ describe('GameService · combate interactivo y victoria', () => {
     // Ambas piezas siguen en el tablero.
     expect(done.state.tiles.find((t) => t.hex.q === 0 && t.hex.r === 0)?.occupant).not.toBeNull();
     expect(done.state.tiles.find((t) => t.hex.q === 1 && t.hex.r === 0)?.occupant).not.toBeNull();
-    // El turno pasó al otro jugador.
-    expect(done.state.currentPlayer).toBe('player2');
+    // El turno no pasa automáticamente; pasamos turno manualmente.
+    expect(done.state.currentPlayer).toBe('player1');
+    game.endTurn('player1');
+    expect(game.getStateDTO().currentPlayer).toBe('player2');
   });
 
   it('serializa y deserializa el estado sin perder información', () => {

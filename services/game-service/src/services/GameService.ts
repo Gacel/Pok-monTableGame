@@ -2,6 +2,7 @@ import { Board, Biome, Pokemon, Tile } from '../engine/board.js';
 import { Hex, hexEqual } from '../engine/hex.js';
 import { getMoveOptions, MoveOptions } from '../engine/movement.js';
 import { computeDamage } from '../engine/combat.js';
+import { terrainDamage } from '../engine/environment.js';
 import { collectResources, PlayerResources } from '../engine/resources.js';
 
 export type MatchStatus = 'active' | 'combat' | 'finished';
@@ -47,8 +48,8 @@ export interface PlayResult {
 }
 
 const emptyResources = (): PlayerResources => ({ FIRE_CANDY: 0, WATER_CANDY: 0, GRASS_CANDY: 0 });
-const candyKey = (type: Biome): keyof PlayerResources =>
-  type === 'FIRE' ? 'FIRE_CANDY' : type === 'WATER' ? 'WATER_CANDY' : 'GRASS_CANDY';
+const candyKey = (type: string): keyof PlayerResources =>
+  type === 'FIRE' ? 'FIRE_CANDY' : type === 'WATER' || type === 'ICE' ? 'WATER_CANDY' : 'GRASS_CANDY';
 const nameOf = (p: Pokemon) => (p.name ?? p.id).toUpperCase();
 
 const HABILIDAD_MULT = 1.6; // daño de habilidad
@@ -110,6 +111,8 @@ export class GameService {
 
   getMoveOptions(hex: Hex): MoveOptions {
     if (this.status !== 'active') return { moves: [], attacks: [] };
+    const occ = this.board.getOccupant(hex);
+    if (occ && occ.hasActed) return { moves: [], attacks: [] };
     return getMoveOptions(hex, this.board);
   }
 
@@ -131,6 +134,9 @@ export class GameService {
     if (mover.playerId !== playerId) {
       return { ok: false, error: 'Esa pieza no es tuya', state: this.getStateDTO() };
     }
+    if (mover.hasActed) {
+      return { ok: false, error: 'Esa pieza ya ha actuado en este turno', state: this.getStateDTO() };
+    }
 
     const opts = getMoveOptions(from, this.board);
     const isMove = opts.moves.some((h) => hexEqual(h, to));
@@ -138,8 +144,9 @@ export class GameService {
 
     if (isMove) {
       this.board.moveOccupant(from, to);
+      const moved = this.board.getOccupant(to);
+      if (moved) moved.hasActed = true;
       this.log.push(`${nameOf(mover)} se mueve.`);
-      this.endTurn();
       return { ok: true, state: this.getStateDTO() };
     }
     if (isAttack) {
@@ -151,7 +158,7 @@ export class GameService {
 
   // ------------------------------------------------------------------- combate
   private initiateCombat(from: Hex, to: Hex): void {
-    const attacker = { ...this.board.getOccupant(from)! };
+    const attacker = { ...this.board.getOccupant(from)!, hasActed: true };
     const defender = { ...this.board.getOccupant(to)! };
     this.combat = {
       attackerId: attacker.id,
@@ -178,7 +185,7 @@ export class GameService {
     return this.board.getTile(hex)?.biome ?? 'GRASS';
   }
 
-  private spendCandies(playerId: string, amount: number, prefer: Biome): boolean {
+  private spendCandies(playerId: string, amount: number, prefer: string): boolean {
     const res = this.resources[playerId] ?? emptyResources();
     const total = res.FIRE_CANDY + res.WATER_CANDY + res.GRASS_CANDY;
     if (total < amount) return false;
@@ -202,25 +209,23 @@ export class GameService {
   /** Aplica una acción de combate para el Pokémon cuyo turno es. */
   combatAction(action: CombatAction): PlayResult {
     if (this.status !== 'combat' || !this.combat) {
-      return { ok: false, error: 'No hay combate activo', state: this.getStateDTO() };
-    }
-    if (this.combat.status === 'finished') {
-      return { ok: false, error: 'El combate ya está resuelto (continúa)', state: this.getStateDTO() };
+      return { ok: false, error: 'No hay combate en curso', state: this.getStateDTO() };
     }
     const c = this.combat;
-    const actorIsAttacker = c.turnActorId === c.attackerId;
-    const actor = actorIsAttacker ? c.attacker : c.defender;
-    const target = actorIsAttacker ? c.defender : c.attacker;
-    const actorHex = actorIsAttacker ? c.attackerHex : c.defenderHex;
-    const targetHex = actorIsAttacker ? c.defenderHex : c.attackerHex;
-    const actorTerrain = this.terrainOf(actorHex);
-    const targetTerrain = this.terrainOf(targetHex);
+    if (c.status !== 'active') {
+      return { ok: false, error: 'Fase de combate cerrada', state: this.getStateDTO() };
+    }
+    const actorId = c.turnActorId;
+    const actor = actorId === c.attackerId ? c.attacker : c.defender;
+    const target = actorId === c.attackerId ? c.defender : c.attacker;
+    const actorTerrain = this.terrainOf(actorId === c.attackerId ? c.attackerHex : c.defenderHex);
+    const targetTerrain = this.terrainOf(actorId === c.attackerId ? c.defenderHex : c.attackerHex);
 
     switch (action) {
       case 'ATACAR': {
         const dmg = computeDamage(actor, target, actorTerrain, targetTerrain);
         target.hp = Math.max(0, target.hp - dmg);
-        c.log.push(`${nameOf(actor)} ataca: ${dmg} de daño (${nameOf(target)}: ${target.hp}).`);
+        c.log.push(`${nameOf(actor)} ATACA: ${dmg} de daño (${nameOf(target)}: ${target.hp}).`);
         break;
       }
       case 'HABILIDAD': {
@@ -291,7 +296,7 @@ export class GameService {
       const attackerWon = c.winnerId === c.attackerId;
       this.board.setOccupant(c.attackerHex, null);
       if (attackerWon) {
-        this.board.setOccupant(c.defenderHex, { ...c.attacker });
+        this.board.setOccupant(c.defenderHex, { ...c.attacker, hasActed: true });
         this.log.push(`${nameOf(c.attacker)} vence y ocupa la casilla.`);
       } else {
         this.board.setOccupant(c.defenderHex, { ...c.defender });
@@ -299,7 +304,7 @@ export class GameService {
       }
     } else {
       // Huida: ambos sobreviven en sus casillas, con el HP actualizado.
-      this.board.setOccupant(c.attackerHex, { ...c.attacker });
+      this.board.setOccupant(c.attackerHex, { ...c.attacker, hasActed: true });
       this.board.setOccupant(c.defenderHex, { ...c.defender });
       this.log.push('El combate termina en huida.');
     }
@@ -307,13 +312,67 @@ export class GameService {
     this.combat = null;
     this.status = 'active';
     this.checkWinCondition();
-    this.endTurn();
   }
 
   // --------------------------------------------------------------------- turnos
-  private endTurn(): void {
+  public endTurn(playerId?: string): PlayResult {
+    if (this.status === 'finished') {
+      return { ok: false, error: 'La partida ha terminado', state: this.getStateDTO() };
+    }
+    if (this.status === 'combat') {
+      return { ok: false, error: 'Hay un combate en curso', state: this.getStateDTO() };
+    }
+    if (playerId && playerId !== this.currentPlayer) {
+      return { ok: false, error: 'No es tu turno', state: this.getStateDTO() };
+    }
+
+    for (const tile of this.board.tiles.values()) {
+      if (tile.occupant) {
+        tile.occupant.hasActed = false;
+      }
+    }
+
     this.collectTurnResources();
+    this.applyLavaDamage();
     if (this.status === 'active') this.switchPlayer();
+    return { ok: true, state: this.getStateDTO() };
+  }
+
+  public abandon(playerId?: string): PlayResult {
+    if (this.status === 'finished') {
+      return { ok: false, error: 'La partida ya ha terminado', state: this.getStateDTO() };
+    }
+    const loser = playerId ?? this.currentPlayer;
+    this.status = 'finished';
+    const remaining = this.players.filter((x) => x !== loser);
+    this.winner = remaining[0] ?? null;
+    this.log.push(`🏳️ ${loser} ha abandonado la partida.`);
+    this.log.push(`🏆 ${this.winner} gana por abandono.`);
+    return { ok: true, state: this.getStateDTO() };
+  }
+
+  private applyLavaDamage(): void {
+    for (const tile of this.board.tiles.values()) {
+      if (tile.occupant) {
+        if (tile.biome === 'FIRE') {
+          if (tile.occupant.type !== 'FIRE' && tile.occupant.type !== 'FLYING') {
+            tile.occupant.lavaTurns = (tile.occupant.lavaTurns ?? 0) + 1;
+          }
+          const dmg = terrainDamage(tile.occupant, 'FIRE');
+          if (dmg > 0) {
+            tile.occupant.hp -= dmg;
+            this.log.push(`¡${nameOf(tile.occupant)} se quema en la lava (-${dmg} HP, turno ${tile.occupant.lavaTurns})!`);
+            if (tile.occupant.hp <= 0) {
+              this.log.push(`¡${nameOf(tile.occupant)} ha caído KO por la lava!`);
+              this.board.setOccupant(tile.hex, null);
+            }
+          }
+        } else {
+          tile.occupant.lavaTurns = 0;
+        }
+      }
+    }
+    this.checkWinCondition();
   }
 
   private countPokemon(playerId: string): number {

@@ -79,6 +79,22 @@ export async function wsRoutes(app: FastifyInstance): Promise<void> {
         }
         await matchManager.persist();
         hub.broadcast({ type: 'state', state: result.state });
+      } else if (msg.type === 'end_turn') {
+        const result = matchManager.get().endTurn();
+        if (!result.ok) {
+          hub.send(socket, { type: 'error', error: result.error });
+          return;
+        }
+        await matchManager.persist();
+        hub.broadcast({ type: 'state', state: result.state });
+      } else if (msg.type === 'abandon') {
+        const result = matchManager.get().abandon();
+        if (!result.ok) {
+          hub.send(socket, { type: 'error', error: result.error });
+          return;
+        }
+        await matchManager.persist();
+        hub.broadcast({ type: 'state', state: result.state });
       } else if (msg.type === 'chat') {
         const text = (msg.text ?? '').toString().slice(0, 200);
         if (text.trim()) hub.broadcast({ type: 'chat', text });

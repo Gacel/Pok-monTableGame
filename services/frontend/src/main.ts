@@ -27,31 +27,46 @@ async function bootstrap() {
   }
 }
 
+function hideSidebar() {
+  const sidebar = document.getElementById('right-sidebar');
+  if (sidebar) sidebar.classList.add('hidden');
+  resizeGameArea();
+}
+
 function showLogin() {
+  hideSidebar();
   hubLayer.innerHTML = '';
   const loginView = new LoginView(hubLayer);
   loginView.render();
 }
 
 function showAvatarCreation() {
+  hideSidebar();
   hubLayer.innerHTML = '';
   const avatarView = new AvatarCreationView(hubLayer);
   avatarView.render();
 }
 
 function showMainMenu() {
+  hideSidebar();
   hubLayer.innerHTML = '';
   const menuView = new MainMenuView(hubLayer);
   menuView.render();
 }
 
+// Resolución interna del área de juego
+const GAME_W = 1600;
+const GAME_H = 1000;
+
 function resizeGameArea() {
-  const wrapper = document.getElementById('game-wrapper');
-  if (!wrapper) return;
-  // Margen del 5% para que no quede pegado a los bordes
-  // Volvemos a escalar al tamaño original de la pantalla del juego (1200x950)
-  const scale = Math.min(window.innerWidth / 1200, window.innerHeight / 950) * 0.95;
-  wrapper.style.transform = `scale(${scale})`;
+  const container = document.getElementById('game-container');
+  if (!container) return;
+  const sidebar = document.getElementById('right-sidebar');
+  const isSidebarVisible = sidebar && !sidebar.classList.contains('hidden');
+  const targetW = isSidebarVisible ? 1984 : GAME_W;
+  // Escala el container para aprovechar la pantalla dejando margen
+  const scale = Math.min(window.innerWidth / targetW, window.innerHeight / GAME_H) * 0.95;
+  container.style.transform = `scale(${scale})`;
 }
 
 // Menú → Draft → (POST /start) → Tablero
@@ -64,6 +79,7 @@ export function startGame() {
 }
 
 function showDraft() {
+  hideSidebar();
   const draftLayer = document.getElementById('draft-layer') as HTMLElement;
   draftLayer.classList.remove('hidden');
   const view = new DraftView(draftLayer, (teams) => onDraftConfirmed(draftLayer, teams));
@@ -92,6 +108,9 @@ async function onDraftConfirmed(draftLayer: HTMLElement, teams: DraftTeams) {
 
 function enterGame() {
   gameLayer.classList.remove('hidden');
+  const sidebar = document.getElementById('right-sidebar');
+  if (sidebar) sidebar.classList.remove('hidden');
+  resizeGameArea();
   if (!gameController) {
     gameController = new GameController(canvas);
   }

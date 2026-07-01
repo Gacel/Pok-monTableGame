@@ -1,5 +1,5 @@
 import { getDb } from './db.js';
-import { Biome, MovementPattern } from '../engine/board.js';
+import { MovementPattern, PokemonType } from '../engine/board.js';
 
 export interface PokemonTemplate {
   name: string;
@@ -7,7 +7,7 @@ export interface PokemonTemplate {
   maxHp: number;
   atk: number;
   def: number;
-  type: Biome;
+  type: PokemonType;
   movementPattern: MovementPattern;
 }
 

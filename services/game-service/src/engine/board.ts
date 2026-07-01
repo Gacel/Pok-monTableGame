@@ -2,13 +2,26 @@ import { Hex } from './hex.js';
 
 export type Biome = 'FIRE' | 'WATER' | 'GRASS' | 'SAND' | 'ICE';
 
+export type PokemonType =
+  | 'FIRE'
+  | 'WATER'
+  | 'GRASS'
+  | 'POISON'
+  | 'FLYING'
+  | 'DRAGON'
+  | 'PSYCHIC'
+  | 'NORMAL'
+  | 'ELECTRIC'
+  | 'ICE'
+  | 'FAIRY';
+
 export type MovementPattern = 'FLYING' | 'TANK' | 'SPEEDSTER';
 
 export interface Pokemon {
   id: string;
   playerId: string;
   name?: string;
-  type: Biome; // Simplified: matches biome types
+  type: PokemonType;
   movementPattern: MovementPattern;
   hp: number;
   maxHp: number;
@@ -18,6 +31,12 @@ export interface Pokemon {
   def?: number;
   /** Nivel de combate; usado como umbral para evolución. */
   level?: number;
+  /** Orientación horizontal del Pokémon en el tablero ('left' | 'right'). */
+  facing?: 'left' | 'right';
+  /** Turnos consecutivos permaneciendo en terreno de lava (FIRE). */
+  lavaTurns?: number;
+  /** Si ya realizó su acción de movimiento o ataque en el turno actual. */
+  hasActed?: boolean;
 }
 
 export interface Tile {
@@ -48,6 +67,10 @@ export class Board {
   public setOccupant(hex: Hex, pokemon: Pokemon | null): void {
     const tile = this.getTile(hex);
     if (tile) {
+      if (pokemon && !pokemon.facing) {
+        const hx = hex.q + hex.r / 2;
+        pokemon.facing = hx < 0 ? 'right' : hx > 0 ? 'left' : (pokemon.playerId === 'player1' ? 'right' : 'left');
+      }
       tile.occupant = pokemon;
     }
   }
@@ -61,6 +84,15 @@ export class Board {
       return false;
     }
     
+    // Actualizar orientación según la dirección del movimiento (sólo derecha o izquierda)
+    const fromX = from.q + from.r / 2;
+    const toX = to.q + to.r / 2;
+    if (toX > fromX) {
+      fromTile.occupant.facing = 'right';
+    } else if (toX < fromX) {
+      fromTile.occupant.facing = 'left';
+    }
+
     // Move the occupant
     toTile.occupant = fromTile.occupant;
     fromTile.occupant = null;

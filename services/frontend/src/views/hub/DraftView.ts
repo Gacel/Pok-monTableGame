@@ -1,8 +1,8 @@
-import type { Biome, MovementPattern } from '../../models/Types';
+import type { MovementPattern, PokemonType } from '../../models/Types';
 
 interface RosterEntry {
   name: string;
-  type: Biome;
+  type: PokemonType;
   movementPattern: MovementPattern;
   hp: number;
   maxHp: number;
@@ -22,7 +22,14 @@ const TYPE_COLOR: Record<string, string> = {
   WATER: '#3b82f6',
   GRASS: '#22c55e',
   SAND: '#eab308',
-  ICE: '#93c5fd',
+  ICE: '#06b6d4',
+  POISON: '#a855f7',
+  FLYING: '#6366f1',
+  DRAGON: '#4338ca',
+  PSYCHIC: '#ec4899',
+  NORMAL: '#9ca3af',
+  ELECTRIC: '#eab308',
+  FAIRY: '#f472b6',
 };
 
 const PATTERN_LABEL: Record<MovementPattern, string> = {
@@ -97,34 +104,41 @@ export class DraftView {
     const cards = this.roster
       .map((p) => {
         const selected = picks.includes(p.name);
-        const disabled = this.phase === 'player2' && taken.has(p.name);
-        const border = selected ? '#facc15' : disabled ? '#374151' : '#111827';
+        const isTakenByOther = this.phase === 'player2' && taken.has(p.name);
+        const isTeamFull = picks.length === TEAM_SIZE && !selected;
+        const disabled = isTakenByOther || isTeamFull;
+        const border = selected ? '#facc15' : disabled ? '#374151' : '#1e293b';
         return `
         <button data-name="${p.name}" ${disabled ? 'disabled' : ''}
-          class="draft-card relative flex flex-col items-center bg-gray-800 p-2 rounded-lg transition-all ${disabled ? 'opacity-30 cursor-not-allowed' : 'hover:bg-gray-700'}"
-          style="border:4px solid ${border};">
-          <img src="${this.sprites[p.name] ?? ''}" alt="${p.name}" class="w-16 h-16 object-contain" style="image-rendering:pixelated;" />
-          <span class="text-[9px] text-white mt-1 uppercase" style="font-family:'Press Start 2P',monospace;">${p.name}</span>
-          <span class="text-[7px] mt-1 px-1 rounded" style="font-family:'Press Start 2P',monospace;background:${TYPE_COLOR[p.type] ?? '#666'};color:#000;">${p.type}</span>
-          <span class="text-[6px] text-gray-400 mt-1" style="font-family:'Press Start 2P',monospace;">${PATTERN_LABEL[p.movementPattern]}</span>
-          ${selected ? '<span class="absolute top-1 right-1 text-yellow-400 text-xs">★</span>' : ''}
+          class="draft-card relative flex flex-col items-center bg-gray-800 p-1.5 rounded-lg transition-all ${disabled ? 'opacity-35 cursor-not-allowed grayscale bg-gray-950' : 'hover:bg-gray-700 hover:scale-105'}"
+          style="border:3px solid ${border};">
+          <img src="${this.sprites[p.name] ?? ''}" alt="${p.name}" class="w-14 h-14 object-contain" style="image-rendering:pixelated;" />
+          <span class="text-[8px] text-white mt-0.5 uppercase font-bold" style="font-family:'Press Start 2P',monospace;">${p.name}</span>
+          <span class="text-[6px] mt-1 px-1.5 py-0.5 rounded font-bold" style="font-family:'Press Start 2P',monospace;background:${TYPE_COLOR[p.type] ?? '#666'};color:#000;">${p.type}</span>
+          <span class="text-[5.5px] text-gray-300 mt-0.5" style="font-family:'Press Start 2P',monospace;">${PATTERN_LABEL[p.movementPattern]}</span>
+          ${selected ? '<span class="absolute top-1 right-1 text-yellow-400 text-sm animate-pulse">★</span>' : ''}
         </button>`;
       })
       .join('');
 
+    const isReady = picks.length === TEAM_SIZE;
+    const btnStyle = isReady
+      ? 'bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 hover:from-yellow-300 hover:to-red-400 border-yellow-200 text-black font-extrabold shadow-[0_0_20px_rgba(250,204,21,0.9)] animate-pulse scale-105 cursor-pointer'
+      : 'bg-gray-800 border-gray-900 text-gray-500 cursor-not-allowed opacity-60';
+
     this.container.innerHTML = `
-      <div class="min-h-full flex flex-col items-center p-6">
-        <h2 class="text-lg mb-1" style="font-family:'Press Start 2P',monospace;color:${color};text-shadow:2px 2px 0 #000;">
+      <div class="h-full flex flex-col items-center justify-center p-3 overflow-hidden">
+        <h2 class="text-base mb-1" style="font-family:'Press Start 2P',monospace;color:${color};text-shadow:2px 2px 0 #000;">
           DRAFT — ${this.phase === 'player1' ? 'JUGADOR 1' : 'JUGADOR 2'}
         </h2>
-        <p class="text-[9px] text-gray-300 mb-4" style="font-family:'Press Start 2P',monospace;">
+        <p class="text-[8px] text-gray-300 mb-3" style="font-family:'Press Start 2P',monospace;">
           Elige ${TEAM_SIZE} Pokémon (${picks.length}/${TEAM_SIZE})
         </p>
-        <div class="grid grid-cols-4 gap-3 max-w-3xl">${cards}</div>
-        <div class="mt-6 flex gap-4 items-center">
-          <span class="text-[8px] text-gray-400" style="font-family:'Press Start 2P',monospace;">Elegidos: ${picks.map((n) => n.toUpperCase()).join('  ') || '—'}</span>
-          <button id="draft-confirm" ${picks.length === TEAM_SIZE ? '' : 'disabled'}
-            class="px-5 py-3 text-xs rounded border-b-4 active:border-b-0 active:mt-1 ${picks.length === TEAM_SIZE ? 'bg-green-600 hover:bg-green-500 border-green-800 text-white' : 'bg-gray-700 border-gray-800 text-gray-500 cursor-not-allowed'}"
+        <div class="grid grid-cols-6 gap-2 max-w-4xl">${cards}</div>
+        <div class="mt-4 flex gap-4 items-center justify-between w-full max-w-4xl px-4 bg-gray-900 bg-opacity-80 p-2 rounded border border-gray-700">
+          <span class="text-[8px] text-gray-300" style="font-family:'Press Start 2P',monospace;">Elegidos: <span class="text-yellow-400 font-bold">${picks.map((n) => n.toUpperCase()).join('  ') || '—'}</span></span>
+          <button id="draft-confirm" ${isReady ? '' : 'disabled'}
+            class="px-6 py-3 text-xs rounded border-2 transition-all ${btnStyle}"
             style="font-family:'Press Start 2P',monospace;">
             ${this.phase === 'player1' ? 'SIGUIENTE ▶' : '¡A JUGAR!'}
           </button>

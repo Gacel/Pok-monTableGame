@@ -127,4 +127,26 @@ export const GameController = {
     hub.broadcast({ type: 'state', state: game.getStateDTO() });
     return { success: true, state: game.getStateDTO() };
   },
+
+  async endTurn() {
+    const game = matchManager.get();
+    const result = game.endTurn();
+    if (!result.ok) {
+      return { success: false, error: result.error, state: result.state };
+    }
+    await matchManager.persist();
+    hub.broadcast({ type: 'state', state: result.state });
+    return { success: true, state: result.state };
+  },
+
+  async abandon() {
+    const game = matchManager.get();
+    const result = game.abandon();
+    if (!result.ok) {
+      return { success: false, error: result.error, state: result.state };
+    }
+    await matchManager.persist();
+    hub.broadcast({ type: 'state', state: result.state });
+    return { success: true, state: result.state };
+  },
 };

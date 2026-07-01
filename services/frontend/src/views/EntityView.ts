@@ -48,6 +48,41 @@ export class EntityView {
           screenY = (screenY - cy) * this.state.zoom + cy;
 
           const sSize = this.boardView.HEX_SIZE * 1.5 * this.state.zoom; 
+
+          let base = document.getElementById(`base-${occupantId}`) as HTMLDivElement;
+          if (!base) {
+            base = document.createElement('div');
+            base.id = `base-${occupantId}`;
+            base.className = 'absolute rounded-full pointer-events-none';
+            base.style.transition = 'left 0.1s linear, top 0.1s linear, width 0.1s linear, height 0.1s linear';
+            base.style.boxShadow = '0 0 12px currentColor';
+            this.entitiesLayer.appendChild(base);
+          }
+
+          const baseColors: Record<string, string> = {
+            player1: 'rgba(59, 130, 246, 0.45)', // Azul
+            player2: 'rgba(239, 68, 68, 0.45)',  // Rojo
+            player3: 'rgba(168, 85, 247, 0.45)', // Violeta
+            player4: 'rgba(234, 179, 8, 0.45)',  // Amarillo
+          };
+          const borderColors: Record<string, string> = {
+            player1: '#60a5fa',
+            player2: '#f87171',
+            player3: '#c084fc',
+            player4: '#facc15',
+          };
+          const pId = tile.occupant.playerId || 'player1';
+          base.style.backgroundColor = baseColors[pId] || 'rgba(255, 255, 255, 0.3)';
+          base.style.border = `2px solid ${borderColors[pId] || '#fff'}`;
+          base.style.color = borderColors[pId] || '#fff';
+
+          const baseW = sSize * 0.85;
+          const baseH = sSize * 0.38;
+          base.style.width = `${baseW}px`;
+          base.style.height = `${baseH}px`;
+          base.style.left = `${screenX - baseW / 2}px`;
+          base.style.top = `${screenY - baseH / 2}px`;
+          base.style.zIndex = Math.floor(screenY - 1).toString();
           
           let img = document.getElementById(`img-${occupantId}`) as HTMLImageElement;
           if (!img) {
@@ -56,7 +91,7 @@ export class EntityView {
             img.src = this.state.pokeGifs[tile.occupant.name];
             img.className = 'absolute';
             img.style.imageRendering = 'pixelated';
-            img.style.transition = 'left 0.1s linear, top 0.1s linear';
+            img.style.transition = 'left 0.1s linear, top 0.1s linear, transform 0.15s ease-in-out';
             this.entitiesLayer.appendChild(img);
           }
           
@@ -65,6 +100,9 @@ export class EntityView {
           img.style.left = `${screenX - sSize/2}px`;
           img.style.top = `${screenY - sSize/1.1}px`;
           img.style.zIndex = Math.floor(screenY).toString();
+
+          const facing = tile.occupant.facing ?? ((tile.hex.q + tile.hex.r / 2 < 0) ? 'right' : 'left');
+          img.style.transform = facing === 'right' ? 'scaleX(-1)' : 'scaleX(1)';
           
           let label = document.getElementById(`lbl-${occupantId}`) as HTMLDivElement;
           if (!label) {
@@ -87,7 +125,7 @@ export class EntityView {
     }
     
     Array.from(this.entitiesLayer.children).forEach(child => {
-       const id = child.id.replace('img-', '').replace('lbl-', '');
+       const id = child.id.replace('img-', '').replace('lbl-', '').replace('base-', '');
        if (!currentOccupantIds.has(id)) {
            child.remove();
        }

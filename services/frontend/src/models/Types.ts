@@ -4,19 +4,34 @@ export interface Hex {
 }
 
 export type Biome = 'FIRE' | 'WATER' | 'GRASS' | 'SAND' | 'ICE';
+export type PokemonType =
+  | 'FIRE'
+  | 'WATER'
+  | 'GRASS'
+  | 'POISON'
+  | 'FLYING'
+  | 'DRAGON'
+  | 'PSYCHIC'
+  | 'NORMAL'
+  | 'ELECTRIC'
+  | 'ICE'
+  | 'FAIRY';
 export type MovementPattern = 'FLYING' | 'TANK' | 'SPEEDSTER';
 
 export interface Pokemon {
   id: string;
   playerId: string;
   name?: string;
-  type: Biome;
+  type: PokemonType;
   movementPattern: MovementPattern;
   hp: number;
   maxHp: number;
   atk?: number;
   def?: number;
   level?: number;
+  facing?: 'left' | 'right';
+  lavaTurns?: number;
+  hasActed?: boolean;
 }
 
 export interface Tile {

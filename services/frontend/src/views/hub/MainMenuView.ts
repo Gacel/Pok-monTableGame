@@ -12,6 +12,8 @@ export class MainMenuView {
     const user = authState.user;
     if (!user) return;
 
+    const spriteName = user.avatarUrl === 'boy' ? 'red' : user.avatarUrl === 'girl' ? 'may' : (user.avatarUrl || 'red');
+
     this.container.innerHTML = `
       <div class="transform scale-125 lg:scale-150 origin-center transition-transform">
         <div class="relative w-full max-w-2xl mx-auto p-1 bg-gray-900" style="border: 4px solid #fff; border-radius: 8px; box-shadow: 0 0 0 4px #000, 0 0 20px rgba(0,0,0,0.8);">
@@ -20,7 +22,7 @@ export class MainMenuView {
           <!-- Top Bar: Trainer Info -->
           <div class="w-full bg-white border-4 border-gray-800 p-3 flex justify-between items-center shadow-inner rounded mb-8">
             <div class="flex items-center gap-3">
-              <img src="https://play.pokemonshowdown.com/sprites/trainers/${user.avatarUrl === 'boy' ? 'red' : 'may'}.png" class="w-10 h-10 object-contain pixelated bg-gray-200 border-2 border-gray-400 rounded-full" />
+              <img src="https://play.pokemonshowdown.com/sprites/trainers/${spriteName}.png" class="w-10 h-10 object-contain pixelated bg-gray-200 border-2 border-gray-400 rounded-full" />
               <div class="flex flex-col">
                 <span class="text-black font-bold text-[10px]" style="font-family: 'Press Start 2P', monospace;">${user.username}</span>
                 <span class="text-gray-600 text-[8px] mt-1" style="font-family: 'Press Start 2P', monospace;">Lv. ${user.level}</span>

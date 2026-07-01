@@ -1,5 +1,6 @@
 import { GameState } from '../models/GameState';
 import type { Tile, PlayerResources } from '../models/Types';
+import { authState } from '../auth/AuthState';
 
 /** Capa VISTA (frontend): pinta el HUD a partir del estado del servidor. */
 export class HUDView {
@@ -14,12 +15,13 @@ export class HUDView {
     const match = this.state.match;
     if (!match) return;
 
-    const [p1Id, p2Id] = match.players;
-    const p1Tile = match.tiles.find((t) => t.occupant?.playerId === p1Id);
-    const p2Tile = match.tiles.find((t) => t.occupant?.playerId === p2Id);
+    const slots: ('p1' | 'p2' | 'p3' | 'p4')[] = ['p1', 'p2', 'p3', 'p4'];
+    slots.forEach((slot, i) => {
+      const playerId = match.players[i];
+      const tile = this.state.getLastInteractedTile(playerId);
+      this.updatePlayerHUD(slot, tile, playerId, match.resources[playerId ?? '']);
+    });
 
-    this.updatePlayerHUD('p1', p1Tile, p1Id, match.resources[p1Id ?? '']);
-    this.updatePlayerHUD('p2', p2Tile, p2Id, match.resources[p2Id ?? '']);
     this.updateTurnBanner();
     this.updateLog();
     this.updateWinOverlay();
@@ -38,15 +40,23 @@ export class HUDView {
       numberEl.textContent = `Turno ${match.turn}`;
       return;
     }
-    const isP1 = match.currentPlayer === match.players[0];
+
+    const colorMap: Record<string, string> = {
+      player1: '#3b82f6', // Azul
+      player2: '#ef4444', // Rojo
+      player3: '#a855f7', // Violeta
+      player4: '#eab308', // Amarillo
+    };
+    const color = colorMap[match.currentPlayer] || '#facc15';
+
     playerEl.textContent = `TURNO: ${(match.currentPlayer || '').toUpperCase()}`;
-    playerEl.style.color = isP1 ? '#f87171' : '#60a5fa';
-    banner.style.borderColor = isP1 ? '#f87171' : '#60a5fa';
+    playerEl.style.color = color;
+    banner.style.borderColor = color;
     numberEl.textContent = `Turno ${match.turn}`;
   }
 
   private updatePlayerHUD(
-    slot: 'p1' | 'p2',
+    slot: 'p1' | 'p2' | 'p3' | 'p4',
     tile: Tile | undefined,
     playerId: string | undefined,
     res: PlayerResources | undefined
@@ -63,6 +73,18 @@ export class HUDView {
 
       const avatarEl = document.getElementById(`hud-${slot}-avatar`) as HTMLImageElement | null;
       if (avatarEl && occ.name) avatarEl.src = this.state.pokeGifs[occ.name] ?? '';
+
+      const trainerEl = document.getElementById(`hud-${slot}-trainer`) as HTMLImageElement | null;
+      if (trainerEl) {
+        let sprite = 'red';
+        if (slot === 'p1') {
+          const u = authState.user;
+          sprite = u?.avatarUrl === 'boy' ? 'red' : u?.avatarUrl === 'girl' ? 'may' : (u?.avatarUrl || 'red');
+        } else if (slot === 'p2') sprite = 'blue';
+        else if (slot === 'p3') sprite = 'cynthia';
+        else if (slot === 'p4') sprite = 'ethan';
+        trainerEl.src = `https://play.pokemonshowdown.com/sprites/trainers/${sprite}.png`;
+      }
 
       const hp = occ.hp;
       const maxHp = occ.maxHp || 1;
@@ -84,6 +106,32 @@ export class HUDView {
           `<span title="Fire candy">🔥${res.FIRE_CANDY}</span>` +
           `<span title="Water candy">💧${res.WATER_CANDY}</span>` +
           `<span title="Grass candy">🌿${res.GRASS_CANDY}</span>`;
+      }
+
+      const teamEl = document.getElementById(`hud-${slot}-team`);
+      if (teamEl && playerId) {
+        const team = this.state.match?.tiles
+          .map((t) => t.occupant)
+          .filter((p): p is NonNullable<typeof p> => !!p && p.playerId === playerId && p.id !== occ.id) ?? [];
+        if (team.length === 0) {
+          teamEl.innerHTML = '';
+          teamEl.classList.add('hidden');
+        } else {
+          teamEl.classList.remove('hidden');
+          teamEl.innerHTML = team.map((p) => {
+            const pPct = Math.max(0, Math.min(100, (p.hp / (p.maxHp || 1)) * 100));
+            const barBg = pPct > 50 ? 'bg-green-500' : pPct > 20 ? 'bg-yellow-500' : 'bg-red-500';
+            const spriteUrl = this.state.pokeGifs[p.name ?? ''] ?? '';
+            return `
+              <div class="flex flex-col items-center bg-gray-800 border border-gray-600 rounded p-1 w-14 shadow transition-transform hover:scale-105 cursor-pointer" title="${p.name ?? 'Pokémon'} (${p.hp}/${p.maxHp})">
+                <img src="${spriteUrl}" class="w-7 h-7 object-contain" style="image-rendering: pixelated;" />
+                <div class="w-full h-1.5 bg-gray-900 rounded overflow-hidden mt-1 border border-gray-700">
+                  <div class="h-full ${barBg}" style="width: ${pPct}%;"></div>
+                </div>
+              </div>
+            `;
+          }).join('');
+        }
       }
     } else {
       el.classList.add('hidden');
@@ -122,6 +170,16 @@ export class HUDView {
     toast.classList.remove('hidden');
     if (this.toastTimer) window.clearTimeout(this.toastTimer);
     this.toastTimer = window.setTimeout(() => toast.classList.add('hidden'), 2200);
+  }
+
+  public appendChat(message: string): void {
+    const box = document.getElementById('chat-messages');
+    if (!box) return;
+    const div = document.createElement('div');
+    div.className = 'break-words leading-tight py-0.5 border-b border-gray-800 text-gray-200';
+    div.innerHTML = `› ${this.escape(message)}`;
+    box.appendChild(div);
+    box.scrollTop = box.scrollHeight;
   }
 
   private escape(s: string): string {

@@ -12,6 +12,7 @@ export class GameState {
   private _selectedHex: Hex | null = null;
   private _cameraOffset: { x: number; y: number } = { x: 0, y: 0 };
   private _zoom = 1.0;
+  private _lastInteractedPokemonId: Record<string, string | null> = {};
   private listeners: Set<Listener> = new Set();
 
   public pokeGifs: Record<string, string> = {};
@@ -34,6 +35,9 @@ export class GameState {
   }
   get zoom(): number {
     return this._zoom;
+  }
+  get lastInteractedPokemonId(): Record<string, string | null> {
+    return this._lastInteractedPokemonId;
   }
 
   setMatch(match: MatchState): void {
@@ -60,6 +64,30 @@ export class GameState {
   setZoom(z: number): void {
     this._zoom = z;
     this.notify();
+  }
+
+  setLastInteractedPokemon(playerId: string | undefined, pokemonId: string | undefined | null): void {
+    if (!playerId || !pokemonId) return;
+    if (this._lastInteractedPokemonId[playerId] !== pokemonId) {
+      this._lastInteractedPokemonId[playerId] = pokemonId;
+      this.notify();
+    }
+  }
+
+  getLastInteractedTile(playerId: string | undefined): Tile | undefined {
+    const match = this.match;
+    if (!match || !playerId) return undefined;
+    const lastId = this._lastInteractedPokemonId[playerId];
+    if (lastId) {
+      const tile = match.tiles.find((t) => t.occupant?.id === lastId && t.occupant?.playerId === playerId);
+      if (tile) return tile;
+    }
+    // Fallback al primer Pokémon vivo de ese jugador
+    const fallback = match.tiles.find((t) => t.occupant?.playerId === playerId);
+    if (fallback && fallback.occupant) {
+      this._lastInteractedPokemonId[playerId] = fallback.occupant.id;
+    }
+    return fallback;
   }
 
   /** ¿Es (q,r) un destino de movimiento resaltado? */

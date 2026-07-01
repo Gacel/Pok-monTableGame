@@ -11,14 +11,21 @@ import { Biome, Pokemon } from './board.js';
  */
 
 /** Multiplicador de ataque por ventaja de tipo del atacante frente al defensor. */
-export function typeAdvantage(attacker: Biome, defender: Biome): number {
-  const beats: Partial<Record<Biome, Biome>> = {
-    FIRE: 'GRASS',
-    GRASS: 'WATER',
-    WATER: 'FIRE',
+export function typeAdvantage(attacker: string, defender: string): number {
+  const beats: Record<string, string[]> = {
+    FIRE: ['GRASS', 'ICE'],
+    WATER: ['FIRE'],
+    GRASS: ['WATER'],
+    ELECTRIC: ['WATER', 'FLYING'],
+    ICE: ['GRASS', 'FLYING', 'DRAGON'],
+    POISON: ['GRASS', 'FAIRY'],
+    FLYING: ['GRASS'],
+    PSYCHIC: ['POISON'],
+    DRAGON: ['DRAGON'],
+    FAIRY: ['DRAGON'],
   };
-  if (beats[attacker] === defender) return 1.5; // super efectivo
-  if (beats[defender] === attacker) return 0.5; // poco efectivo
+  if (beats[attacker]?.includes(defender)) return 1.5; // super efectivo
+  if (beats[defender]?.includes(attacker)) return 0.5; // poco efectivo
   return 1.0; // neutro
 }
 
@@ -45,4 +52,17 @@ export function effectiveDef(pokemon: Pokemon, terrain: Biome): number {
 export function canEnter(pokemon: Pokemon, terrain: Biome): boolean {
   if (terrain === 'WATER' && pokemon.type === 'FIRE') return false;
   return true;
+}
+
+/** Daño por turno sufrido por un Pokémon al permanecer en un terreno (ej. lava / FIRE). */
+export function terrainDamage(pokemon: Pokemon, terrain: Biome): number {
+  if (terrain === 'FIRE') {
+    if (pokemon.type === 'FIRE' || pokemon.type === 'FLYING') return 0;
+    const turns = pokemon.lavaTurns && pokemon.lavaTurns > 0 ? pokemon.lavaTurns : 1;
+    const multiplier = Math.pow(2, turns - 1);
+    if (pokemon.type === 'WATER') return 1 * multiplier;
+    if (pokemon.type === 'GRASS' || pokemon.type === 'ICE') return 4 * multiplier;
+    return 2 * multiplier;
+  }
+  return 0;
 }

@@ -1,5 +1,5 @@
 import { PokemonModel, PokemonTemplate } from '../models/PokemonModel.js';
-import { Biome, MovementPattern } from '../engine/board.js';
+import { MovementPattern, PokemonType } from '../engine/board.js';
 
 interface PokeApiStat {
   base_stat: number;
@@ -17,19 +17,23 @@ function statOf(data: PokeApiResponse, name: string, fallback: number): number {
   return data.stats.find((s) => s.stat.name === name)?.base_stat ?? fallback;
 }
 
-function biomeFromType(primaryType: string): Biome {
+function typeFromPokeApi(primaryType: string): PokemonType {
   const t = primaryType.toUpperCase();
-  if (t === 'FIRE' || t === 'WATER' || t === 'GRASS') return t as Biome;
-  // Mapear tipos comunes a nuestros tres biomas de combate.
-  if (['ICE'].includes(t)) return 'WATER';
-  if (['ROCK', 'GROUND'].includes(t)) return 'FIRE';
-  return 'GRASS';
+  const valid: PokemonType[] = [
+    'FIRE', 'WATER', 'GRASS', 'POISON', 'FLYING', 'DRAGON', 'PSYCHIC', 'NORMAL', 'ELECTRIC', 'ICE', 'FAIRY'
+  ];
+  if (valid.includes(t as PokemonType)) return t as PokemonType;
+  if (['ROCK', 'GROUND', 'FIGHTING'].includes(t)) return 'NORMAL';
+  if (['BUG'].includes(t)) return 'GRASS';
+  if (['GHOST', 'DARK'].includes(t)) return 'POISON';
+  if (['STEEL'].includes(t)) return 'ELECTRIC';
+  return 'NORMAL';
 }
 
-function patternFromType(type: Biome): MovementPattern {
-  if (type === 'FIRE') return 'FLYING';
-  if (type === 'GRASS') return 'SPEEDSTER';
-  return 'TANK';
+function patternFromType(type: PokemonType): MovementPattern {
+  if (['FIRE', 'FLYING', 'DRAGON', 'PSYCHIC'].includes(type)) return 'FLYING';
+  if (['GRASS', 'ELECTRIC', 'FAIRY'].includes(type)) return 'SPEEDSTER';
+  return 'TANK'; // WATER, POISON, NORMAL, ICE
 }
 
 /**
@@ -46,7 +50,7 @@ export const PokemonService = {
       if (!res.ok) throw new Error(`PokeAPI ${res.status}`);
       const data = (await res.json()) as PokeApiResponse;
 
-      const type = biomeFromType(data.types?.[0]?.type?.name ?? 'grass');
+      const type = typeFromPokeApi(data.types?.[0]?.type?.name ?? 'grass');
       const hp = statOf(data, 'hp', 100) * 2; // escalado para gameplay
       const atk = statOf(data, 'attack', 50);
       const def = statOf(data, 'defense', 40);

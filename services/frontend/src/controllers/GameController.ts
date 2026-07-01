@@ -3,6 +3,7 @@ import { BoardView } from '../views/BoardView';
 import { HUDView } from '../views/HUDView';
 import { EntityView } from '../views/EntityView';
 import { CombatView } from '../views/CombatView';
+import { MinimapView } from '../views/MinimapView';
 import { WsClient } from '../net/WsClient';
 import type { WsMessage } from '../net/WsClient';
 import type { Hex, MatchState, CombatAction } from '../models/Types';
@@ -17,6 +18,7 @@ export class GameController {
   private hudView: HUDView;
   private entityView: EntityView;
   private combatView: CombatView;
+  private minimapView: MinimapView;
   private canvas: HTMLCanvasElement;
 
   private isDragging = false;
@@ -27,6 +29,7 @@ export class GameController {
   private hasDragged = false;
   private busy = false;
   private wsClient: WsClient | null = null;
+  private cameraAnimId: number | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -39,9 +42,12 @@ export class GameController {
       (a) => this.sendCombatAction(a),
       () => this.sendCombatContinue()
     );
+    this.minimapView = new MinimapView(this.state, this.boardView, this.canvas);
 
     this.state.subscribe(() => this.renderAll());
     this.setupEvents();
+    this.setupKeyboardShortcuts();
+    this.setupHUDListeners();
   }
 
   public async start(): Promise<void> {
@@ -52,7 +58,7 @@ export class GameController {
 
       this.centerCamera(state);
       await this.preloadSprites(state);
-      this.state.setMatch(state);
+      this.applyMatchState(state, false);
       this.renderAll();
       this.connectRealtime();
     } catch (e) {
@@ -73,13 +79,14 @@ export class GameController {
       const state = msg.state as MatchState;
       await this.preloadSprites(state);
       // No pisamos una selección local en curso si el estado no cambió de turno.
-      this.state.setMatch(state);
+      this.applyMatchState(state);
       if (msg.combat) {
         const c = msg.combat as { winnerId?: string };
         this.hudView.flashToast(`Combate: gana ${String(c.winnerId ?? '').toUpperCase()}`, '#7c3aed');
       }
     } else if (msg.type === 'chat' && msg.text) {
       this.hudView.flashToast(`💬 ${msg.text}`, '#1d4ed8');
+      this.hudView.appendChat(msg.text);
     }
   }
 
@@ -106,6 +113,60 @@ export class GameController {
     const cx = this.canvas.width / 2 - (minX + boardWidth / 2) - 30;
     const cy = this.canvas.height / 2 - (minY + boardHeight / 2) + 40;
     this.state.setCameraOffset(cx, cy);
+  }
+
+  public centerOnTile(tile: { hex: Hex } | undefined, animate = true): void {
+    if (this.cameraAnimId !== null) {
+      cancelAnimationFrame(this.cameraAnimId);
+      this.cameraAnimId = null;
+    }
+
+    if (!tile) {
+      if (this.state.match) this.centerCamera(this.state.match);
+      return;
+    }
+    const p = this.boardView.hexToPixel(tile.hex.q, tile.hex.r);
+    const targetX = this.canvas.width / 2 - p.x - 30;
+    const targetY = this.canvas.height / 2 - p.y + 40;
+
+    if (!animate) {
+      this.state.setCameraOffset(targetX, targetY);
+      return;
+    }
+
+    const startX = this.state.cameraOffset.x;
+    const startY = this.state.cameraOffset.y;
+    const duration = 800;
+    const startTime = performance.now();
+
+    const step = (now: number) => {
+      const elapsed = now - startTime;
+      const progress = Math.min(1, elapsed / duration);
+      // easeInOutCubic: progress < 0.5 ? 4 * p^3 : 1 - (-2p + 2)^3 / 2
+      const ease = progress < 0.5 ? 4 * progress * progress * progress : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+      const curX = startX + (targetX - startX) * ease;
+      const curY = startY + (targetY - startY) * ease;
+      this.state.setCameraOffset(curX, curY);
+      this.renderAll();
+      if (progress < 1) {
+        this.cameraAnimId = requestAnimationFrame(step);
+      } else {
+        this.cameraAnimId = null;
+      }
+    };
+    this.cameraAnimId = requestAnimationFrame(step);
+  }
+
+  private applyMatchState(newState: MatchState, animateCamera = true): void {
+    const oldTurn = this.state.match?.turn;
+    const oldPlayer = this.state.match?.currentPlayer;
+
+    this.state.setMatch(newState);
+
+    if (!oldPlayer || oldPlayer !== newState.currentPlayer || oldTurn !== newState.turn) {
+      const targetTile = this.state.getLastInteractedTile(newState.currentPlayer);
+      this.centerOnTile(targetTile, animateCamera && !!oldPlayer);
+    }
   }
 
   private async preloadSprites(state: MatchState): Promise<void> {
@@ -139,6 +200,7 @@ export class GameController {
     this.entityView.render();
     this.hudView.render();
     this.combatView.render();
+    this.minimapView.render();
   }
 
   private async sendCombatAction(action: CombatAction): Promise<void> {
@@ -152,7 +214,7 @@ export class GameController {
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        this.state.setMatch(data.state as MatchState);
+        this.applyMatchState(data.state as MatchState);
       } else {
         this.hudView.flashToast(data.error ?? 'Acción no válida');
       }
@@ -171,7 +233,7 @@ export class GameController {
       const res = await fetch('/api/game/combat/continue', { method: 'POST' });
       const data = await res.json();
       if (res.ok && data.success) {
-        this.state.setMatch(data.state as MatchState);
+        this.applyMatchState(data.state as MatchState);
       }
     } catch (err) {
       console.error(err);
@@ -233,6 +295,21 @@ export class GameController {
 
     document.getElementById('btn-reset')?.addEventListener('click', () => this.resetGame());
     document.getElementById('btn-rematch')?.addEventListener('click', () => this.resetGame());
+    document.getElementById('btn-end-turn')?.addEventListener('click', () => this.endTurn());
+    document.getElementById('btn-abandon')?.addEventListener('click', () => {
+      if (confirm('¿Estás seguro de que quieres abandonar la partida? (Esto equivaldrá a una derrota)')) {
+        this.abandonGame();
+      }
+    });
+
+    document.getElementById('chat-form')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const input = document.getElementById('chat-input') as HTMLInputElement | null;
+      if (input && input.value.trim() && this.wsClient) {
+        this.wsClient.sendChat(input.value.trim());
+        input.value = '';
+      }
+    });
   }
 
   private async handleCanvasClick(e: MouseEvent): Promise<void> {
@@ -266,6 +343,7 @@ export class GameController {
 
     // Selección: solo piezas del jugador de turno.
     if (clickedTile.occupant) {
+      this.state.setLastInteractedPokemon(clickedTile.occupant.playerId, clickedTile.occupant.id);
       if (clickedTile.occupant.playerId === match.currentPlayer) {
         this.state.selectedHex = hex;
         await this.loadMoveOptions(hex);
@@ -288,6 +366,10 @@ export class GameController {
   }
 
   private async performMove(from: Hex, to: Hex): Promise<void> {
+    const movingOcc = this.state.currentTiles.find((t) => t.hex.q === from.q && t.hex.r === from.r)?.occupant;
+    if (movingOcc) {
+      this.state.setLastInteractedPokemon(movingOcc.playerId, movingOcc.id);
+    }
     this.busy = true;
     try {
       const res = await fetch('/api/game/move', {
@@ -302,7 +384,7 @@ export class GameController {
           const c = data.combat;
           this.hudView.flashToast(`Combate: gana ${String(c.winnerId).toUpperCase()}`, '#7c3aed');
         }
-        this.state.setMatch(data.state as MatchState);
+        this.applyMatchState(data.state as MatchState);
       } else {
         this.hudView.flashToast(data.error ?? 'Jugada inválida');
         this.state.selectedHex = null;
@@ -323,12 +405,98 @@ export class GameController {
       if (res.ok && data.success) {
         this.state.selectedHex = null;
         await this.preloadSprites(data.state as MatchState);
-        this.state.setMatch(data.state as MatchState);
+        this.applyMatchState(data.state as MatchState, false);
       }
     } catch (err) {
       console.error(err);
     } finally {
       this.busy = false;
     }
+  }
+
+  private async endTurn(): Promise<void> {
+    if (this.busy) return;
+    this.busy = true;
+    try {
+      const res = await fetch('/api/game/end-turn', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        this.state.selectedHex = null;
+        this.applyMatchState(data.state as MatchState);
+      } else {
+        this.hudView.flashToast(data.error ?? 'Error al finalizar turno');
+      }
+    } catch (err) {
+      console.error(err);
+      this.hudView.flashToast('Error de red al pasar turno');
+    } finally {
+      this.busy = false;
+    }
+  }
+
+  private async abandonGame(): Promise<void> {
+    if (this.busy) return;
+    this.busy = true;
+    try {
+      const res = await fetch('/api/game/abandon', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        this.state.selectedHex = null;
+        this.applyMatchState(data.state as MatchState);
+      } else {
+        this.hudView.flashToast(data.error ?? 'Error al abandonar partida');
+      }
+    } catch (err) {
+      console.error(err);
+      this.hudView.flashToast('Error de red al abandonar');
+    } finally {
+      this.busy = false;
+    }
+  }
+
+  private setupKeyboardShortcuts(): void {
+    let lastKey = '';
+    let lastKeyTime = 0;
+
+    window.addEventListener('keydown', (e) => {
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement ||
+        e.target instanceof HTMLSelectElement
+      ) {
+        return;
+      }
+
+      const now = Date.now();
+      if (e.key === lastKey && now - lastKeyTime < 400) {
+        const match = this.state.match;
+        if (match) {
+          const tile = this.state.getLastInteractedTile(match.currentPlayer);
+          this.centerOnTile(tile, true);
+        }
+        lastKey = '';
+        lastKeyTime = 0;
+      } else {
+        lastKey = e.key;
+        lastKeyTime = now;
+      }
+    });
+  }
+
+  private setupHUDListeners(): void {
+    const slots = ['p1', 'p2', 'p3', 'p4'] as const;
+    slots.forEach((slot, i) => {
+      const el = document.getElementById(`hud-${slot}`);
+      if (el) {
+        el.style.cursor = 'pointer';
+        el.addEventListener('click', () => {
+          const match = this.state.match;
+          if (match && match.players[i]) {
+            const tile = this.state.getLastInteractedTile(match.players[i]);
+            this.centerOnTile(tile, true);
+          }
+        });
+      }
+    });
   }
 }
