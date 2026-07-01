@@ -1,7 +1,9 @@
 import Fastify, { FastifyInstance } from 'fastify';
+import websocket from '@fastify/websocket';
 import { authRoutes } from './routes/auth.routes.js';
 import { userRoutes } from './routes/user.routes.js';
 import { gameRoutes } from './routes/game.routes.js';
+import { wsRoutes } from './routes/ws.routes.js';
 
 const SERVICE = 'game-service';
 
@@ -16,9 +18,11 @@ export function buildApp(): FastifyInstance {
 
   app.get('/health', async () => ({ status: 'ok', service: SERVICE }));
 
+  app.register(websocket);
   app.register(authRoutes);
   app.register(userRoutes);
   app.register(gameRoutes);
+  app.register(wsRoutes);
 
   return app;
 }

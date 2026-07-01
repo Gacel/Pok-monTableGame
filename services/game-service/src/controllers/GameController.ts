@@ -1,5 +1,6 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { matchManager } from '../services/MatchManager.js';
+import { hub } from '../realtime/hub.js';
 import { Hex } from '../engine/hex.js';
 
 interface MoveBody {
@@ -59,12 +60,15 @@ export const GameController = {
       return reply.code(400).send({ success: false, error: result.error, state: result.state });
     }
     await matchManager.persist();
+    // Difunde a los clientes WSS conectados para mantener el tablero sincronizado.
+    hub.broadcast({ type: 'state', state: result.state, combat: result.combat ?? null });
     return { success: true, state: result.state, combat: result.combat ?? null };
   },
 
   /** Reinicia la partida por defecto. */
   async reset() {
     const game = await matchManager.reset();
+    hub.broadcast({ type: 'state', state: game.getStateDTO() });
     return { success: true, state: game.getStateDTO() };
   },
 };

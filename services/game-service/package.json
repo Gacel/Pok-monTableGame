@@ -9,11 +9,13 @@
     "build": "tsc"
   },
   "dependencies": {
+    "@fastify/websocket": "^8.3.1",
     "fastify": "^4.26.2",
     "sqlite": "^5.1.1",
     "sqlite3": "^5.1.7"
   },
   "devDependencies": {
+    "@types/ws": "^8.5.10",
     "tsx": "^4.7.1",
     "vitest": "^1.6.0"
   }

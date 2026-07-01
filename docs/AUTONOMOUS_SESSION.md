@@ -143,4 +143,15 @@
   actualización del roadmap del `README.md` al estado real.
 - **Commit:** `docs: game-service contract README + docker-only verification + roadmap`
 
+### F11 — WebSockets (sincronización de tablero + chat) ✅
+- **Qué:** `@fastify/websocket` en `game-service`; `realtime/hub.ts` (difusión a la
+  sala) y `routes/ws.routes.ts` (`/ws`). Al conectar se envía el estado; los `move`
+  se **validan con el motor antes de difundir** (autoridad del servidor); soporta `chat`.
+  Los `move` vía REST **también difunden** por WSS → REST y WSS quedan sincronizados.
+  El gateway ya enruta `/ws` (F2) con cabeceras Upgrade.
+- **Verificación (Docker):** `tsc --noEmit` limpio (con `@types/ws`), 22/22 tests, y
+  **smoke test WSS real** con 2 clientes: ambos reciben el estado inicial y el difundido
+  tras un movimiento validado, y el chat se propaga (`WS_SMOKE_OK`).
+- **Commit:** `feat(game): WSS board sync + chat (server-authoritative broadcast)`
+
 <!-- Las siguientes entradas se añaden a medida que se completan. -->
