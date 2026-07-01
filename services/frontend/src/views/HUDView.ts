@@ -49,7 +49,9 @@ export class HUDView {
     };
     const color = colorMap[match.currentPlayer] || '#facc15';
 
-    playerEl.textContent = `TURNO: ${(match.currentPlayer || '').toUpperCase()}`;
+    const label = this.state.labelFor(match.currentPlayer).toUpperCase();
+    const isMe = this.state.mySlot !== null && this.state.mySlot === match.currentPlayer;
+    playerEl.textContent = isMe ? `TU TURNO · ${label}` : `TURNO: ${label}`;
     playerEl.style.color = color;
     banner.style.borderColor = color;
     numberEl.textContent = `Turno ${match.turn}`;
@@ -157,7 +159,12 @@ export class HUDView {
     if (match.status === 'finished' && match.winner) {
       overlay.classList.remove('hidden');
       overlay.classList.add('flex');
-      text.textContent = `${match.winner.toUpperCase()} gana la partida`;
+      // El ganador puede ser un equipo ("player2 & player4") → nombres visibles.
+      const label = match.winner
+        .split(' & ')
+        .map((p) => this.state.labelFor(p).toUpperCase())
+        .join(' & ');
+      text.textContent = `${label} gana la partida`;
     } else {
       overlay.classList.add('hidden');
       overlay.classList.remove('flex');

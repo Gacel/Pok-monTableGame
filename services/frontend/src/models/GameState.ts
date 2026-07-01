@@ -18,6 +18,17 @@ export class GameState {
   public pokeGifs: Record<string, string> = {};
   public pokeStatic: Record<string, string> = {};
 
+  /** Slot propio en partidas ONLINE (player1..4); null en local hot-seat. */
+  public mySlot: string | null = null;
+  /** Nombres visibles por slot (player1 → username) en partidas online. */
+  public playerNames: Record<string, string> = {};
+
+  /** Etiqueta visible de un jugador: username online o el propio slot. */
+  labelFor(playerId: string | undefined | null): string {
+    if (!playerId) return '';
+    return this.playerNames[playerId] ?? playerId;
+  }
+
   get match(): MatchState | null {
     return this._match;
   }

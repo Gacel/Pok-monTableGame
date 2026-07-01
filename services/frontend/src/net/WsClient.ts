@@ -1,11 +1,17 @@
+import type { RoomInfo } from '@transcendence/shared';
+import { authState } from '../auth/AuthState';
+
 /**
  * Cliente WSS del frontend. Recibe difusiones autoritativas del game-service
- * (`state`, `chat`) y las entrega al controlador. Reconecta automáticamente.
- * No envía movimientos por aquí (se usan vía REST, que también difunden por WSS).
+ * (`state`, `room`, `chat`) y las entrega al controlador. Reconecta
+ * automáticamente a la MISMA sala. No envía movimientos por aquí (van vía
+ * REST, que también difunde por WSS).
  */
 export interface WsMessage {
-  type: 'state' | 'chat' | 'error';
+  type: 'state' | 'room' | 'room_closed' | 'chat' | 'error';
   state?: unknown;
+  room?: RoomInfo;
+  matchId?: string;
   combat?: unknown;
   text?: string;
   error?: string;
@@ -14,15 +20,22 @@ export interface WsMessage {
 export class WsClient {
   private ws: WebSocket | null = null;
   private closedByUser = false;
+  private matchId: string | null = null;
   private onMessage: (msg: WsMessage) => void;
 
   constructor(onMessage: (msg: WsMessage) => void) {
     this.onMessage = onMessage;
   }
 
-  connect(): void {
+  /** Sin `matchId` conecta a la sala local (hot-seat); con él, a la sala online. */
+  connect(matchId?: string): void {
+    this.matchId = matchId ?? null;
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-    const url = `${proto}://${location.host}/ws`;
+    let url = `${proto}://${location.host}/ws`;
+    if (this.matchId) {
+      const token = encodeURIComponent(authState.sessionToken ?? '');
+      url += `?matchId=${encodeURIComponent(this.matchId)}&token=${token}`;
+    }
     try {
       this.ws = new WebSocket(url);
     } catch {
@@ -36,7 +49,9 @@ export class WsClient {
       }
     };
     this.ws.onclose = () => {
-      if (!this.closedByUser) window.setTimeout(() => this.connect(), 2000);
+      if (!this.closedByUser) {
+        window.setTimeout(() => this.connect(this.matchId ?? undefined), 2000);
+      }
     };
     this.ws.onerror = () => this.ws?.close();
   }

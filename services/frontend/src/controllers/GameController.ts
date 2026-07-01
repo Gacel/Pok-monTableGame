@@ -6,6 +6,9 @@ import { CombatView } from '../views/CombatView';
 import { MinimapView } from '../views/MinimapView';
 import { WsClient } from '../net/WsClient';
 import type { WsMessage } from '../net/WsClient';
+import { apiFetch } from '../net/api';
+import { MatchSession } from '../state/MatchSession';
+import type { OnlineSession } from '../state/MatchSession';
 import type { Hex, MatchState, CombatAction } from '../models/Types';
 
 /**
@@ -30,6 +33,8 @@ export class GameController {
   private busy = false;
   private wsClient: WsClient | null = null;
   private cameraAnimId: number | null = null;
+  /** Sesión de partida ONLINE (matchId + slot propio); null en local hot-seat. */
+  private session: OnlineSession | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -48,6 +53,44 @@ export class GameController {
     this.setupEvents();
     this.setupKeyboardShortcuts();
     this.setupHUDListeners();
+  }
+
+  /**
+   * Configura la partida a controlar: null = local hot-seat (rutas clásicas);
+   * OnlineSession = partida de sala con identidad y turno propio.
+   */
+  public setSession(session: OnlineSession | null): void {
+    this.session = session;
+    this.state.mySlot = session?.mySlot ?? null;
+    this.state.playerNames = session?.playerNames ?? {};
+    // El socket anterior apuntaba a otra sala: se reconecta al entrar.
+    if (this.wsClient) {
+      this.wsClient.close();
+      this.wsClient = null;
+    }
+    // Online no hay reinicio manual; la revancha vuelve al menú.
+    const resetBtn = document.getElementById('btn-reset');
+    if (resetBtn) resetBtn.style.display = session ? 'none' : '';
+    const rematchBtn = document.getElementById('btn-rematch');
+    if (rematchBtn) rematchBtn.textContent = session ? 'VOLVER AL MENÚ' : 'REVANCHA';
+  }
+
+  /** Prefijo REST según el modo: /api/game (local) o /api/game/<matchId>. */
+  private apiPath(path: string): string {
+    return this.session ? `/api/game/${this.session.matchId}${path}` : `/api/game${path}`;
+  }
+
+  /** ¿Puede este cliente actuar ahora? (online: solo en tu turno). */
+  private isMyTurn(): boolean {
+    const match = this.state.match;
+    if (!match) return false;
+    if (!this.session) return true; // local: el turno se comparte en pantalla
+    return match.currentPlayer === this.session.mySlot;
+  }
+
+  private turnOwnerLabel(): string {
+    const current = this.state.match?.currentPlayer ?? '';
+    return this.state.labelFor(current).toUpperCase();
   }
 
   public async start(): Promise<void> {
@@ -71,7 +114,7 @@ export class GameController {
   private connectRealtime(): void {
     if (this.wsClient) return;
     this.wsClient = new WsClient((msg: WsMessage) => this.onRealtimeMessage(msg));
-    this.wsClient.connect();
+    this.wsClient.connect(this.session?.matchId);
   }
 
   private async onRealtimeMessage(msg: WsMessage): Promise<void> {
@@ -91,7 +134,7 @@ export class GameController {
   }
 
   private async fetchState(): Promise<MatchState | null> {
-    const res = await fetch(`/api/game/state?t=${Date.now()}`);
+    const res = await apiFetch(this.apiPath(`/state?t=${Date.now()}`));
     if (!res.ok) return null;
     return (await res.json()) as MatchState;
   }
@@ -163,6 +206,11 @@ export class GameController {
 
     this.state.setMatch(newState);
 
+    // Partida online terminada: la sesión ya no debe reanudarse tras un F5.
+    if (this.session && newState.status === 'finished') {
+      MatchSession.clear();
+    }
+
     if (!oldPlayer || oldPlayer !== newState.currentPlayer || oldTurn !== newState.turn) {
       const targetTile = this.state.getLastInteractedTile(newState.currentPlayer);
       this.centerOnTile(targetTile, animateCamera && !!oldPlayer);
@@ -205,11 +253,20 @@ export class GameController {
 
   private async sendCombatAction(action: CombatAction, moveName?: string): Promise<void> {
     if (this.busy) return;
+    // Online: solo actúa el dueño del Pokémon al que le toca en el combate.
+    const combat = this.state.match?.combat;
+    if (this.session && combat) {
+      const actorPlayer =
+        combat.turnActorId === combat.attackerId ? combat.attackerPlayer : combat.defenderPlayer;
+      if (actorPlayer !== this.session.mySlot) {
+        this.hudView.flashToast(`Turno de ${this.state.labelFor(actorPlayer).toUpperCase()}`);
+        return;
+      }
+    }
     this.busy = true;
     try {
-      const res = await fetch('/api/game/combat/action', {
+      const res = await apiFetch(this.apiPath('/combat/action'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(moveName ? { action, moveName } : { action }),
       });
       const data = await res.json();
@@ -230,7 +287,7 @@ export class GameController {
     if (this.busy) return;
     this.busy = true;
     try {
-      const res = await fetch('/api/game/combat/continue', { method: 'POST' });
+      const res = await apiFetch(this.apiPath('/combat/continue'), { method: 'POST' });
       const data = await res.json();
       if (res.ok && data.success) {
         this.applyMatchState(data.state as MatchState);
@@ -317,6 +374,12 @@ export class GameController {
     // Durante el combate el tablero no acepta clics (se usa el menú de combate).
     if (!match || match.status !== 'active' || this.busy) return;
 
+    // Online: fuera de tu turno el tablero es de solo lectura.
+    if (!this.isMyTurn()) {
+      this.hudView.flashToast(`Turno de ${this.turnOwnerLabel()}`);
+      return;
+    }
+
     const rect = this.canvas.getBoundingClientRect();
     const scaleX = this.canvas.width / rect.width;
     const scaleY = this.canvas.height / rect.height;
@@ -358,7 +421,7 @@ export class GameController {
 
   private async loadMoveOptions(hex: Hex): Promise<void> {
     try {
-      const res = await fetch(`/api/game/moves?q=${hex.q}&r=${hex.r}`);
+      const res = await apiFetch(this.apiPath(`/moves?q=${hex.q}&r=${hex.r}`));
       if (res.ok) this.state.moveOptions = await res.json();
     } catch (err) {
       console.error(err);
@@ -372,9 +435,8 @@ export class GameController {
     }
     this.busy = true;
     try {
-      const res = await fetch('/api/game/move', {
+      const res = await apiFetch(this.apiPath('/move'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ from, to }),
       });
       const data = await res.json();
@@ -398,6 +460,12 @@ export class GameController {
   }
 
   private async resetGame(): Promise<void> {
+    // Online no hay revancha in situ: se limpia la sesión y se vuelve al menú.
+    if (this.session) {
+      MatchSession.clear();
+      location.reload();
+      return;
+    }
     this.busy = true;
     try {
       const res = await fetch('/api/game/reset', { method: 'POST' });
@@ -416,9 +484,13 @@ export class GameController {
 
   private async endTurn(): Promise<void> {
     if (this.busy) return;
+    if (!this.isMyTurn()) {
+      this.hudView.flashToast(`Turno de ${this.turnOwnerLabel()}`);
+      return;
+    }
     this.busy = true;
     try {
-      const res = await fetch('/api/game/end-turn', { method: 'POST' });
+      const res = await apiFetch(this.apiPath('/end-turn'), { method: 'POST' });
       const data = await res.json();
       if (res.ok && data.success) {
         this.state.selectedHex = null;
@@ -438,7 +510,7 @@ export class GameController {
     if (this.busy) return;
     this.busy = true;
     try {
-      const res = await fetch('/api/game/abandon', { method: 'POST' });
+      const res = await apiFetch(this.apiPath('/abandon'), { method: 'POST' });
       const data = await res.json();
       if (res.ok && data.success) {
         this.state.selectedHex = null;

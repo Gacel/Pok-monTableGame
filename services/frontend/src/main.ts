@@ -1,27 +1,38 @@
 import './style.css';
+import type { RoomInfo } from '@transcendence/shared';
 import { GameController } from './controllers/GameController';
 import { authState } from './auth/AuthState';
+import { apiFetch } from './net/api';
+import { MatchSession } from './state/MatchSession';
+import type { OnlineSession } from './state/MatchSession';
 import { LoginView } from './views/hub/LoginView';
 import { AvatarCreationView } from './views/hub/AvatarCreationView';
 import { MainMenuView } from './views/hub/MainMenuView';
+import { MultiplayerMenuView } from './views/hub/MultiplayerMenuView';
+import { LocalSetupView } from './views/hub/LocalSetupView';
+import type { LocalGameConfig } from './views/hub/LocalSetupView';
+import { SettingsView } from './views/hub/SettingsView';
+import { LobbyView } from './views/hub/LobbyView';
 import { DraftView } from './views/hub/DraftView';
-import type { DraftTeams } from './views/hub/DraftView';
 
 const hubLayer = document.getElementById('hub-layer') as HTMLElement;
 const gameLayer = document.getElementById('game-layer') as HTMLElement;
 const canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
 
 let gameController: GameController | null = null;
+let currentLobby: LobbyView | null = null;
 
 async function bootstrap() {
   const hasSession = await authState.checkSession();
-  
+
   if (!hasSession) {
     showLogin();
   } else {
     if (!authState.user || !authState.user.username) {
       showAvatarCreation();
     } else {
+      // Si hay una partida online en curso (F5), reconecta directamente.
+      if (await tryRejoinOnline()) return;
       showMainMenu();
     }
   }
@@ -33,25 +44,47 @@ function hideSidebar() {
   resizeGameArea();
 }
 
-function showLogin() {
+/** Deja el hub visible y limpio (cierra el lobby si estaba abierto). */
+function resetHubLayer() {
   hideSidebar();
+  currentLobby?.destroy();
+  currentLobby = null;
+  hubLayer.style.display = '';
+  hubLayer.classList.remove('opacity-0');
   hubLayer.innerHTML = '';
+}
+
+function showLogin() {
+  resetHubLayer();
   const loginView = new LoginView(hubLayer);
   loginView.render();
 }
 
 function showAvatarCreation() {
-  hideSidebar();
-  hubLayer.innerHTML = '';
+  resetHubLayer();
   const avatarView = new AvatarCreationView(hubLayer);
   avatarView.render();
 }
 
-function showMainMenu() {
-  hideSidebar();
-  hubLayer.innerHTML = '';
+export function showMainMenu() {
+  resetHubLayer();
   const menuView = new MainMenuView(hubLayer);
   menuView.render();
+}
+
+export function showMultiplayerMenu() {
+  resetHubLayer();
+  new MultiplayerMenuView(hubLayer).render();
+}
+
+export function showLocalSetup() {
+  resetHubLayer();
+  new LocalSetupView(hubLayer).render();
+}
+
+export function showSettings() {
+  resetHubLayer();
+  new SettingsView(hubLayer).render();
 }
 
 // Resolución interna del área de juego
@@ -69,29 +102,41 @@ function resizeGameArea() {
   container.style.transform = `scale(${scale})`;
 }
 
-// Menú → Draft → (POST /start) → Tablero
-export function startGame() {
+// ------------------------------------------------------------ PARTIDA LOCAL
+// Setup (2-4 jugadores, FFA/2v2) → Draft secuencial → POST /start → Tablero
+
+export function startLocalGame(config: LocalGameConfig) {
   hubLayer.classList.add('opacity-0');
   setTimeout(() => {
     hubLayer.style.display = 'none';
-    showDraft();
+    showLocalDraft(config);
   }, 500);
 }
 
-function showDraft() {
+function showLocalDraft(config: LocalGameConfig) {
   hideSidebar();
   const draftLayer = document.getElementById('draft-layer') as HTMLElement;
   draftLayer.classList.remove('hidden');
-  const view = new DraftView(draftLayer, (teams) => onDraftConfirmed(draftLayer, teams));
-  view.render();
+  const view = new DraftView(
+    draftLayer,
+    { mode: 'local', players: config.players, gameMode: config.gameMode },
+    (teams) => void onLocalDraftConfirmed(draftLayer, config, teams)
+  );
+  void view.render();
 }
 
-async function onDraftConfirmed(draftLayer: HTMLElement, teams: DraftTeams) {
+async function onLocalDraftConfirmed(
+  draftLayer: HTMLElement,
+  config: LocalGameConfig,
+  teams: string[][]
+) {
+  const payload: Record<string, unknown> = { gameMode: config.gameMode };
+  teams.forEach((team, i) => (payload[`player${i + 1}`] = team));
   try {
     const res = await fetch('/api/game/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(teams),
+      body: JSON.stringify(payload),
     });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
@@ -103,10 +148,90 @@ async function onDraftConfirmed(draftLayer: HTMLElement, teams: DraftTeams) {
     return;
   }
   draftLayer.classList.add('hidden');
-  enterGame();
+  enterGame(null);
 }
 
-function enterGame() {
+// ----------------------------------------------------------- PARTIDA ONLINE
+// Lobby (crear/buscar) → sala de espera → draft de tu equipo → Tablero
+
+export function showLobby() {
+  resetHubLayer();
+  currentLobby = new LobbyView(hubLayer, {
+    onBack: showMultiplayerMenu,
+    onDraft: (room) => showOnlineDraft(room),
+    onGameStart: (room) => enterOnlineGame(room),
+  });
+  void currentLobby.render();
+}
+
+function showOnlineDraft(room: RoomInfo) {
+  hideSidebar();
+  const draftLayer = document.getElementById('draft-layer') as HTMLElement;
+  draftLayer.classList.remove('hidden');
+  const label = authState.user?.username ?? 'TU EQUIPO';
+  const view = new DraftView(draftLayer, { mode: 'online', playerLabel: label }, (teams) => {
+    void (async () => {
+      try {
+        const res = await apiFetch(`/api/lobby/matches/${room.id}/team`, {
+          method: 'POST',
+          body: JSON.stringify({ team: teams[0] }),
+        });
+        const data = await res.json();
+        draftLayer.classList.add('hidden');
+        if (res.ok && data.success) {
+          currentLobby?.setRoom(data.room as RoomInfo);
+        } else {
+          alert(data.error ?? 'No se pudo guardar el equipo');
+        }
+      } catch {
+        draftLayer.classList.add('hidden');
+        alert('Error de red al guardar el equipo');
+      }
+    })();
+  });
+  void view.render();
+}
+
+function enterOnlineGame(room: RoomInfo) {
+  if (!room.youAre) return;
+  const playerNames: Record<string, string> = {};
+  for (const p of room.players) playerNames[p.slot] = p.username;
+  const session: OnlineSession = { matchId: room.id, mySlot: room.youAre, playerNames };
+  MatchSession.save(session);
+
+  const draftLayer = document.getElementById('draft-layer') as HTMLElement;
+  draftLayer.classList.add('hidden');
+  currentLobby?.destroy();
+  currentLobby = null;
+  hubLayer.classList.add('opacity-0');
+  hubLayer.style.display = 'none';
+  enterGame(session);
+}
+
+/** Reanuda una partida online tras un F5 (sesión en sessionStorage). */
+async function tryRejoinOnline(): Promise<boolean> {
+  const session = MatchSession.load();
+  if (!session) return false;
+  try {
+    const res = await apiFetch(`/api/lobby/matches/${session.matchId}`);
+    if (res.ok) {
+      const data = await res.json();
+      const room = data.room as RoomInfo;
+      if (room.youAre && (room.status === 'active' || room.status === 'combat')) {
+        enterOnlineGame(room);
+        return true;
+      }
+    }
+  } catch {
+    /* sin red: seguimos al menú */
+  }
+  MatchSession.clear();
+  return false;
+}
+
+// ------------------------------------------------------------------- TABLERO
+
+function enterGame(session: OnlineSession | null) {
   gameLayer.classList.remove('hidden');
   const sidebar = document.getElementById('right-sidebar');
   if (sidebar) sidebar.classList.remove('hidden');
@@ -114,6 +239,7 @@ function enterGame() {
   if (!gameController) {
     gameController = new GameController(canvas);
   }
+  gameController.setSession(session);
   gameController.start();
 }
 

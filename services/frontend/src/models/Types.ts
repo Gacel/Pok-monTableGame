@@ -93,6 +93,10 @@ export interface MatchState {
   resources: Record<string, PlayerResources>;
   log: string[];
   combat: CombatState | null;
+  /** Alianzas 2v2 ([[p1,p3],[p2,p4]]); null en todos contra todos. */
+  alliances?: string[][] | null;
+  /** Jugadores eliminados (sin Pokémon o que abandonaron). */
+  eliminated?: string[];
 }
 
 export interface MoveOptions {

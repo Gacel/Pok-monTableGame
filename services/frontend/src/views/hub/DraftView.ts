@@ -1,4 +1,5 @@
 import type { MovementPattern, PokemonType } from '../../models/Types';
+import type { GameMode } from '@transcendence/shared';
 
 interface RosterEntry {
   name: string;
@@ -10,12 +11,15 @@ interface RosterEntry {
   def: number;
 }
 
-export interface DraftTeams {
-  player1: string[];
-  player2: string[];
-}
+/** Configuración del draft: local secuencial (N jugadores) u online (solo tú). */
+export type DraftConfig =
+  | { mode: 'local'; players: number; gameMode: GameMode }
+  | { mode: 'online'; playerLabel: string };
 
 const TEAM_SIZE = 3;
+
+/** Colores por jugador, alineados con el HUD (P1 azul, P2 rojo, P3 violeta, P4 amarillo). */
+const PLAYER_COLORS = ['#3b82f6', '#ef4444', '#a855f7', '#eab308'];
 
 const TYPE_COLOR: Record<string, string> = {
   FIRE: '#ef4444',
@@ -39,21 +43,28 @@ const PATTERN_LABEL: Record<MovementPattern, string> = {
 };
 
 /**
- * Capa VISTA: pantalla de draft. El Jugador 1 elige 3 y luego el Jugador 2 elige 3
- * de un pool de 12. Al confirmar, entrega los equipos vía callback.
+ * Capa VISTA: pantalla de draft.
+ *  - Local: cada jugador (1..N) elige 3 por turnos en la misma pantalla,
+ *    sin repetir Pokémon entre jugadores.
+ *  - Online: eliges SOLO tu equipo de 3 (los rivales draftean en su navegador).
+ * Al confirmar, entrega los equipos en orden vía callback.
  */
 export class DraftView {
   private container: HTMLElement;
-  private onConfirm: (teams: DraftTeams) => void;
+  private config: DraftConfig;
+  private onConfirm: (teams: string[][]) => void;
 
   private roster: RosterEntry[] = [];
   private sprites: Record<string, string> = {};
-  private phase: 'player1' | 'player2' = 'player1';
-  private picks: DraftTeams = { player1: [], player2: [] };
+  private phase = 0; // índice del jugador que elige (siempre 0 en online)
+  private picks: string[][];
 
-  constructor(container: HTMLElement, onConfirm: (teams: DraftTeams) => void) {
+  constructor(container: HTMLElement, config: DraftConfig, onConfirm: (teams: string[][]) => void) {
     this.container = container;
+    this.config = config;
     this.onConfirm = onConfirm;
+    const teams = config.mode === 'local' ? config.players : 1;
+    this.picks = Array.from({ length: teams }, () => []);
   }
 
   async render(): Promise<void> {
@@ -92,19 +103,42 @@ export class DraftView {
     return `<div class="w-full h-full flex items-center justify-center text-yellow-400 text-xs" style="font-family:'Press Start 2P',monospace;">${msg}</div>`;
   }
 
+  private totalPhases(): number {
+    return this.picks.length;
+  }
+
   private currentPicks(): string[] {
-    return this.picks[this.phase];
+    return this.picks[this.phase] ?? [];
+  }
+
+  /** Título de la fase: JUGADOR N (+ equipo en 2v2) o tu etiqueta online. */
+  private phaseTitle(): string {
+    if (this.config.mode === 'online') {
+      return `DRAFT — ${this.config.playerLabel.toUpperCase()}`;
+    }
+    const n = this.phase + 1;
+    if (this.config.gameMode === 'teams') {
+      const team = n === 1 || n === 3 ? 'EQUIPO A' : 'EQUIPO B';
+      return `DRAFT — JUGADOR ${n} · ${team}`;
+    }
+    return `DRAFT — JUGADOR ${n}`;
+  }
+
+  private phaseColor(): string {
+    if (this.config.mode === 'online') return '#facc15';
+    return PLAYER_COLORS[this.phase] ?? '#facc15';
   }
 
   private draw(): void {
-    const taken = new Set(this.picks.player1); // no repetir entre jugadores
+    // En local no se repite Pokémon entre jugadores; online cada uno es libre.
+    const taken = new Set(this.picks.slice(0, this.phase).flat());
     const picks = this.currentPicks();
-    const color = this.phase === 'player1' ? '#f87171' : '#60a5fa';
+    const color = this.phaseColor();
 
     const cards = this.roster
       .map((p) => {
         const selected = picks.includes(p.name);
-        const isTakenByOther = this.phase === 'player2' && taken.has(p.name);
+        const isTakenByOther = taken.has(p.name);
         const isTeamFull = picks.length === TEAM_SIZE && !selected;
         const disabled = isTakenByOther || isTeamFull;
         const border = selected ? '#facc15' : disabled ? '#374151' : '#1e293b';
@@ -122,6 +156,13 @@ export class DraftView {
       .join('');
 
     const isReady = picks.length === TEAM_SIZE;
+    const isLastPhase = this.phase === this.totalPhases() - 1;
+    const confirmLabel =
+      this.config.mode === 'online'
+        ? 'CONFIRMAR EQUIPO ✔'
+        : isLastPhase
+          ? '¡A JUGAR!'
+          : 'SIGUIENTE ▶';
     const btnStyle = isReady
       ? 'bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 hover:from-yellow-300 hover:to-red-400 border-yellow-200 text-black font-extrabold shadow-[0_0_20px_rgba(250,204,21,0.9)] animate-pulse scale-105 cursor-pointer'
       : 'bg-gray-800 border-gray-900 text-gray-500 cursor-not-allowed opacity-60';
@@ -129,10 +170,10 @@ export class DraftView {
     this.container.innerHTML = `
       <div class="h-full flex flex-col items-center justify-center p-3 overflow-hidden">
         <h2 class="text-base mb-1" style="font-family:'Press Start 2P',monospace;color:${color};text-shadow:2px 2px 0 #000;">
-          DRAFT — ${this.phase === 'player1' ? 'JUGADOR 1' : 'JUGADOR 2'}
+          ${this.phaseTitle()}
         </h2>
         <p class="text-[8px] text-gray-300 mb-3" style="font-family:'Press Start 2P',monospace;">
-          Elige ${TEAM_SIZE} Pokémon (${picks.length}/${TEAM_SIZE})
+          Elige ${TEAM_SIZE} Pokémon (${picks.length}/${TEAM_SIZE})${this.config.mode === 'local' ? ` · Fase ${this.phase + 1}/${this.totalPhases()}` : ''}
         </p>
         <div class="grid grid-cols-6 gap-2 max-w-4xl">${cards}</div>
         <div class="mt-4 flex gap-4 items-center justify-between w-full max-w-4xl px-4 bg-gray-900 bg-opacity-80 p-2 rounded border border-gray-700">
@@ -140,7 +181,7 @@ export class DraftView {
           <button id="draft-confirm" ${isReady ? '' : 'disabled'}
             class="px-6 py-3 text-xs rounded border-2 transition-all ${btnStyle}"
             style="font-family:'Press Start 2P',monospace;">
-            ${this.phase === 'player1' ? 'SIGUIENTE ▶' : '¡A JUGAR!'}
+            ${confirmLabel}
           </button>
         </div>
       </div>`;
@@ -162,8 +203,8 @@ export class DraftView {
 
   private confirm(): void {
     if (this.currentPicks().length !== TEAM_SIZE) return;
-    if (this.phase === 'player1') {
-      this.phase = 'player2';
+    if (this.phase < this.totalPhases() - 1) {
+      this.phase += 1;
       this.draw();
     } else {
       this.onConfirm(this.picks);

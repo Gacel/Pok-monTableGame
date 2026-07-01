@@ -1,6 +1,10 @@
 import { authState } from '../../auth/AuthState';
-import { startGame } from '../../main';
+import { showMultiplayerMenu, showSettings } from '../../main';
 
+/**
+ * Capa VISTA: menú principal. Orden fijo: Un Jugador, Multijugador, Tienda,
+ * Configuración. Un Jugador (vs IA) y Tienda llegarán en fases posteriores.
+ */
 export class MainMenuView {
   private container: HTMLElement;
 
@@ -18,7 +22,7 @@ export class MainMenuView {
       <div class="transform scale-125 lg:scale-150 origin-center transition-transform">
         <div class="relative w-full max-w-2xl mx-auto p-1 bg-gray-900" style="border: 4px solid #fff; border-radius: 8px; box-shadow: 0 0 0 4px #000, 0 0 20px rgba(0,0,0,0.8);">
           <div class="bg-blue-900 border-4 border-black p-4 flex flex-col items-center min-h-[400px] relative" style="border-radius: 4px; box-shadow: inset 0 0 20px rgba(0,0,0,0.5);">
-          
+
           <!-- Top Bar: Trainer Info -->
           <div class="w-full bg-white border-4 border-gray-800 p-3 flex justify-between items-center shadow-inner rounded mb-8">
             <div class="flex items-center gap-3">
@@ -37,27 +41,24 @@ export class MainMenuView {
           <div class="bg-white border-4 border-gray-800 p-4 shadow-[4px_4px_0_#000] rounded-lg w-full max-w-sm relative">
             <h3 class="text-black text-xs mb-4 text-center border-b-2 border-gray-300 pb-2" style="font-family: 'Press Start 2P', monospace;">MENÚ PRINCIPAL</h3>
 
-            <!-- Acción principal destacada: modo de 2 jugadores -->
-            <button id="btn-local" class="w-full mb-4 py-3 bg-red-600 hover:bg-red-500 text-white border-b-4 border-red-800 active:border-b-0 active:mt-1 transition-all rounded flex flex-col items-center gap-2" style="font-family: 'Press Start 2P', monospace; box-shadow: 0 4px 0 #000;">
-              <span class="text-[8px] bg-yellow-400 text-black px-2 py-1 rounded">👥 2 JUGADORES</span>
-              <span class="text-[12px]">▶ PARTIDA LOCAL · 2 VS</span>
-              <span class="text-[7px] text-yellow-200">Misma pantalla · Draft 3 vs 3 · por turnos</span>
-            </button>
-
-            <p class="text-black text-[7px] leading-relaxed mb-4 bg-gray-100 border border-gray-300 rounded p-2" style="font-family: 'Press Start 2P', monospace;">
-              Dos jugadores en el mismo equipo/PC. Elige 3 Pokémon, controla biomas para ganar candies y derrota al rival en combate por turnos.
-            </p>
-
-            <div class="space-y-3 flex flex-col border-t-2 border-gray-200 pt-3">
-              <button id="btn-singleplayer" disabled class="text-left w-full p-1 text-gray-400 text-[9px] flex items-center cursor-not-allowed" style="font-family: 'Press Start 2P', monospace;">
-                <span class="ml-2">🔒 1 Jugador · vs IA (pronto)</span>
+            <div class="space-y-3 flex flex-col">
+              <button id="btn-singleplayer" disabled class="text-left w-full p-2 text-gray-400 text-[9px] flex items-center cursor-not-allowed" style="font-family: 'Press Start 2P', monospace;">
+                <span class="ml-2">🔒 UN JUGADOR · vs IA (pronto)</span>
               </button>
-              <button id="btn-online" disabled class="text-left w-full p-1 text-gray-400 text-[9px] flex items-center cursor-not-allowed" style="font-family: 'Press Start 2P', monospace;">
-                <span class="ml-2">🔒 2 Jugadores · Online (pronto)</span>
+
+              <!-- Acción principal destacada -->
+              <button id="btn-multiplayer" class="w-full py-3 bg-red-600 hover:bg-red-500 text-white border-b-4 border-red-800 active:border-b-0 active:mt-1 transition-all rounded flex flex-col items-center gap-2" style="font-family: 'Press Start 2P', monospace; box-shadow: 0 4px 0 #000;">
+                <span class="text-[12px]">▶ MULTIJUGADOR</span>
+                <span class="text-[7px] text-yellow-200">Local o Online · 2-4 jugadores · FFA o 2 vs 2</span>
               </button>
-              <button id="btn-ranking" class="text-left w-full p-1 text-black text-[9px] hover:bg-gray-200 transition-colors flex items-center group focus:outline-none" style="font-family: 'Press Start 2P', monospace;">
+
+              <button id="btn-shop" disabled class="text-left w-full p-2 text-gray-400 text-[9px] flex items-center cursor-not-allowed" style="font-family: 'Press Start 2P', monospace;">
+                <span class="ml-2">🔒 TIENDA (pronto)</span>
+              </button>
+
+              <button id="btn-settings" class="text-left w-full p-2 text-black text-[9px] hover:bg-gray-200 transition-colors flex items-center group focus:outline-none" style="font-family: 'Press Start 2P', monospace;">
                 <span class="w-4 opacity-0 group-hover:opacity-100 transition-opacity">▶</span>
-                <span class="ml-2">🏆 Ranking</span>
+                <span class="ml-2">⚙️ CONFIGURACIÓN</span>
               </button>
             </div>
           </div>
@@ -71,12 +72,12 @@ export class MainMenuView {
       </div>
     `;
 
-    document.getElementById('btn-local')?.addEventListener('click', () => {
-      startGame();
+    document.getElementById('btn-multiplayer')?.addEventListener('click', () => {
+      showMultiplayerMenu();
     });
 
-    document.getElementById('btn-ranking')?.addEventListener('click', () => {
-      alert('El ranking global llegará con el user-service. ¡Próximamente!');
+    document.getElementById('btn-settings')?.addEventListener('click', () => {
+      showSettings();
     });
 
     document.getElementById('btn-logout')?.addEventListener('click', () => {
