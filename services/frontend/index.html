@@ -17,6 +17,11 @@
         <div id="hub-layer" class="absolute inset-0 z-50 flex items-center justify-center bg-gray-900 transition-opacity duration-500">
           <!-- Se inyectan las vistas aquí -->
         </div>
+
+        <!-- Draft Layer (selección de equipos 3v3) -->
+        <div id="draft-layer" class="absolute inset-0 z-[55] hidden overflow-auto bg-gray-900">
+          <!-- DraftView se inyecta aquí -->
+        </div>
         
         <!-- Game Layer -->
         <div id="game-layer" class="absolute inset-0 z-10 hidden bg-black">
@@ -65,6 +70,11 @@
 
           <!-- Reset button (bottom-right) -->
           <button id="btn-reset" class="absolute bottom-4 right-4 bg-gray-800 hover:bg-gray-700 text-white text-[8px] px-3 py-2 rounded border-b-4 border-gray-900 active:border-b-0 active:mt-1 z-50" style="font-family: 'Press Start 2P', monospace;">REINICIAR</button>
+
+          <!-- Combat overlay (escena de lucha) -->
+          <div id="combat-overlay" class="absolute inset-0 hidden z-[70]">
+            <!-- CombatView se inyecta aquí -->
+          </div>
 
           <!-- Win overlay -->
           <div id="win-overlay" class="absolute inset-0 hidden items-center justify-center bg-black bg-opacity-80 z-[60]">

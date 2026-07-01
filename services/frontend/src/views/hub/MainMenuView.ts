@@ -33,25 +33,26 @@ export class MainMenuView {
 
           <!-- Menu Options -->
           <div class="bg-white border-4 border-gray-800 p-4 shadow-[4px_4px_0_#000] rounded-lg w-full max-w-sm relative">
-            <h3 class="text-black text-xs mb-6 text-center border-b-2 border-gray-300 pb-2" style="font-family: 'Press Start 2P', monospace;">MENÚ PRINCIPAL</h3>
-            
-            <div class="space-y-4 flex flex-col">
-              <button id="btn-singleplayer" class="text-left w-full p-2 bg-transparent text-black text-[10px] hover:bg-gray-200 transition-colors flex items-center group focus:outline-none" style="font-family: 'Press Start 2P', monospace;">
-                <span class="w-4 opacity-0 group-hover:opacity-100 transition-opacity">▶</span>
-                <span class="ml-2">1 Jugador (Pronto)</span>
-              </button>
-              
-              <button id="btn-local" class="text-left w-full p-2 bg-transparent text-black text-[10px] hover:bg-gray-200 transition-colors flex items-center group focus:outline-none" style="font-family: 'Press Start 2P', monospace;">
-                <span class="w-4 opacity-0 group-hover:opacity-100 transition-opacity">▶</span>
-                <span class="ml-2 text-blue-700">Multijugador Local</span>
-              </button>
-              
-              <button id="btn-online" class="text-left w-full p-2 bg-transparent text-black text-[10px] hover:bg-gray-200 transition-colors flex items-center group focus:outline-none" style="font-family: 'Press Start 2P', monospace;">
-                <span class="w-4 opacity-0 group-hover:opacity-100 transition-opacity">▶</span>
-                <span class="ml-2">Multijugador Online (Pronto)</span>
-              </button>
+            <h3 class="text-black text-xs mb-4 text-center border-b-2 border-gray-300 pb-2" style="font-family: 'Press Start 2P', monospace;">MENÚ PRINCIPAL</h3>
 
-              <button id="btn-ranking" class="text-left w-full p-2 bg-transparent text-black text-[10px] hover:bg-gray-200 transition-colors flex items-center group focus:outline-none" style="font-family: 'Press Start 2P', monospace;">
+            <!-- Acción principal destacada -->
+            <button id="btn-local" class="w-full mb-4 py-3 bg-red-600 hover:bg-red-500 text-white text-[11px] border-b-4 border-red-800 active:border-b-0 active:mt-1 transition-all rounded flex flex-col items-center gap-1" style="font-family: 'Press Start 2P', monospace; box-shadow: 0 4px 0 #000;">
+              <span>▶ PARTIDA LOCAL</span>
+              <span class="text-[7px] text-yellow-200">Draft 3 vs 3 · por turnos</span>
+            </button>
+
+            <p class="text-black text-[7px] leading-relaxed mb-4 bg-gray-100 border border-gray-300 rounded p-2" style="font-family: 'Press Start 2P', monospace;">
+              Elige 3 Pokémon, controla biomas para ganar candies y derrota al rival en combate.
+            </p>
+
+            <div class="space-y-3 flex flex-col border-t-2 border-gray-200 pt-3">
+              <button id="btn-singleplayer" disabled class="text-left w-full p-1 text-gray-400 text-[9px] flex items-center cursor-not-allowed" style="font-family: 'Press Start 2P', monospace;">
+                <span class="ml-2">1 Jugador · IA (pronto)</span>
+              </button>
+              <button id="btn-online" disabled class="text-left w-full p-1 text-gray-400 text-[9px] flex items-center cursor-not-allowed" style="font-family: 'Press Start 2P', monospace;">
+                <span class="ml-2">Multijugador Online (pronto)</span>
+              </button>
+              <button id="btn-ranking" class="text-left w-full p-1 text-black text-[9px] hover:bg-gray-200 transition-colors flex items-center group focus:outline-none" style="font-family: 'Press Start 2P', monospace;">
                 <span class="w-4 opacity-0 group-hover:opacity-100 transition-opacity">▶</span>
                 <span class="ml-2">Ranking</span>
               </button>
@@ -69,6 +70,10 @@ export class MainMenuView {
 
     document.getElementById('btn-local')?.addEventListener('click', () => {
       startGame();
+    });
+
+    document.getElementById('btn-ranking')?.addEventListener('click', () => {
+      alert('El ranking global llegará con el user-service. ¡Próximamente!');
     });
 
     document.getElementById('btn-logout')?.addEventListener('click', () => {

@@ -4,6 +4,8 @@ import { authState } from './auth/AuthState';
 import { LoginView } from './views/hub/LoginView';
 import { AvatarCreationView } from './views/hub/AvatarCreationView';
 import { MainMenuView } from './views/hub/MainMenuView';
+import { DraftView } from './views/hub/DraftView';
+import type { DraftTeams } from './views/hub/DraftView';
 
 const hubLayer = document.getElementById('hub-layer') as HTMLElement;
 const gameLayer = document.getElementById('game-layer') as HTMLElement;
@@ -52,17 +54,48 @@ function resizeGameArea() {
   wrapper.style.transform = `scale(${scale})`;
 }
 
+// Menú → Draft → (POST /start) → Tablero
 export function startGame() {
   hubLayer.classList.add('opacity-0');
   setTimeout(() => {
     hubLayer.style.display = 'none';
-    gameLayer.classList.remove('hidden');
-    
-    if (!gameController) {
-      gameController = new GameController(canvas);
-      gameController.start();
-    }
+    showDraft();
   }, 500);
+}
+
+function showDraft() {
+  const draftLayer = document.getElementById('draft-layer') as HTMLElement;
+  draftLayer.classList.remove('hidden');
+  const view = new DraftView(draftLayer, (teams) => onDraftConfirmed(draftLayer, teams));
+  view.render();
+}
+
+async function onDraftConfirmed(draftLayer: HTMLElement, teams: DraftTeams) {
+  try {
+    const res = await fetch('/api/game/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(teams),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      alert(data.error ?? 'No se pudo iniciar la partida');
+      return;
+    }
+  } catch {
+    alert('Error de red al iniciar la partida');
+    return;
+  }
+  draftLayer.classList.add('hidden');
+  enterGame();
+}
+
+function enterGame() {
+  gameLayer.classList.remove('hidden');
+  if (!gameController) {
+    gameController = new GameController(canvas);
+  }
+  gameController.start();
 }
 
 // Inicializar y reescalar al cargar la página

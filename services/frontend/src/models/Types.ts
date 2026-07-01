@@ -31,6 +31,27 @@ export interface PlayerResources {
   GRASS_CANDY: number;
 }
 
+export type MatchStatus = 'active' | 'combat' | 'finished';
+export type CombatAction = 'ATACAR' | 'HABILIDAD' | 'OBJETO' | 'HUIR';
+
+/** Estado de un combate interactivo (espejo del CombatState del servidor). */
+export interface CombatState {
+  attackerId: string;
+  defenderId: string;
+  attackerHex: Hex;
+  defenderHex: Hex;
+  attacker: Pokemon;
+  defender: Pokemon;
+  attackerPlayer: string;
+  defenderPlayer: string;
+  turnActorId: string;
+  round: number;
+  log: string[];
+  status: 'active' | 'finished';
+  winnerId: string | null;
+  outcome: 'ko' | 'fled' | null;
+}
+
 /** Estado autoritativo de la partida (espejo del DTO del game-service). */
 export interface MatchState {
   id: string;
@@ -38,10 +59,11 @@ export interface MatchState {
   players: string[];
   currentPlayer: string;
   turn: number;
-  status: 'active' | 'finished';
+  status: MatchStatus;
   winner: string | null;
   resources: Record<string, PlayerResources>;
   log: string[];
+  combat: CombatState | null;
 }
 
 export interface MoveOptions {

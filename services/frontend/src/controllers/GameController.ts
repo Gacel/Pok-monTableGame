@@ -2,9 +2,10 @@ import { GameState } from '../models/GameState';
 import { BoardView } from '../views/BoardView';
 import { HUDView } from '../views/HUDView';
 import { EntityView } from '../views/EntityView';
+import { CombatView } from '../views/CombatView';
 import { WsClient } from '../net/WsClient';
 import type { WsMessage } from '../net/WsClient';
-import type { Hex, MatchState } from '../models/Types';
+import type { Hex, MatchState, CombatAction } from '../models/Types';
 
 /**
  * Capa CONTROLADOR (frontend): traduce input del usuario a peticiones al servidor
@@ -15,6 +16,7 @@ export class GameController {
   private boardView: BoardView;
   private hudView: HUDView;
   private entityView: EntityView;
+  private combatView: CombatView;
   private canvas: HTMLCanvasElement;
 
   private isDragging = false;
@@ -32,6 +34,7 @@ export class GameController {
     this.boardView = new BoardView(this.canvas, this.state);
     this.hudView = new HUDView(this.state);
     this.entityView = new EntityView(this.state, this.boardView);
+    this.combatView = new CombatView(this.state, (a) => this.sendCombatAction(a));
 
     this.state.subscribe(() => this.renderAll());
     this.setupEvents();
@@ -131,6 +134,30 @@ export class GameController {
     this.boardView.render();
     this.entityView.render();
     this.hudView.render();
+    this.combatView.render();
+  }
+
+  private async sendCombatAction(action: CombatAction): Promise<void> {
+    if (this.busy) return;
+    this.busy = true;
+    try {
+      const res = await fetch('/api/game/combat/action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        this.state.setMatch(data.state as MatchState);
+      } else {
+        this.hudView.flashToast(data.error ?? 'Acción no válida');
+      }
+    } catch (err) {
+      console.error(err);
+      this.hudView.flashToast('Error de red');
+    } finally {
+      this.busy = false;
+    }
   }
 
   private setupEvents(): void {
@@ -190,7 +217,8 @@ export class GameController {
 
   private async handleCanvasClick(e: MouseEvent): Promise<void> {
     const match = this.state.match;
-    if (!match || match.status === 'finished' || this.busy) return;
+    // Durante el combate el tablero no acepta clics (se usa el menú de combate).
+    if (!match || match.status !== 'active' || this.busy) return;
 
     const rect = this.canvas.getBoundingClientRect();
     const scaleX = this.canvas.width / rect.width;

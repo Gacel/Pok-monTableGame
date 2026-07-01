@@ -189,6 +189,28 @@
 - **Verificación:** `tsc` limpio, **23/23 tests**, smoke HTTP de guardas.
 - **Commit:** `feat(game): 3v3 draft + interactive turn-based combat`
 
+### F16 — Pantalla de Draft [frontend] ✅
+- **Qué:** `views/hub/DraftView.ts`: pide `/api/game/roster` (12), muestra tarjetas con
+  sprite/tipo/patrón; el Jugador 1 elige 3 y luego el 2 (los del P1 quedan bloqueados);
+  al confirmar hace `POST /api/game/start` y entra al tablero. Flujo cableado en `main.ts`
+  (menú → draft → partida) e `index.html` (`#draft-layer`).
+
+### F17 — Escena de combate interactivo [frontend] ✅
+- **Qué:** `views/CombatView.ts`: overlay estilo lucha (fondo de arena, atacante a la
+  izquierda volteado y defensor a la derecha, barras de HP), **menú de acciones**
+  (ATACAR/HABILIDAD/OBJETO/HUIR) habilitadas según recursos, y log de combate. Integrada
+  en `GameController` (render en `status:'combat'`, bloquea el tablero, envía acciones a
+  `/api/game/combat/action`). Sincroniza en vivo por WSS.
+
+### F18 — Mejora del menú principal + fix Vite ✅
+- **Qué:** `MainMenuView` con acción principal destacada (PARTIDA LOCAL · Draft 3v3),
+  instrucciones breves, opciones "pronto" claras y handler de Ranking. `vite.config.ts`:
+  `allowedHosts: true` (evita el bloqueo anti DNS-rebinding de Vite 8 tras el gateway).
+- **Verificación (F16-F18):** `tsc --noEmit` limpio + **`vite build` OK** (17 módulos) +
+  `docker compose up --build`: frontend servido por HTTPS (`<title>` presente vía
+  `localhost`), roster=12, estado activo.
+- **Commit:** `feat(frontend): draft screen + interactive battle scene + menu polish`
+
 ---
 
 ## Resumen del estado al cierre de la sesión
