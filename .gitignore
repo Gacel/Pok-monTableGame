@@ -18,6 +18,9 @@ npm-debug.log*
 .env.*
 !.env.example
 
+# Config local de agentes/MCP (contiene claves de API — mantener SOLO en local)
+.agents/mcp.json
+
 # Bases de datos SQLite locales
 *.db
 *.sqlite
