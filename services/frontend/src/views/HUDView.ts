@@ -110,6 +110,7 @@ export class HUDView {
 
       const teamEl = document.getElementById(`hud-${slot}-team`);
       if (teamEl && playerId) {
+        const rightSide = slot === 'p2' || slot === 'p4';
         const team = this.state.match?.tiles
           .map((t) => t.occupant)
           .filter((p): p is NonNullable<typeof p> => !!p && p.playerId === playerId && p.id !== occ.id) ?? [];
@@ -118,14 +119,16 @@ export class HUDView {
           teamEl.classList.add('hidden');
         } else {
           teamEl.classList.remove('hidden');
+          // Píldoras horizontales que crecen (flex-1) para llenar el marco sin
+          // dejar hueco. En P2/P4 se reflejan (sprite hacia el borde de pantalla).
           teamEl.innerHTML = team.map((p) => {
             const pPct = Math.max(0, Math.min(100, (p.hp / (p.maxHp || 1)) * 100));
             const barBg = pPct > 50 ? 'bg-green-500' : pPct > 20 ? 'bg-yellow-500' : 'bg-red-500';
             const spriteUrl = this.state.pokeGifs[p.name ?? ''] ?? '';
             return `
-              <div class="flex flex-col items-center bg-gray-800 border border-gray-600 rounded p-1 w-14 shadow transition-transform hover:scale-105 cursor-pointer" title="${p.name ?? 'Pokémon'} (${p.hp}/${p.maxHp})">
-                <img src="${spriteUrl}" class="w-7 h-7 object-contain" style="image-rendering: pixelated;" />
-                <div class="w-full h-1.5 bg-gray-900 rounded overflow-hidden mt-1 border border-gray-700">
+              <div class="flex items-center gap-1.5 flex-1 min-w-0 bg-gray-800 border border-gray-600 rounded px-1.5 py-1 shadow transition-transform hover:scale-105 cursor-pointer ${rightSide ? 'flex-row-reverse' : ''}" title="${p.name ?? 'Pokémon'} (${p.hp}/${p.maxHp})">
+                <img src="${spriteUrl}" class="w-8 h-8 object-contain flex-shrink-0" style="image-rendering: pixelated;" />
+                <div class="flex-1 min-w-0 h-2 bg-gray-900 rounded overflow-hidden border border-gray-700 flex ${rightSide ? 'justify-end' : ''}">
                   <div class="h-full ${barBg}" style="width: ${pPct}%;"></div>
                 </div>
               </div>

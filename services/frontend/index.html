@@ -63,6 +63,10 @@
                 <!-- Player 2 (Top-Right - Rojo) -->
                 <div id="hud-p2" class="flex flex-col gap-1.5 bg-gray-900 bg-opacity-85 p-2 rounded-lg border-2 border-red-500 shadow-lg hidden pointer-events-auto cursor-pointer transition-transform hover:scale-105">
                   <div class="flex items-center gap-3 flex-row-reverse text-right">
+                    <!-- Marco entrenador (mismo orden DOM que P1 → espejo por flex-row-reverse) -->
+                    <div class="w-16 h-16 bg-gray-800 rounded border-2 border-red-400 p-1 flex items-center justify-center flex-shrink-0 shadow-inner">
+                      <img id="hud-p2-trainer" src="https://play.pokemonshowdown.com/sprites/trainers/blue.png" class="w-14 h-14 object-contain" style="image-rendering: pixelated;" title="Entrenador" />
+                    </div>
                     <img id="hud-p2-avatar" src="" class="w-16 h-16 object-contain bg-gray-800 rounded border border-red-400 p-1 flex-shrink-0" style="image-rendering: pixelated;" title="Pokémon activo" />
                     <div class="flex flex-col items-end">
                         <div class="text-xs text-red-400 mb-1 drop-shadow" style="font-family: 'Press Start 2P', monospace;" id="hud-p2-name">Player 2</div>
@@ -71,10 +75,6 @@
                           <div id="hud-p2-hp-text" class="absolute inset-0 flex items-center justify-center text-[9px] leading-none pt-1 text-white drop-shadow-md" style="font-family: 'Press Start 2P', monospace;">100/100</div>
                         </div>
                         <div id="hud-p2-res" class="mt-1 text-[8px] text-white flex gap-2 justify-end" style="font-family: 'Press Start 2P', monospace;"></div>
-                    </div>
-                    <!-- Marco entrenador (a su izquierda en pantalla) -->
-                    <div class="w-16 h-16 bg-gray-800 rounded border-2 border-red-400 p-1 flex items-center justify-center flex-shrink-0 shadow-inner">
-                      <img id="hud-p2-trainer" src="https://play.pokemonshowdown.com/sprites/trainers/blue.png" class="w-14 h-14 object-contain" style="image-rendering: pixelated;" title="Entrenador" />
                     </div>
                   </div>
                   <!-- Miniaturas equipo -->
@@ -108,6 +108,10 @@
                 <!-- Player 4 (Bottom-Right - Amarillo) -->
                 <div id="hud-p4" class="flex flex-col gap-1 bg-gray-900 bg-opacity-85 p-2 rounded-lg border-2 border-yellow-500 shadow-lg hidden pointer-events-auto cursor-pointer transition-transform hover:scale-105">
                   <div class="flex items-center gap-2 flex-row-reverse text-right">
+                    <!-- Marco entrenador (mismo orden DOM que P3 → espejo por flex-row-reverse) -->
+                    <div class="w-14 h-14 bg-gray-800 rounded border-2 border-yellow-400 p-1 flex items-center justify-center flex-shrink-0 shadow-inner">
+                      <img id="hud-p4-trainer" src="https://play.pokemonshowdown.com/sprites/trainers/ethan.png" class="w-12 h-12 object-contain" style="image-rendering: pixelated;" title="Entrenador" />
+                    </div>
                     <img id="hud-p4-avatar" src="" class="w-14 h-14 object-contain bg-gray-800 rounded border border-yellow-400 p-1 flex-shrink-0" style="image-rendering: pixelated;" title="Pokémon activo" />
                     <div class="flex flex-col items-end">
                         <div class="text-[10px] text-yellow-400 mb-1 drop-shadow" style="font-family: 'Press Start 2P', monospace;" id="hud-p4-name">Player 4</div>
@@ -116,10 +120,6 @@
                           <div id="hud-p4-hp-text" class="absolute inset-0 flex items-center justify-center text-[8px] leading-none pt-0.5 text-white drop-shadow-md" style="font-family: 'Press Start 2P', monospace;">100/100</div>
                         </div>
                         <div id="hud-p4-res" class="mt-1 text-[8px] text-white flex gap-2 justify-end" style="font-family: 'Press Start 2P', monospace;"></div>
-                    </div>
-                    <!-- Marco entrenador a su izquierda en pantalla -->
-                    <div class="w-14 h-14 bg-gray-800 rounded border-2 border-yellow-400 p-1 flex items-center justify-center flex-shrink-0 shadow-inner">
-                      <img id="hud-p4-trainer" src="https://play.pokemonshowdown.com/sprites/trainers/ethan.png" class="w-12 h-12 object-contain" style="image-rendering: pixelated;" title="Entrenador" />
                     </div>
                   </div>
                   <!-- Miniaturas equipo -->
