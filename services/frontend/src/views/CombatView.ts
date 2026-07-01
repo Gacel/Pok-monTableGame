@@ -1,5 +1,5 @@
 import { GameState } from '../models/GameState';
-import type { CombatAction, CombatState, Pokemon } from '../models/Types';
+import type { CombatAction, CombatState, PlayerResources, Pokemon, PokemonMove } from '../models/Types';
 
 /**
  * Capa VISTA: escena de combate estilo juego de lucha (bitmap frente a frente)
@@ -8,13 +8,13 @@ import type { CombatAction, CombatState, Pokemon } from '../models/Types';
  */
 export class CombatView {
   private state: GameState;
-  private onAction: (action: CombatAction) => void;
+  private onAction: (action: CombatAction, moveName?: string) => void;
   private onContinue: () => void;
   private overlay: HTMLElement | null;
 
   constructor(
     state: GameState,
-    onAction: (action: CombatAction) => void,
+    onAction: (action: CombatAction, moveName?: string) => void,
     onContinue: () => void
   ) {
     this.state = state;
@@ -88,7 +88,7 @@ export class CombatView {
       this.overlay.querySelectorAll<HTMLButtonElement>('button[data-action]').forEach((btn) => {
         btn.addEventListener('click', () => {
           const a = btn.dataset.action as CombatAction | undefined;
-          if (a) this.onAction(a);
+          if (a) this.onAction(a, btn.dataset.move || undefined);
         });
       });
     }
@@ -113,33 +113,63 @@ export class CombatView {
       </div>`;
   }
 
+  private candyIcon(type: string): string {
+    if (type === 'FIRE') return '🔥';
+    if (type === 'WATER' || type === 'ICE') return '💧';
+    return '🌿';
+  }
+
+  private candyOf(res: PlayerResources | undefined, type: string): number {
+    if (!res) return 0;
+    if (type === 'FIRE') return res.FIRE_CANDY;
+    if (type === 'WATER' || type === 'ICE') return res.WATER_CANDY;
+    return res.GRASS_CANDY;
+  }
+
   private actionPanel(combat: CombatState, actorIsAttacker: boolean): string {
     const match = this.state.match!;
     const actor = actorIsAttacker ? combat.attacker : combat.defender;
     const res = match.resources[actorIsAttacker ? combat.attackerPlayer : combat.defenderPlayer];
     const total = res ? res.FIRE_CANDY + res.WATER_CANDY + res.GRASS_CANDY : 0;
-    const typeCandy = res
-      ? actor.type === 'FIRE'
-        ? res.FIRE_CANDY
-        : actor.type === 'WATER'
-          ? res.WATER_CANDY
-          : res.GRASS_CANDY
-      : 0;
 
-    const btn = (id: string, label: string, sub: string, enabled: boolean) => `
+    const moves = (actor.moves ?? []).slice(0, 4);
+
+    const moveBtn = (m: PokemonMove) => {
+      const special = m.damageClass === 'special';
+      const enabled = !special || this.candyOf(res, m.type) >= 1;
+      const cost = special ? `${this.candyIcon(m.type)}1` : 'gratis';
+      const label = m.name.replace(/-/g, ' ').toUpperCase();
+      const sub = `${m.type} · P${m.power} · ${cost}`;
+      return `
+        <button data-action="MOVE" data-move="${this.escape(m.name)}" ${enabled ? '' : 'disabled'}
+          class="flex flex-col items-start px-3 py-2 rounded border-b-4 active:border-b-0 active:mt-1 text-left ${enabled ? 'bg-gray-800 hover:bg-yellow-600 border-black text-white' : 'bg-gray-900 border-gray-800 text-gray-600 cursor-not-allowed'}"
+          style="font-family:'Press Start 2P',monospace;">
+          <span class="text-[10px] leading-tight">${this.escape(label)}</span>
+          <span class="text-[7px] text-gray-300 mt-1">${sub}</span>
+        </button>`;
+    };
+
+    const utilBtn = (id: string, label: string, sub: string, enabled: boolean) => `
       <button data-action="${id}" ${enabled ? '' : 'disabled'}
-        class="flex flex-col items-start px-4 py-3 rounded border-b-4 active:border-b-0 active:mt-1 text-left ${enabled ? 'bg-gray-800 hover:bg-yellow-600 border-black text-white' : 'bg-gray-900 border-gray-800 text-gray-600 cursor-not-allowed'}"
+        class="flex flex-col items-start px-4 py-2 rounded border-b-4 active:border-b-0 active:mt-1 text-left ${enabled ? 'bg-gray-800 hover:bg-yellow-600 border-black text-white' : 'bg-gray-900 border-gray-800 text-gray-600 cursor-not-allowed'}"
         style="font-family:'Press Start 2P',monospace;">
-        <span class="text-[12px]">${label}</span>
+        <span class="text-[11px]">${label}</span>
         <span class="text-[7px] text-gray-300 mt-1">${sub}</span>
       </button>`;
 
+    const moveButtons = moves.length
+      ? moves.map(moveBtn).join('')
+      : `<div class="col-span-4 text-center text-[9px] text-gray-400 self-center py-3" style="font-family:'Press Start 2P',monospace;">Sin ataques disponibles</div>`;
+
     return `
-      <div class="grid grid-cols-4 gap-2 max-w-4xl mx-auto">
-        ${btn('ATACAR', 'ATACAR', 'daño básico', true)}
-        ${btn('HABILIDAD', 'HABILIDAD', `x1.6 · 1 candy`, typeCandy >= 1)}
-        ${btn('OBJETO', 'OBJETO', 'cura 30% · 2 candy', total >= 2)}
-        ${btn('HUIR', 'HUIR', 'con riesgo', true)}
+      <div class="max-w-4xl mx-auto flex flex-col gap-2">
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          ${moveButtons}
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          ${utilBtn('OBJETO', 'OBJETO', 'cura 30% · 2 candy', total >= 2)}
+          ${utilBtn('HUIR', 'HUIR', 'con riesgo', true)}
+        </div>
       </div>`;
   }
 

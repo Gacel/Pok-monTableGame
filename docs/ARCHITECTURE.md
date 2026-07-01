@@ -93,10 +93,23 @@ matches(        id TEXT PK, status TEXT, turn INTEGER,
                 current_player TEXT, created_at TEXT, updated_at TEXT )
 
 match_state(    match_id TEXT PK, state_json TEXT )     -- tablero serializado
+
+moves(          name TEXT PK, type TEXT, power INT, accuracy INT, pp INT,
+                damage_class TEXT, short_effect TEXT, raw_data TEXT )  -- catálogo PokeAPI
+
+pokemon_moves(  pokemon_name TEXT, move_name TEXT, learn_method TEXT,
+                level INT, PK(pokemon_name, move_name) )  -- learnset por Pokémon
 ```
 
 Persistencia: el estado del tablero se serializa a JSON y se guarda al final de
 cada turno y ante `SIGTERM` (graceful shutdown, C4.2).
+
+**Ataques (moves):** `moves` es el catálogo deduplicado de movimientos importados de
+PokeAPI y `pokemon_moves` el learnset de cada Pokémon (índice
+`idx_pokemon_moves_pokemon`). Al crear una partida, `PokemonService.getCuratedMoves()`
+elige ≤4 ataques por Pokémon y los cachea aquí; solo la primera partida paga red.
+Detalle completo en `docs/MOVES_SYSTEM.md`. *(A futuro, este fetch/caché debe migrar
+al microservicio `pokeapi-proxy` + Redis, C3.1.)*
 
 ---
 

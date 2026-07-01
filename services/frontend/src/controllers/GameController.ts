@@ -39,7 +39,7 @@ export class GameController {
     this.entityView = new EntityView(this.state, this.boardView);
     this.combatView = new CombatView(
       this.state,
-      (a) => this.sendCombatAction(a),
+      (a, moveName) => this.sendCombatAction(a, moveName),
       () => this.sendCombatContinue()
     );
     this.minimapView = new MinimapView(this.state, this.boardView, this.canvas);
@@ -203,14 +203,14 @@ export class GameController {
     this.minimapView.render();
   }
 
-  private async sendCombatAction(action: CombatAction): Promise<void> {
+  private async sendCombatAction(action: CombatAction, moveName?: string): Promise<void> {
     if (this.busy) return;
     this.busy = true;
     try {
       const res = await fetch('/api/game/combat/action', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action }),
+        body: JSON.stringify(moveName ? { action, moveName } : { action }),
       });
       const data = await res.json();
       if (res.ok && data.success) {

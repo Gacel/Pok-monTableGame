@@ -51,7 +51,10 @@ export async function gameRoutes(app: FastifyInstance): Promise<void> {
         body: {
           type: 'object',
           required: ['action'],
-          properties: { action: { type: 'string', enum: ['ATACAR', 'HABILIDAD', 'OBJETO', 'HUIR'] } },
+          properties: {
+            action: { type: 'string', enum: ['ATACAR', 'HABILIDAD', 'OBJETO', 'HUIR', 'MOVE'] },
+            moveName: { type: 'string', maxLength: 40 },
+          },
         },
       },
     },

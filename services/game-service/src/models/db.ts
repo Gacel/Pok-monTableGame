@@ -69,6 +69,29 @@ async function openAndMigrate(): Promise<Database> {
       state_json TEXT NOT NULL,
       FOREIGN KEY (match_id) REFERENCES matches(id) ON DELETE CASCADE
     );
+
+    -- Catálogo de movimientos importado de PokeAPI (deduplicado por nombre).
+    CREATE TABLE IF NOT EXISTS moves (
+      name         TEXT PRIMARY KEY,
+      type         TEXT NOT NULL DEFAULT 'NORMAL',
+      power        INTEGER,
+      accuracy     INTEGER,
+      pp           INTEGER,
+      damage_class TEXT,
+      short_effect TEXT,
+      raw_data     TEXT
+    );
+
+    -- Learnset: qué movimientos puede aprender cada Pokémon (sin FK para no
+    -- depender del orden de inserción entre pokemons/moves).
+    CREATE TABLE IF NOT EXISTS pokemon_moves (
+      pokemon_name TEXT NOT NULL,
+      move_name    TEXT NOT NULL,
+      learn_method TEXT,
+      level        INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (pokemon_name, move_name)
+    );
+    CREATE INDEX IF NOT EXISTS idx_pokemon_moves_pokemon ON pokemon_moves(pokemon_name);
   `);
 
   // Migración defensiva: añade columnas atk/def si la tabla pokemons ya existía.

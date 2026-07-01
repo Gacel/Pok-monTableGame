@@ -18,6 +18,18 @@ export type PokemonType =
   | 'FAIRY';
 export type MovementPattern = 'FLYING' | 'TANK' | 'SPEEDSTER';
 
+export type MoveDamageClass = 'physical' | 'special' | 'status';
+
+/** Un ataque concreto de un Pokémon (espejo del PokemonMove del servidor). */
+export interface PokemonMove {
+  name: string;
+  type: PokemonType;
+  power: number;
+  damageClass: MoveDamageClass;
+  accuracy?: number;
+  pp?: number;
+}
+
 export interface Pokemon {
   id: string;
   playerId: string;
@@ -32,6 +44,7 @@ export interface Pokemon {
   facing?: 'left' | 'right';
   lavaTurns?: number;
   hasActed?: boolean;
+  moves?: PokemonMove[];
 }
 
 export interface Tile {
@@ -47,7 +60,7 @@ export interface PlayerResources {
 }
 
 export type MatchStatus = 'active' | 'combat' | 'finished';
-export type CombatAction = 'ATACAR' | 'HABILIDAD' | 'OBJETO' | 'HUIR';
+export type CombatAction = 'ATACAR' | 'HABILIDAD' | 'OBJETO' | 'HUIR' | 'MOVE';
 
 /** Estado de un combate interactivo (espejo del CombatState del servidor). */
 export interface CombatState {

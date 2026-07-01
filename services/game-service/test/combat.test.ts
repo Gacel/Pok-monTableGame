@@ -1,12 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { Board, Pokemon } from '../src/engine/board.js';
+import { Board, Pokemon, PokemonMove } from '../src/engine/board.js';
 import {
   typeAdvantage,
   effectiveAtk,
   effectiveDef,
   canEnter,
 } from '../src/engine/environment.js';
-import { computeDamage, resolveCombat } from '../src/engine/combat.js';
+import { computeDamage, computeMoveDamage, resolveCombat } from '../src/engine/combat.js';
 import { getMoveOptions } from '../src/engine/movement.js';
 
 const mk = (over: Partial<Pokemon> & Pick<Pokemon, 'id' | 'playerId' | 'type' | 'movementPattern'>): Pokemon => ({
@@ -60,6 +60,43 @@ describe('Combat · damage', () => {
     const weak = mk({ id: 'x', playerId: 'p1', type: 'GRASS', movementPattern: 'TANK', atk: 1 });
     const tank = mk({ id: 'y', playerId: 'p2', type: 'FIRE', movementPattern: 'TANK', def: 999 });
     expect(computeDamage(weak, tank, 'GRASS', 'GRASS')).toBe(1);
+  });
+});
+
+describe('Combat · move damage', () => {
+  const move = (over: Partial<PokemonMove> & Pick<PokemonMove, 'type'>): PokemonMove => ({
+    name: 'test',
+    power: 60,
+    damageClass: 'physical',
+    ...over,
+  });
+
+  it('a POWER_REF (60) neutral move ≈ base attack scaling', () => {
+    const a = mk({ id: 'a', playerId: 'p1', type: 'WATER', movementPattern: 'TANK', atk: 50 });
+    const d = mk({ id: 'd', playerId: 'p2', type: 'NORMAL', movementPattern: 'TANK', def: 40 });
+    // NORMAL move, attacker WATER → no STAB; NORMAL vs NORMAL → neutral
+    // 50 * (60/60) * 1.0 * 1.0 − 20 = 30
+    expect(computeMoveDamage(a, d, move({ type: 'NORMAL' }), 'GRASS', 'GRASS')).toBe(30);
+  });
+
+  it('applies STAB (+20%) when the move type matches the attacker', () => {
+    const a = mk({ id: 'a', playerId: 'p1', type: 'WATER', movementPattern: 'TANK', atk: 50 });
+    const d = mk({ id: 'd', playerId: 'p2', type: 'NORMAL', movementPattern: 'TANK', def: 40 });
+    // 50 * 1 * 1.0 * 1.2 (STAB) − 20 = 40
+    expect(computeMoveDamage(a, d, move({ type: 'WATER' }), 'GRASS', 'GRASS')).toBe(40);
+  });
+
+  it('uses the MOVE type for advantage, not the pokemon type', () => {
+    const a = mk({ id: 'a', playerId: 'p1', type: 'NORMAL', movementPattern: 'TANK', atk: 50 });
+    const grass = mk({ id: 'd', playerId: 'p2', type: 'GRASS', movementPattern: 'TANK', def: 40 });
+    // FIRE move vs GRASS defender → 1.5; no STAB (attacker NORMAL): 50 * 1 * 1.5 * 1.0 − 20 = 55
+    expect(computeMoveDamage(a, grass, move({ type: 'FIRE' }), 'GRASS', 'GRASS')).toBe(55);
+  });
+
+  it('scales with move power and never drops below 1', () => {
+    const a = mk({ id: 'a', playerId: 'p1', type: 'NORMAL', movementPattern: 'TANK', atk: 10 });
+    const wall = mk({ id: 'd', playerId: 'p2', type: 'NORMAL', movementPattern: 'TANK', def: 999 });
+    expect(computeMoveDamage(a, wall, move({ type: 'NORMAL', power: 10 }), 'GRASS', 'GRASS')).toBe(1);
   });
 });
 

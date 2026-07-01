@@ -17,6 +17,24 @@ export type PokemonType =
 
 export type MovementPattern = 'FLYING' | 'TANK' | 'SPEEDSTER';
 
+export type MoveDamageClass = 'physical' | 'special' | 'status';
+
+/** Un ataque concreto de un Pokémon (importado de PokeAPI y curado para combate). */
+export interface PokemonMove {
+  /** Identificador/nombre del movimiento (ej. 'ember'); se muestra y se valida por él. */
+  name: string;
+  /** Tipo del movimiento, ya normalizado al dominio (afecta a la ventaja de tipo). */
+  type: PokemonType;
+  /** Potencia base (0 si no inflige daño directo). */
+  power: number;
+  /** Categoría PokeAPI: física (gratis) / especial (cuesta 1 candy) / estado. */
+  damageClass: MoveDamageClass;
+  /** Precisión 0-100 (informativo). */
+  accuracy?: number;
+  /** Puntos de poder (informativo). */
+  pp?: number;
+}
+
 export interface Pokemon {
   id: string;
   playerId: string;
@@ -37,6 +55,8 @@ export interface Pokemon {
   lavaTurns?: number;
   /** Si ya realizó su acción de movimiento o ataque en el turno actual. */
   hasActed?: boolean;
+  /** Ataques curados (≤4) disponibles en la fase de combate. */
+  moves?: PokemonMove[];
 }
 
 export interface Tile {

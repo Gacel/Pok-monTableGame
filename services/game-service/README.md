@@ -16,8 +16,8 @@ src/
 │   ├── resources.ts   economía por bioma (Catan)
 │   └── mapLoader.ts   carga de mapas Tiled → Board
 ├── models/        MODELO: acceso a datos SQLite
-│   ├── db.ts          conexión + migraciones
-│   ├── UserModel.ts   PokemonModel.ts   MatchModel.ts
+│   ├── db.ts          conexión + migraciones (incl. tablas moves, pokemon_moves)
+│   ├── UserModel.ts   PokemonModel.ts   MatchModel.ts   MoveModel.ts
 ├── services/      DOMINIO/orquestación
 │   ├── GameService.ts     partida autoritativa (turnos, combate, recursos)
 │   ├── MatchManager.ts    ciclo de vida + persistencia
@@ -37,6 +37,8 @@ src/
 | GET  | `/api/game/board` | Solo el array de losetas (compatibilidad) |
 | GET  | `/api/game/moves?q&r` | Movimientos y ataques legales de la pieza en `(q,r)` |
 | POST | `/api/game/move` | `{from:{q,r}, to:{q,r}}` → valida y aplica; `400` si es ilegal |
+| POST | `/api/game/combat/action` | Acción de combate: `{action, moveName?}`. `action` ∈ `ATACAR·HABILIDAD·OBJETO·HUIR·MOVE`. `MOVE` usa un ataque real: `{action:'MOVE', moveName:'ember'}` |
+| POST | `/api/game/combat/continue` | Cierra la fase de resultado del combate |
 | POST | `/api/game/reset` | Reinicia la partida por defecto |
 | POST | `/api/auth/login` | *(transición)* `{email}` → token + user (mock) |
 | POST | `/api/auth/register` | *(transición)* `{token,username,avatarUrl}` |
@@ -53,6 +55,10 @@ src/
   bloquea a los Pokémon de fuego.
 - **Combate**: al atacar a un enemigo alcanzable se resuelve por turnos con ventaja
   de tipo (FIRE>GRASS>WATER>FIRE); el vencedor ocupa la casilla.
+- **Ataques (moves)**: cada Pokémon lleva ≤4 ataques reales importados y curados de
+  PokeAPI (tablas `moves`/`pokemon_moves`). Los especiales cuestan 1 candy del tipo
+  del ataque; los físicos son gratis. La ventaja de tipo la aporta el **tipo del
+  movimiento**. Detalle en `docs/MOVES_SYSTEM.md`.
 - **Recursos** (Catan): cada turno, cada Pokémon genera el "candy" de su bioma.
 - **Victoria**: quedarse sin Pokémon en el tablero.
 

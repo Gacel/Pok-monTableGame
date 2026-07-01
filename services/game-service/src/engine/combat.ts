@@ -1,4 +1,4 @@
-import { Biome, Pokemon } from './board.js';
+import { Biome, Pokemon, PokemonMove } from './board.js';
 import { effectiveAtk, effectiveDef, typeAdvantage } from './environment.js';
 
 export interface CombatBlow {
@@ -31,6 +31,33 @@ export function computeDamage(
   const def = effectiveDef(defender, defenderTerrain);
   const adv = typeAdvantage(attacker.type, defender.type);
   const raw = Math.round(atk * adv) - Math.floor(def / 2);
+  return Math.max(1, raw);
+}
+
+/** Potencia de referencia: un movimiento de POWER_REF equivale al golpe básico. */
+const POWER_REF = 60;
+/** Bonus por STAB (movimiento del mismo tipo que el atacante). */
+const STAB_MULT = 1.2;
+
+/**
+ * Daño de un ataque concreto (movimiento importado de PokeAPI).
+ * El tipo de la VENTAJA lo aporta el movimiento (no el Pokémon), escalado por
+ * su potencia y por el STAB. Determinista → testeable.
+ * damage = max(1, round(ATK_ef * (power/60) * ventajaTipoMov * STAB) − DEF_ef/2)
+ */
+export function computeMoveDamage(
+  attacker: Pokemon,
+  defender: Pokemon,
+  move: PokemonMove,
+  attackerTerrain: Biome,
+  defenderTerrain: Biome
+): number {
+  const atk = effectiveAtk(attacker, attackerTerrain);
+  const def = effectiveDef(defender, defenderTerrain);
+  const power = move.power > 0 ? move.power : 40;
+  const adv = typeAdvantage(move.type, defender.type);
+  const stab = move.type === attacker.type ? STAB_MULT : 1.0;
+  const raw = Math.round(atk * (power / POWER_REF) * adv * stab) - Math.floor(def / 2);
   return Math.max(1, raw);
 }
 

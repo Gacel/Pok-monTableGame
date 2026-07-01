@@ -452,6 +452,41 @@ FASE 4  IA & Hardening  (Sprint 4)
 
 ---
 
+# Extras implementados (fuera del orden de fases)
+
+> Trabajo real ya en el código que adelanta o complementa componentes del plan.
+> Se documenta aquí para no perder trazabilidad hasta reubicarlo en su fase.
+
+### ✅ EX.1 — Sistema de ataques (moves) por Pokémon *(complementa C2.7 y C3.1)*
+- **Objetivo:** cada Pokémon lleva **hasta 4 ataques reales** importados de PokeAPI,
+  además de las acciones genéricas previas (`ATACAR`/`HABILIDAD`/`OBJETO`/`HUIR`).
+- **Entregables (game-service):**
+  - Tablas SQLite nuevas `moves` (catálogo deduplicado) y `pokemon_moves` (learnset)
+    con índice `idx_pokemon_moves_pokemon` (`src/models/db.ts`).
+  - `src/models/MoveModel.ts`: `findMove/saveMove/hasLearnset/listLearnset/saveLearnset`.
+  - `PokemonService`: `getTemplate()` importa el learnset completo; `hydrateMove()`
+    cachea detalles; `getCuratedMoves()` cura 4 ataques (prioriza level-up/MT,
+    filtra `power>0`, ordena por STAB y potencia, garantiza ≥1 físico gratuito).
+  - `MatchManager.withMoves()`: adjunta los 4 ataques a cada Pokémon al crear la
+    partida (en paralelo, cacheado en SQLite → solo la 1ª partida paga red).
+  - `engine/combat.computeMoveDamage()`: daño con ventaja del **tipo del movimiento**
+    y STAB (1.2). `GameService.combatAction('MOVE', moveName)`: especiales cuestan
+    1 candy del tipo del ataque; físicos gratis.
+  - API: `POST /api/game/combat/action` acepta `{ action:'MOVE', moveName }`.
+  - Frontend: la escena de combate muestra ≤4 botones de ataque + `OBJETO`/`HUIR`.
+- **Doc detallada:** `docs/MOVES_SYSTEM.md`.
+- **Pendiente:** mover el fetch/caché a `pokeapi-proxy` + Redis (C3.1); hidratar el
+  learnset completo; recalcular ataques al evolucionar (C3.8).
+
+### ✅ EX.2 — Purga de evoluciones del roster de draft
+- Roster (`MatchManager.ROSTER_NAMES`) reducido de **32 a 27** Pokémon: fuera
+  `charizard`, `blastoise`, `pidgeot`, `dragonite`, `jolteon`. El draft usa **solo
+  formas base**; las evoluciones se obtendrán evolucionando en partida (C3.8).
+- Efecto: `FLYING`=aerodactyl, `DRAGON`=dratini, `ELECTRIC`=pikachu quedan con un
+  único Pokémon. Los equipos por defecto (3 por tipo) no cambian.
+
+---
+
 ## Checklist global de requisitos ft_transcendence
 
 - [ ] Fastify backend · [ ] TS + Tailwind frontend · [ ] SQLite por servicio

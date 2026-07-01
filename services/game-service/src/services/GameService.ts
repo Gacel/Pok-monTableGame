@@ -1,12 +1,12 @@
 import { Board, Biome, Pokemon, Tile } from '../engine/board.js';
 import { Hex, hexEqual } from '../engine/hex.js';
 import { getMoveOptions, MoveOptions } from '../engine/movement.js';
-import { computeDamage } from '../engine/combat.js';
+import { computeDamage, computeMoveDamage } from '../engine/combat.js';
 import { terrainDamage } from '../engine/environment.js';
 import { collectResources, PlayerResources } from '../engine/resources.js';
 
 export type MatchStatus = 'active' | 'combat' | 'finished';
-export type CombatAction = 'ATACAR' | 'HABILIDAD' | 'OBJETO' | 'HUIR';
+export type CombatAction = 'ATACAR' | 'HABILIDAD' | 'OBJETO' | 'HUIR' | 'MOVE';
 
 /** Estado de un combate interactivo por turnos entre dos Pokémon. */
 export interface CombatState {
@@ -207,7 +207,7 @@ export class GameService {
   }
 
   /** Aplica una acción de combate para el Pokémon cuyo turno es. */
-  combatAction(action: CombatAction): PlayResult {
+  combatAction(action: CombatAction, moveName?: string): PlayResult {
     if (this.status !== 'combat' || !this.combat) {
       return { ok: false, error: 'No hay combate en curso', state: this.getStateDTO() };
     }
@@ -222,6 +222,20 @@ export class GameService {
     const targetTerrain = this.terrainOf(actorId === c.attackerId ? c.defenderHex : c.attackerHex);
 
     switch (action) {
+      case 'MOVE': {
+        const move = (actor.moves ?? []).find((m) => m.name === moveName);
+        if (!move) {
+          return { ok: false, error: 'Ataque no disponible', state: this.getStateDTO() };
+        }
+        // Los ataques especiales cuestan 1 candy del tipo del movimiento; los físicos son gratis.
+        if (move.damageClass === 'special' && !this.spendCandies(actor.playerId, 1, move.type)) {
+          return { ok: false, error: 'Sin candies para ataque especial', state: this.getStateDTO() };
+        }
+        const dmg = computeMoveDamage(actor, target, move, actorTerrain, targetTerrain);
+        target.hp = Math.max(0, target.hp - dmg);
+        c.log.push(`${nameOf(actor)} usa ${move.name.toUpperCase()}: ${dmg} de daño (${nameOf(target)}: ${target.hp}).`);
+        break;
+      }
       case 'ATACAR': {
         const dmg = computeDamage(actor, target, actorTerrain, targetTerrain);
         target.hp = Math.max(0, target.hp - dmg);

@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import { Board, Pokemon, Tile } from '../engine/board.js';
 import { MapLoader, TiledMapData } from '../engine/mapLoader.js';
 import { generateEcosystem } from '../engine/mapGenerator.js';
-import { largestLandComponent, pickOppositeSpawns, pickCornerSpawns } from '../engine/spawns.js';
+import { largestLandComponent, pickCornerSpawns } from '../engine/spawns.js';
 import { hashStringToSeed } from '../engine/rng.js';
 import { GameService } from './GameService.js';
 import { PokemonService } from './PokemonService.js';
@@ -17,17 +17,21 @@ const MAP_SEED = process.env.GAME_MAP_SEED ?? 'transcendence-default';
 const MAP_RADIUS = Number(process.env.GAME_MAP_RADIUS ?? 20);
 const TEAM_SIZE = 3;
 
-/** Pool de Pokémon para el draft (mezcla de todos los tipos elementales y patrones). */
+/**
+ * Pool de Pokémon para el draft. Solo formas base: se han purgado las
+ * evoluciones (charizard, blastoise, pidgeot, dragonite, jolteon), que se
+ * obtendrán evolucionando en partida más adelante.
+ */
 export const ROSTER_NAMES = [
-  'charmander', 'charizard', 'vulpix', 'growlithe', // FIRE
-  'squirtle', 'blastoise', 'psyduck', 'poliwag', // WATER
+  'charmander', 'vulpix', 'growlithe', // FIRE
+  'squirtle', 'psyduck', 'poliwag', // WATER
   'bulbasaur', 'oddish', 'bellsprout', 'tangela', // GRASS
   'ekans', 'zubat', // POISON
-  'pidgeot', 'aerodactyl', // FLYING
-  'dratini', 'dragonite', // DRAGON
+  'aerodactyl', // FLYING
+  'dratini', // DRAGON
   'abra', 'mewtwo', // PSYCHIC
   'snorlax', 'eevee', // NORMAL
-  'pikachu', 'jolteon', // ELECTRIC
+  'pikachu', // ELECTRIC
   'lapras', 'articuno', // ICE
   'clefairy', 'jigglypuff', // FAIRY
 ];
@@ -51,7 +55,7 @@ export class MatchManager {
     return this.match;
   }
 
-  /** Devuelve (y cachea) las 12 plantillas del pool de draft. */
+  /** Devuelve (y cachea) las plantillas del pool de draft. */
   async getRoster(): Promise<PokemonTemplate[]> {
     if (this.rosterCache) return this.rosterCache;
     this.rosterCache = await Promise.all(ROSTER_NAMES.map((n) => PokemonService.getTemplate(n)));
@@ -90,6 +94,22 @@ export class MatchManager {
     return result;
   }
 
+  /**
+   * Adjunta los ataques curados (importados de PokeAPI) a cada Pokémon en juego.
+   * Se hace al crear la partida (≤12 Pokémon) y se cachea en SQLite, por lo que
+   * solo la primera partida paga el coste de red; las siguientes son instantáneas.
+   */
+  private async withMoves(
+    placements: { hex: Tile['hex']; pokemon: Pokemon }[]
+  ): Promise<{ hex: Tile['hex']; pokemon: Pokemon }[]> {
+    await Promise.all(
+      placements.map(async (p) => {
+        p.pokemon.moves = await PokemonService.getCuratedMoves(p.pokemon.name ?? '', p.pokemon.type);
+      })
+    );
+    return placements;
+  }
+
   private async buildDefault(): Promise<GameService> {
     const board = this.loadBoard();
     const roster = await this.getRoster();
@@ -98,7 +118,8 @@ export class MatchManager {
     const team2 = roster.filter((p) => p.type === 'WATER').slice(0, TEAM_SIZE);
     const team3 = roster.filter((p) => p.type === 'GRASS').slice(0, TEAM_SIZE);
     const team4 = [...roster.filter((p) => p.type === 'ELECTRIC'), ...roster.filter((p) => p.type === 'NORMAL')].slice(0, TEAM_SIZE);
-    return GameService.create(DEFAULT_MATCH_ID, board, this.placements(board, [team1, team2, team3, team4]));
+    const placements = await this.withMoves(this.placements(board, [team1, team2, team3, team4]));
+    return GameService.create(DEFAULT_MATCH_ID, board, placements);
   }
 
   /** Crea una partida a partir de los equipos elegidos en el draft. */
@@ -124,7 +145,8 @@ export class MatchManager {
     }
 
     const board = this.loadBoard();
-    this.match = GameService.create(DEFAULT_MATCH_ID, board, this.placements(board, teamArrays));
+    const placements = await this.withMoves(this.placements(board, teamArrays));
+    this.match = GameService.create(DEFAULT_MATCH_ID, board, placements);
     await this.persist();
     return this.match;
   }

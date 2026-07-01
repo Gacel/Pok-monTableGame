@@ -14,13 +14,14 @@ interface OptionsQuery {
 }
 interface CombatBody {
   action?: string;
+  moveName?: string;
 }
 interface StartBody {
   player1?: unknown;
   player2?: unknown;
 }
 
-const COMBAT_ACTIONS: CombatAction[] = ['ATACAR', 'HABILIDAD', 'OBJETO', 'HUIR'];
+const COMBAT_ACTIONS: CombatAction[] = ['ATACAR', 'HABILIDAD', 'OBJETO', 'HUIR', 'MOVE'];
 
 function isHex(h: unknown): h is Hex {
   return (
@@ -102,7 +103,9 @@ export const GameController = {
     if (!COMBAT_ACTIONS.includes(action)) {
       return reply.code(400).send({ success: false, error: 'Acción de combate inválida' });
     }
-    const result = matchManager.get().combatAction(action);
+    const moveName =
+      typeof request.body?.moveName === 'string' ? request.body.moveName.slice(0, 40) : undefined;
+    const result = matchManager.get().combatAction(action, moveName);
     if (!result.ok) {
       return reply.code(400).send({ success: false, error: result.error, state: result.state });
     }
