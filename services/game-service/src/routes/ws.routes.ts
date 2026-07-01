@@ -5,7 +5,7 @@ import { hub } from '../realtime/hub.js';
 import { Hex } from '../engine/hex.js';
 
 interface WsMessage {
-  type: 'move' | 'chat' | 'combat_action';
+  type: 'move' | 'chat' | 'combat_action' | 'combat_continue';
   from?: Hex;
   to?: Hex;
   text?: string;
@@ -65,6 +65,14 @@ export async function wsRoutes(app: FastifyInstance): Promise<void> {
           return;
         }
         const result = matchManager.get().combatAction(action as (typeof COMBAT_ACTIONS)[number]);
+        if (!result.ok) {
+          hub.send(socket, { type: 'error', error: result.error });
+          return;
+        }
+        await matchManager.persist();
+        hub.broadcast({ type: 'state', state: result.state });
+      } else if (msg.type === 'combat_continue') {
+        const result = matchManager.get().continueCombat();
         if (!result.ok) {
           hub.send(socket, { type: 'error', error: result.error });
           return;

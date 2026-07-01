@@ -49,6 +49,7 @@ export interface CombatState {
   log: string[];
   status: 'active' | 'finished';
   winnerId: string | null;
+  loserId: string | null;
   outcome: 'ko' | 'fled' | null;
 }
 

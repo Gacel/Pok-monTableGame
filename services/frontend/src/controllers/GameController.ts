@@ -34,7 +34,11 @@ export class GameController {
     this.boardView = new BoardView(this.canvas, this.state);
     this.hudView = new HUDView(this.state);
     this.entityView = new EntityView(this.state, this.boardView);
-    this.combatView = new CombatView(this.state, (a) => this.sendCombatAction(a));
+    this.combatView = new CombatView(
+      this.state,
+      (a) => this.sendCombatAction(a),
+      () => this.sendCombatContinue()
+    );
 
     this.state.subscribe(() => this.renderAll());
     this.setupEvents();
@@ -155,6 +159,22 @@ export class GameController {
     } catch (err) {
       console.error(err);
       this.hudView.flashToast('Error de red');
+    } finally {
+      this.busy = false;
+    }
+  }
+
+  private async sendCombatContinue(): Promise<void> {
+    if (this.busy) return;
+    this.busy = true;
+    try {
+      const res = await fetch('/api/game/combat/continue', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        this.state.setMatch(data.state as MatchState);
+      }
+    } catch (err) {
+      console.error(err);
     } finally {
       this.busy = false;
     }

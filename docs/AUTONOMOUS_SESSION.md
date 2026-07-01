@@ -211,6 +211,25 @@
   `localhost`), roster=12, estado activo.
 - **Commit:** `feat(frontend): draft screen + interactive battle scene + menu polish`
 
+### F19 — Combate más claro (2 fases) + menú de 2 jugadores ✅
+- **Problema reportado:** el combate "salía sin dar victoria/derrota, confuso, sin restar
+  vida"; el menú no aclaraba si era 1 o 2 jugadores.
+- **Causa raíz:** al hacer KO, el backend finalizaba el combate al instante (`combat=null`),
+  así que la escena desaparecía de golpe sin mostrar resultado. (La resta de vida y la
+  victoria SÍ funcionaban — confirmado con test multironda; era un problema de UX/timing.)
+- **Qué se hizo:**
+  - Backend: combate en **dos fases**. Al KO/huida se pasa a `combat.status:'finished'`
+    (con `winnerId/loserId/outcome`) sin aplicar aún; nuevo `POST /api/game/combat/continue`
+    (+ WSS `combat_continue`) aplica el resultado al tablero. Guarda contra actuar sobre un
+    combate resuelto. `loserId` añadido al estado.
+  - Frontend `CombatView`: **turno arriba centrado y grande** ("TURNO: POKÉMON (player)"),
+    barras de HP **alineadas con los sprites** y resaltando al que actúa, última acción
+    prominente, y **pantalla de resultado** ("¡X venció a Y!" / "X huyó") con botón CONTINUAR.
+  - Menú: entrada principal inequívoca **"PARTIDA LOCAL · 2 VS · 👥 2 JUGADORES"** (misma
+    pantalla), y opciones de 1 jugador/online marcadas 🔒 (pronto).
+- **Verificación:** **24/24 tests**, `tsc` limpio (back y front), `vite build` OK.
+- **Commit:** `fix(game): two-phase combat with result screen + clearer 2-player menu`
+
 ---
 
 ## Resumen del estado al cierre de la sesión

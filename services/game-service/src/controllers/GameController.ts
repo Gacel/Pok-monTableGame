@@ -111,6 +111,17 @@ export const GameController = {
     return { success: true, state: result.state };
   },
 
+  /** Cierra la fase de resultado del combate y devuelve al tablero. */
+  async combatContinue() {
+    const result = matchManager.get().continueCombat();
+    if (!result.ok) {
+      return { success: false, error: result.error, state: result.state };
+    }
+    await matchManager.persist();
+    hub.broadcast({ type: 'state', state: result.state });
+    return { success: true, state: result.state };
+  },
+
   async reset() {
     const game = await matchManager.reset();
     hub.broadcast({ type: 'state', state: game.getStateDTO() });

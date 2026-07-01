@@ -58,5 +58,7 @@ export async function gameRoutes(app: FastifyInstance): Promise<void> {
     GameController.combatAction
   );
 
+  app.post('/api/game/combat/continue', GameController.combatContinue);
+
   app.post('/api/game/reset', GameController.reset);
 }

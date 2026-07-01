@@ -23,6 +23,7 @@ export interface CombatState {
   log: string[];
   status: 'active' | 'finished';
   winnerId: string | null;
+  loserId: string | null;
   outcome: 'ko' | 'fled' | null;
 }
 
@@ -166,6 +167,7 @@ export class GameService {
       log: [`¡${nameOf(attacker)} ataca a ${nameOf(defender)}!`],
       status: 'active',
       winnerId: null,
+      loserId: null,
       outcome: null,
     };
     this.status = 'combat';
@@ -201,6 +203,9 @@ export class GameService {
   combatAction(action: CombatAction): PlayResult {
     if (this.status !== 'combat' || !this.combat) {
       return { ok: false, error: 'No hay combate activo', state: this.getStateDTO() };
+    }
+    if (this.combat.status === 'finished') {
+      return { ok: false, error: 'El combate ya está resuelto (continúa)', state: this.getStateDTO() };
     }
     const c = this.combat;
     const actorIsAttacker = c.turnActorId === c.attackerId;
@@ -244,26 +249,37 @@ export class GameService {
         if (actor.hp <= 0) {
           c.outcome = 'ko';
           c.winnerId = target.id;
+          c.loserId = actor.id;
         } else {
           c.outcome = 'fled';
           c.winnerId = null;
+          c.loserId = actor.id; // el que huyó
         }
-        c.status = 'finished';
-        this.finalizeCombat();
+        c.status = 'finished'; // fase de resultado; se resuelve con continueCombat()
         return { ok: true, state: this.getStateDTO() };
       }
     }
 
-    // KO por daño
+    // KO por daño → pasa a fase de resultado (no se finaliza hasta "continuar").
     if (target.hp <= 0) {
       c.outcome = 'ko';
       c.winnerId = actor.id;
+      c.loserId = target.id;
+      c.log.push(`¡${nameOf(target)} se ha debilitado!`);
       c.status = 'finished';
-      this.finalizeCombat();
     } else {
       c.turnActorId = target.id; // pasa el turno al rival
       c.round += 1;
     }
+    return { ok: true, state: this.getStateDTO() };
+  }
+
+  /** Cierra un combate ya resuelto (fase de resultado): aplica el tablero y sigue. */
+  continueCombat(): PlayResult {
+    if (this.status !== 'combat' || !this.combat || this.combat.status !== 'finished') {
+      return { ok: false, error: 'No hay combate por resolver', state: this.getStateDTO() };
+    }
+    this.finalizeCombat();
     return { ok: true, state: this.getStateDTO() };
   }
 
