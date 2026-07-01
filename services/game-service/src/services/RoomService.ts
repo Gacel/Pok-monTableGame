@@ -1,0 +1,220 @@
+import type { GameMode, LobbySummary, PlayerSlot, RoomInfo, RoomStatus } from '@transcendence/shared';
+import {
+  DRAFT_TEAM_SIZE,
+  MAX_PLAYERS,
+  MIN_PLAYERS,
+  PLAYER_SLOTS,
+  TEAMS_MODE_PLAYERS,
+} from '@transcendence/shared';
+import { MatchModel, parseRoomPlayers, RoomRow, StoredRoomPlayer } from '../models/MatchModel.js';
+import { matchManager, ROSTER_NAMES } from './MatchManager.js';
+import { hub } from '../realtime/hub.js';
+
+/** Minutos sin actividad tras los que una sala `waiting` se barre del lobby. */
+const STALE_ROOM_MINUTES = 30;
+/** Gracia para que el anfitrión reconecte (F5) antes de cerrar su sala. */
+const HOST_GRACE_MS = 30_000;
+
+const hostGraceTimers = new Map<string, NodeJS.Timeout>();
+
+export class RoomError extends Error {
+  constructor(
+    public readonly code: number,
+    message: string
+  ) {
+    super(message);
+  }
+}
+
+function toRoomInfo(row: RoomRow, userId: string | null): RoomInfo {
+  const players = parseRoomPlayers(row);
+  const you = userId ? players.find((p) => p.userId === userId) : undefined;
+  return {
+    id: row.id,
+    name: row.name ?? row.id,
+    gameMode: row.game_mode,
+    capacity: row.capacity,
+    status: row.status as RoomStatus,
+    hostId: row.host_id ?? '',
+    players: players.map((p) => ({
+      userId: p.userId,
+      username: p.username,
+      slot: p.slot,
+      ready: p.team !== null,
+    })),
+    youAre: you?.slot ?? null,
+  };
+}
+
+function nextFreeSlot(players: StoredRoomPlayer[], capacity: number): PlayerSlot | null {
+  for (const slot of PLAYER_SLOTS.slice(0, capacity)) {
+    if (!players.some((p) => p.slot === slot)) return slot;
+  }
+  return null;
+}
+
+async function loadRoom(matchId: string): Promise<RoomRow> {
+  const row = await MatchModel.findRoom(matchId);
+  if (!row || row.mode !== 'online') {
+    throw new RoomError(404, 'La sala no existe');
+  }
+  return row;
+}
+
+/**
+ * Ciclo de vida de las salas online (anfitrión crea → otros se unen → draft →
+ * partida). Toda mutación se difunde a la sala por WSS como `{type:'room'}`.
+ */
+export const RoomService = {
+  toRoomInfo,
+
+  async create(
+    hostId: string,
+    hostName: string,
+    name: string,
+    capacity: number,
+    gameMode: GameMode
+  ): Promise<RoomInfo> {
+    const clean = name.trim().slice(0, 32);
+    if (!clean) throw new RoomError(400, 'La partida necesita un nombre');
+    if (!Number.isInteger(capacity) || capacity < MIN_PLAYERS || capacity > MAX_PLAYERS) {
+      throw new RoomError(400, `La sala debe ser de ${MIN_PLAYERS} a ${MAX_PLAYERS} jugadores`);
+    }
+    if (gameMode === 'teams' && capacity !== TEAMS_MODE_PLAYERS) {
+      throw new RoomError(400, 'El modo 2 vs 2 requiere exactamente 4 jugadores');
+    }
+
+    const id = matchManager.newId();
+    const players: StoredRoomPlayer[] = [
+      { userId: hostId, username: hostName, slot: 'player1', team: null },
+    ];
+    await MatchModel.createRoom(id, clean, gameMode, capacity, hostId, players);
+    const row = await loadRoom(id);
+    return toRoomInfo(row, hostId);
+  },
+
+  async list(): Promise<LobbySummary[]> {
+    await MatchModel.sweepStaleRooms(STALE_ROOM_MINUTES);
+    const rows = await MatchModel.listOpenRooms();
+    return rows.map((row) => {
+      const players = parseRoomPlayers(row);
+      const host = players.find((p) => p.userId === row.host_id);
+      return {
+        id: row.id,
+        name: row.name ?? row.id,
+        hostName: host?.username ?? '???',
+        gameMode: row.game_mode,
+        capacity: row.capacity,
+        playerCount: players.length,
+        createdAt: row.created_at,
+      };
+    });
+  },
+
+  async get(matchId: string, userId: string | null): Promise<RoomInfo> {
+    const row = await loadRoom(matchId);
+    return toRoomInfo(row, userId);
+  },
+
+  async join(matchId: string, userId: string, username: string): Promise<RoomInfo> {
+    const row = await loadRoom(matchId);
+    if (row.status !== 'waiting') throw new RoomError(409, 'La partida ya ha empezado');
+    const players = parseRoomPlayers(row);
+    if (players.some((p) => p.userId === userId)) {
+      return toRoomInfo(row, userId); // ya dentro (reintento/rejoin)
+    }
+    if (players.length >= row.capacity) throw new RoomError(409, 'La sala está llena');
+    const slot = nextFreeSlot(players, row.capacity);
+    if (!slot) throw new RoomError(409, 'La sala está llena');
+
+    players.push({ userId, username, slot, team: null });
+    await MatchModel.updateRoomPlayers(matchId, players);
+    const updated = await loadRoom(matchId);
+    hub.broadcast(matchId, { type: 'room', room: toRoomInfo(updated, null) });
+    return toRoomInfo(updated, userId);
+  },
+
+  /** Guarda el equipo del draft; si ya están todos, arranca la partida. */
+  async submitTeam(matchId: string, userId: string, team: string[]): Promise<RoomInfo> {
+    const row = await loadRoom(matchId);
+    if (row.status !== 'waiting') throw new RoomError(409, 'La partida ya ha empezado');
+    const players = parseRoomPlayers(row);
+    const me = players.find((p) => p.userId === userId);
+    if (!me) throw new RoomError(403, 'No estás en esta sala');
+
+    const valid =
+      Array.isArray(team) &&
+      team.length === DRAFT_TEAM_SIZE &&
+      team.every((n) => typeof n === 'string' && ROSTER_NAMES.includes(n)) &&
+      new Set(team).size === team.length;
+    if (!valid) {
+      throw new RoomError(400, `Elige ${DRAFT_TEAM_SIZE} Pokémon distintos del roster`);
+    }
+
+    me.team = [...team];
+    await MatchModel.updateRoomPlayers(matchId, players);
+
+    // ¿Sala completa y todos con equipo? → crear el juego autoritativo.
+    if (players.length === row.capacity && players.every((p) => p.team !== null)) {
+      const teams: Record<string, string[]> = {};
+      for (const p of players) teams[p.slot] = p.team!;
+      const game = await matchManager.createGame(matchId, teams, row.game_mode);
+      hub.broadcast(matchId, { type: 'room', room: toRoomInfo(await loadRoom(matchId), null) });
+      hub.broadcast(matchId, { type: 'state', state: game.getStateDTO() });
+    } else {
+      hub.broadcast(matchId, { type: 'room', room: toRoomInfo(await loadRoom(matchId), null) });
+    }
+    return this.get(matchId, userId);
+  },
+
+  /** El anfitrión cierra su sala antes de empezar. */
+  async cancel(matchId: string, userId: string): Promise<void> {
+    const row = await loadRoom(matchId);
+    if (row.host_id !== userId) throw new RoomError(403, 'Solo el anfitrión puede cerrar la sala');
+    if (row.status !== 'waiting') throw new RoomError(409, 'La partida ya ha empezado');
+    await MatchModel.deleteRoom(matchId);
+    hub.broadcast(matchId, { type: 'room_closed', matchId });
+  },
+
+  /**
+   * Desconexión de un socket de sala en `waiting`:
+   * - invitado → se libera su hueco;
+   * - anfitrión → gracia de 30 s por si es un F5; si no vuelve, sala cerrada.
+   */
+  async handleDisconnect(matchId: string, userId: string): Promise<void> {
+    const row = await MatchModel.findRoom(matchId);
+    if (!row || row.mode !== 'online' || row.status !== 'waiting') return;
+    if (hub.hasUser(matchId, userId)) return; // sigue conectado por otro socket
+
+    if (row.host_id === userId) {
+      const prev = hostGraceTimers.get(matchId);
+      if (prev) clearTimeout(prev);
+      const timer = setTimeout(() => {
+        hostGraceTimers.delete(matchId);
+        void (async () => {
+          const fresh = await MatchModel.findRoom(matchId);
+          if (!fresh || fresh.status !== 'waiting') return;
+          if (hub.hasUser(matchId, userId)) return; // reconectó
+          await MatchModel.deleteRoom(matchId);
+          hub.broadcast(matchId, { type: 'room_closed', matchId });
+        })();
+      }, HOST_GRACE_MS);
+      timer.unref?.();
+      hostGraceTimers.set(matchId, timer);
+      return;
+    }
+
+    const players = parseRoomPlayers(row).filter((p) => p.userId !== userId);
+    await MatchModel.updateRoomPlayers(matchId, players);
+    const fresh = await MatchModel.findRoom(matchId);
+    if (fresh) hub.broadcast(matchId, { type: 'room', room: toRoomInfo(fresh, null) });
+  },
+
+  /** Slot del usuario en la sala (para atar identidad → player1..4). */
+  async slotFor(matchId: string, userId: string | null): Promise<PlayerSlot | null> {
+    if (!userId) return null;
+    const row = await MatchModel.findRoom(matchId);
+    if (!row) return null;
+    return parseRoomPlayers(row).find((p) => p.userId === userId)?.slot ?? null;
+  },
+};

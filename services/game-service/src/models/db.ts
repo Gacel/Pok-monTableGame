@@ -100,5 +100,19 @@ async function openAndMigrate(): Promise<Database> {
   if (!names.has('atk')) await db.exec(`ALTER TABLE pokemons ADD COLUMN atk INTEGER NOT NULL DEFAULT 50`);
   if (!names.has('def')) await db.exec(`ALTER TABLE pokemons ADD COLUMN def INTEGER NOT NULL DEFAULT 40`);
 
+  // Migración defensiva: columnas del lobby multijugador en `matches`.
+  const matchCols = await db.all(`PRAGMA table_info(matches)`);
+  const matchNames = new Set(matchCols.map((c: { name: string }) => c.name));
+  if (!matchNames.has('name')) await db.exec(`ALTER TABLE matches ADD COLUMN name TEXT`);
+  if (!matchNames.has('mode'))
+    await db.exec(`ALTER TABLE matches ADD COLUMN mode TEXT NOT NULL DEFAULT 'local'`);
+  if (!matchNames.has('game_mode'))
+    await db.exec(`ALTER TABLE matches ADD COLUMN game_mode TEXT NOT NULL DEFAULT 'ffa'`);
+  if (!matchNames.has('capacity'))
+    await db.exec(`ALTER TABLE matches ADD COLUMN capacity INTEGER NOT NULL DEFAULT 2`);
+  if (!matchNames.has('host_id')) await db.exec(`ALTER TABLE matches ADD COLUMN host_id TEXT`);
+  if (!matchNames.has('players_json'))
+    await db.exec(`ALTER TABLE matches ADD COLUMN players_json TEXT`);
+
   return db;
 }

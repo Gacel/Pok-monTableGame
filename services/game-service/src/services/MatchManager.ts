@@ -1,4 +1,7 @@
 import fs from 'node:fs';
+import crypto from 'node:crypto';
+import type { GameMode } from '@transcendence/shared';
+import { TEAMS_MODE_ALLIANCES, TEAMS_MODE_PLAYERS } from '@transcendence/shared';
 import { Board, Pokemon, Tile } from '../engine/board.js';
 import { MapLoader, TiledMapData } from '../engine/mapLoader.js';
 import { generateEcosystem } from '../engine/mapGenerator.js';
@@ -43,6 +46,8 @@ export const ROSTER_NAMES = [
 export class MatchManager {
   private match: GameService | null = null;
   private rosterCache: PokemonTemplate[] | null = null;
+  /** Partidas online en memoria, indexadas por matchId (carga perezosa). */
+  private onlineMatches: Map<string, GameService> = new Map();
 
   async init(): Promise<GameService> {
     const saved = await MatchModel.loadState(DEFAULT_MATCH_ID);
@@ -122,8 +127,8 @@ export class MatchManager {
     return GameService.create(DEFAULT_MATCH_ID, board, placements);
   }
 
-  /** Crea una partida a partir de los equipos elegidos en el draft. */
-  async startMatch(teams: Record<string, string[]>): Promise<GameService> {
+  /** Resuelve nombres del roster a plantillas, en orden player1..player4. */
+  private async resolveTeams(teams: Record<string, string[]>): Promise<PokemonTemplate[][]> {
     const roster = await this.getRoster();
     const byName = new Map(roster.map((p) => [p.name, p]));
     const resolve = (names: string[]): PokemonTemplate[] =>
@@ -143,12 +148,89 @@ export class MatchManager {
     if (teamArrays.length < 2) {
       throw new Error('Se necesitan al menos 2 equipos para iniciar la partida');
     }
+    return teamArrays;
+  }
 
+  /** Alianzas del modo 2v2 (P1+P3 vs P2+P4); null en todos contra todos. */
+  private alliancesFor(gameMode: GameMode, teamCount: number): string[][] | null {
+    if (gameMode !== 'teams') return null;
+    if (teamCount !== TEAMS_MODE_PLAYERS) {
+      throw new Error('El modo 2 vs 2 requiere exactamente 4 jugadores');
+    }
+    return TEAMS_MODE_ALLIANCES.map((team) => [...team]);
+  }
+
+  /** Crea la partida LOCAL a partir de los equipos elegidos en el draft. */
+  async startMatch(
+    teams: Record<string, string[]>,
+    gameMode: GameMode = 'ffa'
+  ): Promise<GameService> {
+    const teamArrays = await this.resolveTeams(teams);
     const board = this.loadBoard();
     const placements = await this.withMoves(this.placements(board, teamArrays));
-    this.match = GameService.create(DEFAULT_MATCH_ID, board, placements);
+    this.match = GameService.create(
+      DEFAULT_MATCH_ID,
+      board,
+      placements,
+      this.alliancesFor(gameMode, teamArrays.length)
+    );
     await this.persist();
     return this.match;
+  }
+
+  // ------------------------------------------------------- partidas online
+
+  newId(): string {
+    return `m_${crypto.randomUUID()}`;
+  }
+
+  /** Partida online por id: memoria → SQLite (carga perezosa) → error. */
+  async getMatch(id: string): Promise<GameService | null> {
+    const cached = this.onlineMatches.get(id);
+    if (cached) return cached;
+    const saved = await MatchModel.loadState(id);
+    if (!saved) return null;
+    const game = GameService.deserialize(saved);
+    this.onlineMatches.set(id, game);
+    return game;
+  }
+
+  /** Crea el juego de una sala online cuando todos han enviado su equipo. */
+  async createGame(
+    id: string,
+    teams: Record<string, string[]>,
+    gameMode: GameMode
+  ): Promise<GameService> {
+    const teamArrays = await this.resolveTeams(teams);
+    const board = this.loadBoard();
+    const placements = await this.withMoves(this.placements(board, teamArrays));
+    const game = GameService.create(
+      id,
+      board,
+      placements,
+      this.alliancesFor(gameMode, teamArrays.length)
+    );
+    this.onlineMatches.set(id, game);
+    await this.persistMatch(id);
+    return game;
+  }
+
+  async persistMatch(id: string): Promise<void> {
+    const game = this.onlineMatches.get(id);
+    if (!game) return;
+    await MatchModel.upsert(game.matchRow, game.serialize());
+  }
+
+  /** Saca una partida terminada de la caché en memoria. */
+  evict(id: string): void {
+    this.onlineMatches.delete(id);
+  }
+
+  async persistAll(): Promise<void> {
+    await this.persist();
+    for (const id of this.onlineMatches.keys()) {
+      await this.persistMatch(id);
+    }
   }
 
   private loadBoard(): Board {

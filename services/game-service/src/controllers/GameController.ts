@@ -1,6 +1,7 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
+import type { GameMode } from '@transcendence/shared';
 import { matchManager } from '../services/MatchManager.js';
-import { hub } from '../realtime/hub.js';
+import { hub, LOCAL_ROOM } from '../realtime/hub.js';
 import { Hex } from '../engine/hex.js';
 import { CombatAction } from '../services/GameService.js';
 
@@ -19,6 +20,9 @@ interface CombatBody {
 interface StartBody {
   player1?: unknown;
   player2?: unknown;
+  player3?: unknown;
+  player4?: unknown;
+  gameMode?: unknown;
 }
 
 const COMBAT_ACTIONS: CombatAction[] = ['ATACAR', 'HABILIDAD', 'OBJETO', 'HUIR', 'MOVE'];
@@ -65,16 +69,36 @@ export const GameController = {
     return matchManager.get().getMoveOptions({ q, r });
   },
 
-  /** Inicia una partida con los equipos elegidos en el draft (3 por jugador). */
+  /**
+   * Inicia una partida LOCAL con los equipos del draft (3 por jugador,
+   * de 2 a 4 jugadores; gameMode 'teams' = 2v2 con exactamente 4).
+   */
   async start(request: FastifyRequest<{ Body: StartBody }>, reply: FastifyReply) {
-    const p1 = asNameArray(request.body?.player1);
-    const p2 = asNameArray(request.body?.player2);
-    if (!p1 || !p2 || p1.length !== 3 || p2.length !== 3) {
-      return reply.code(400).send({ success: false, error: 'Cada jugador debe elegir 3 Pokémon' });
+    const teams: Record<string, string[]> = {};
+    const bodies = [
+      request.body?.player1,
+      request.body?.player2,
+      request.body?.player3,
+      request.body?.player4,
+    ];
+    for (let i = 0; i < bodies.length; i++) {
+      const raw = bodies[i];
+      if (raw === undefined) break; // los jugadores deben ser contiguos: 1..N
+      const team = asNameArray(raw);
+      if (!team || team.length !== 3) {
+        return reply
+          .code(400)
+          .send({ success: false, error: 'Cada jugador debe elegir 3 Pokémon' });
+      }
+      teams[`player${i + 1}`] = team;
     }
+    if (Object.keys(teams).length < 2) {
+      return reply.code(400).send({ success: false, error: 'Se necesitan al menos 2 jugadores' });
+    }
+    const gameMode = (request.body?.gameMode === 'teams' ? 'teams' : 'ffa') as GameMode;
     try {
-      const game = await matchManager.startMatch({ player1: p1, player2: p2 });
-      hub.broadcast({ type: 'state', state: game.getStateDTO() });
+      const game = await matchManager.startMatch(teams, gameMode);
+      hub.broadcast(LOCAL_ROOM, { type: 'state', state: game.getStateDTO() });
       return { success: true, state: game.getStateDTO() };
     } catch (e) {
       return reply.code(400).send({ success: false, error: (e as Error).message });
@@ -93,7 +117,7 @@ export const GameController = {
       return reply.code(400).send({ success: false, error: result.error, state: result.state });
     }
     await matchManager.persist();
-    hub.broadcast({ type: 'state', state: result.state });
+    hub.broadcast(LOCAL_ROOM, { type: 'state', state: result.state });
     return { success: true, state: result.state };
   },
 
@@ -110,7 +134,7 @@ export const GameController = {
       return reply.code(400).send({ success: false, error: result.error, state: result.state });
     }
     await matchManager.persist();
-    hub.broadcast({ type: 'state', state: result.state });
+    hub.broadcast(LOCAL_ROOM, { type: 'state', state: result.state });
     return { success: true, state: result.state };
   },
 
@@ -121,13 +145,13 @@ export const GameController = {
       return { success: false, error: result.error, state: result.state };
     }
     await matchManager.persist();
-    hub.broadcast({ type: 'state', state: result.state });
+    hub.broadcast(LOCAL_ROOM, { type: 'state', state: result.state });
     return { success: true, state: result.state };
   },
 
   async reset() {
     const game = await matchManager.reset();
-    hub.broadcast({ type: 'state', state: game.getStateDTO() });
+    hub.broadcast(LOCAL_ROOM, { type: 'state', state: game.getStateDTO() });
     return { success: true, state: game.getStateDTO() };
   },
 
@@ -138,7 +162,7 @@ export const GameController = {
       return { success: false, error: result.error, state: result.state };
     }
     await matchManager.persist();
-    hub.broadcast({ type: 'state', state: result.state });
+    hub.broadcast(LOCAL_ROOM, { type: 'state', state: result.state });
     return { success: true, state: result.state };
   },
 
@@ -149,7 +173,7 @@ export const GameController = {
       return { success: false, error: result.error, state: result.state };
     }
     await matchManager.persist();
-    hub.broadcast({ type: 'state', state: result.state });
+    hub.broadcast(LOCAL_ROOM, { type: 'state', state: result.state });
     return { success: true, state: result.state };
   },
 };

@@ -39,10 +39,39 @@ src/
 | POST | `/api/game/move` | `{from:{q,r}, to:{q,r}}` → valida y aplica; `400` si es ilegal |
 | POST | `/api/game/combat/action` | Acción de combate: `{action, moveName?}`. `action` ∈ `ATACAR·HABILIDAD·OBJETO·HUIR·MOVE`. `MOVE` usa un ataque real: `{action:'MOVE', moveName:'ember'}` |
 | POST | `/api/game/combat/continue` | Cierra la fase de resultado del combate |
+| POST | `/api/game/start` | Partida LOCAL: `{player1..player4?: string[3], gameMode?: 'ffa'\|'teams'}` (2-4 jugadores; `teams` = 2v2, exige 4) |
 | POST | `/api/game/reset` | Reinicia la partida por defecto |
 | POST | `/api/auth/login` | *(transición)* `{email}` → token + user (mock) |
 | POST | `/api/auth/register` | *(transición)* `{token,username,avatarUrl}` |
 | GET  | `/api/users/me` | *(transición)* perfil por `Authorization: Bearer <token>` |
+
+### Lobby multijugador ONLINE
+
+Crear partida como **anfitrión** (con nombre) y **buscar partida** desde otro
+navegador. Identidad por `Authorization: Bearer <token>` (mock actual: el token
+es el userId; se sustituirá por JWT). Tipos compartidos en `@transcendence/shared`.
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| POST   | `/api/lobby/matches` | `{name, capacity: 2-4, gameMode: 'ffa'\|'teams'}` → crea sala `waiting` (Bearer) |
+| GET    | `/api/lobby/matches` | Lista de salas abiertas (`LobbySummary[]`) |
+| GET    | `/api/lobby/matches/:id` | Estado de la sala (`RoomInfo`, con `youAre` según token) |
+| POST   | `/api/lobby/matches/:id/join` | Unirse a la sala (Bearer); `409` si llena/empezada |
+| POST   | `/api/lobby/matches/:id/team` | `{team: string[3]}` del draft; al completarse todos → partida `active` |
+| DELETE | `/api/lobby/matches/:id` | Cerrar sala (solo anfitrión, solo `waiting`) |
+
+Acciones de partida online (mismas de arriba con guard de identidad — cada
+jugador SOLO actúa como su propio slot): `GET/POST /api/game/:matchId/(state |
+moves | move | combat/action | combat/continue | end-turn | abandon)`.
+
+### WebSocket
+
+`GET /ws` — sala local hot-seat (comportamiento clásico).
+`GET /ws?matchId=<id>&token=<token>` — sala online: al conectar recibe
+`{type:'room'}` (+ `{type:'state'}` si la partida existe); el servidor difunde
+`state`/`room`/`room_closed`/`chat` SOLO dentro de la sala. Si el anfitrión se
+desconecta en `waiting` >30 s, la sala se cierra; las salas inactivas se barren
+a los 30 min.
 
 > Las rutas `auth`/`users` son **provisionales** hasta que existan `auth-service` y
 > `user-service` como microservicios propios (ver `docs/ARCHITECTURE.md`).

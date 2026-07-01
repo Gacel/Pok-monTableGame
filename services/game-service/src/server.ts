@@ -19,7 +19,7 @@ async function main(): Promise<void> {
       shuttingDown = true;
       app.log.info(`${signal} recibido, persistiendo estado y cerrando…`);
       try {
-        await matchManager.persist();
+        await matchManager.persistAll();
         await app.close();
       } finally {
         process.exit(0);
