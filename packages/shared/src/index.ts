@@ -13,6 +13,10 @@
 
 export const SHARED_VERSION = '0.1.0';
 
+// Contratos del lobby multijugador y mensajes WSS (anfitrión/buscar partida).
+export * from './lobby.js';
+export * from './ws.js';
+
 /** Biomas del tablero (lógica Catan). */
 export const BIOMES = ['fire', 'water', 'forest', 'sand', 'ice'] as const;
 export type Biome = (typeof BIOMES)[number];
