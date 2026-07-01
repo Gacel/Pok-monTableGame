@@ -16,9 +16,11 @@ export class EntityView {
   public render() {
     if (!this.entitiesLayer) return;
 
-    // Durante el combate se muestra la escena de lucha (overlay): ocultamos los
-    // sprites del tablero, que si no se colarían por encima (z-index dinámico alto).
-    if (this.state.match?.status === 'combat') {
+    // Durante el combate (escena de lucha) y al finalizar la partida (overlay de
+    // VICTORIA) ocultamos los sprites del tablero: su z-index dinámico es alto
+    // (basado en la Y de pantalla) y si no se colarían por encima del overlay.
+    const status = this.state.match?.status;
+    if (status === 'combat' || status === 'finished') {
       this.entitiesLayer.style.display = 'none';
       return;
     }

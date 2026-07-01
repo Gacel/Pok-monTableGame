@@ -161,13 +161,27 @@ export class CombatView {
       ? moves.map(moveBtn).join('')
       : `<div class="col-span-4 text-center text-[9px] text-gray-400 self-center py-3" style="font-family:'Press Start 2P',monospace;">Sin ataques disponibles</div>`;
 
+    // Saldo de caramelos del jugador en turno: los ataques ESPECIALES gastan 1
+    // caramelo de su tipo; los físicos son gratis. Sin este saldo a la vista, el
+    // jugador no sabe por qué un ataque especial aparece deshabilitado.
+    const candy = (icon: string, n: number, title: string) =>
+      `<span title="${title}" class="${n > 0 ? 'text-white' : 'text-gray-600'}">${icon} ${n}</span>`;
+    const candyBar = `
+      <div class="flex items-center justify-center gap-4 text-[9px] pb-1" style="font-family:'Press Start 2P',monospace;">
+        <span class="text-gray-400">CARAMELOS</span>
+        ${candy('🔥', res?.FIRE_CANDY ?? 0, 'Caramelo de fuego')}
+        ${candy('💧', res?.WATER_CANDY ?? 0, 'Caramelo de agua/hielo')}
+        ${candy('🌿', res?.GRASS_CANDY ?? 0, 'Caramelo de planta')}
+      </div>`;
+
     return `
       <div class="max-w-4xl mx-auto flex flex-col gap-2">
+        ${candyBar}
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
           ${moveButtons}
         </div>
         <div class="grid grid-cols-2 gap-2">
-          ${utilBtn('OBJETO', 'OBJETO', 'cura 30% · 2 candy', total >= 2)}
+          ${utilBtn('OBJETO', 'OBJETO', 'cura 30% · 2 caramelos', total >= 2)}
           ${utilBtn('HUIR', 'HUIR', 'con riesgo', true)}
         </div>
       </div>`;
