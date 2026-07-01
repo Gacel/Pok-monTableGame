@@ -32,7 +32,10 @@
             <!-- LIENZO DE JUEGO (JUEGO + HUD) -->
             <div id="game-viewport" class="relative w-full h-full overflow-hidden bg-gray-900">
               <canvas id="game-canvas" width="1600" height="1000" class="absolute inset-0 bg-gray-800 shadow-inner"></canvas>
-              <div id="entities-layer" class="absolute inset-0 pointer-events-none"></div>
+              <!-- z-30 crea un contexto de apilamiento propio: los z-index dinámicos
+                   (altos, según la Y) de los sprites quedan CONTENIDOS aquí y no se
+                   cuelan por encima del HUD (z-40/z-50) ni de los overlays. -->
+              <div id="entities-layer" class="absolute inset-0 pointer-events-none z-30"></div>
 
               <!-- HUD SUPERIOR (P1 y P2) -->
               <div id="hud-container" class="absolute top-0 left-0 w-full p-4 flex justify-between items-start pointer-events-none z-50">
