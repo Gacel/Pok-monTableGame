@@ -5,11 +5,14 @@ import { hub } from '../realtime/hub.js';
 import { Hex } from '../engine/hex.js';
 
 interface WsMessage {
-  type: 'move' | 'chat';
+  type: 'move' | 'chat' | 'combat_action';
   from?: Hex;
   to?: Hex;
   text?: string;
+  action?: string;
 }
+
+const COMBAT_ACTIONS = ['ATACAR', 'HABILIDAD', 'OBJETO', 'HUIR'] as const;
 
 function isHex(h: unknown): h is Hex {
   return (
@@ -54,7 +57,20 @@ export async function wsRoutes(app: FastifyInstance): Promise<void> {
           return;
         }
         await matchManager.persist();
-        hub.broadcast({ type: 'state', state: result.state, combat: result.combat ?? null });
+        hub.broadcast({ type: 'state', state: result.state });
+      } else if (msg.type === 'combat_action') {
+        const action = String(msg.action ?? '').toUpperCase();
+        if (!(COMBAT_ACTIONS as readonly string[]).includes(action)) {
+          hub.send(socket, { type: 'error', error: 'Acción de combate inválida' });
+          return;
+        }
+        const result = matchManager.get().combatAction(action as (typeof COMBAT_ACTIONS)[number]);
+        if (!result.ok) {
+          hub.send(socket, { type: 'error', error: result.error });
+          return;
+        }
+        await matchManager.persist();
+        hub.broadcast({ type: 'state', state: result.state });
       } else if (msg.type === 'chat') {
         const text = (msg.text ?? '').toString().slice(0, 200);
         if (text.trim()) hub.broadcast({ type: 'chat', text });

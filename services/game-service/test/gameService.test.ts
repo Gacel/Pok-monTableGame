@@ -53,10 +53,9 @@ describe('GameService · turnos y recursos', () => {
   });
 });
 
-describe('GameService · combate y victoria', () => {
-  it('atacar a un enemigo adyacente resuelve combate y termina la partida', () => {
+describe('GameService · combate interactivo y victoria', () => {
+  it('atacar inicia combate; las acciones lo resuelven y termina la partida', () => {
     const board = Board.generateBasic(3);
-    // player1 con fuerte ventaja para ganar de forma determinista.
     const p1 = mk({ id: 'p1', playerId: 'player1', type: 'FIRE', movementPattern: 'TANK', atk: 200 });
     const p2 = mk({ id: 'p2', playerId: 'player2', type: 'GRASS', movementPattern: 'TANK', hp: 40, maxHp: 40 });
     const game = GameService.create('t3', board, [
@@ -64,19 +63,47 @@ describe('GameService · combate y victoria', () => {
       { hex: { q: 1, r: 0 }, pokemon: p2 }, // adyacente
     ]);
 
-    const res = game.play('player1', { q: 0, r: 0 }, { q: 1, r: 0 });
-    expect(res.ok).toBe(true);
-    expect(res.combat).toBeDefined();
-    expect(res.combat?.winnerId).toBe('p1');
+    // Atacar entra en modo combate (no resuelve al instante).
+    const start = game.play('player1', { q: 0, r: 0 }, { q: 1, r: 0 });
+    expect(start.ok).toBe(true);
+    expect(start.state.status).toBe('combat');
+    expect(start.state.combat?.turnActorId).toBe('p1');
 
-    const s = res.state;
-    expect(s.status).toBe('finished');
-    expect(s.winner).toBe('player1');
-    // El atacante ocupa la casilla del defensor; el defensor desaparece.
-    const at10 = s.tiles.find((t) => t.hex.q === 1 && t.hex.r === 0);
+    // No se puede mover mientras hay combate.
+    const blocked = game.play('player1', { q: 1, r: 0 }, { q: 2, r: 0 });
+    expect(blocked.ok).toBe(false);
+
+    // El atacante fuerte hace KO de un golpe.
+    const res = game.combatAction('ATACAR');
+    expect(res.ok).toBe(true);
+    expect(res.state.status).toBe('finished');
+    expect(res.state.winner).toBe('player1');
+    expect(res.state.combat).toBeNull();
+
+    const at10 = res.state.tiles.find((t) => t.hex.q === 1 && t.hex.r === 0);
     expect(at10?.occupant?.playerId).toBe('player1');
-    const at00 = s.tiles.find((t) => t.hex.q === 0 && t.hex.r === 0);
+    const at00 = res.state.tiles.find((t) => t.hex.q === 0 && t.hex.r === 0);
     expect(at00?.occupant).toBeNull();
+  });
+
+  it('HUIR termina el combate sin muerte (ambos sobreviven) y pasa el turno', () => {
+    const board = Board.generateBasic(3);
+    const p1 = mk({ id: 'p1', playerId: 'player1', type: 'WATER', movementPattern: 'TANK', hp: 100, maxHp: 100, atk: 10 });
+    const p2 = mk({ id: 'p2', playerId: 'player2', type: 'WATER', movementPattern: 'TANK', hp: 100, maxHp: 100, atk: 10 });
+    const game = GameService.create('t5', board, [
+      { hex: { q: 0, r: 0 }, pokemon: p1 },
+      { hex: { q: 1, r: 0 }, pokemon: p2 },
+    ]);
+    game.play('player1', { q: 0, r: 0 }, { q: 1, r: 0 }); // inicia combate
+    const res = game.combatAction('HUIR');
+    expect(res.ok).toBe(true);
+    expect(res.state.status).toBe('active');
+    expect(res.state.combat).toBeNull();
+    // Ambas piezas siguen en el tablero.
+    expect(res.state.tiles.find((t) => t.hex.q === 0 && t.hex.r === 0)?.occupant).not.toBeNull();
+    expect(res.state.tiles.find((t) => t.hex.q === 1 && t.hex.r === 0)?.occupant).not.toBeNull();
+    // El turno pasó al otro jugador.
+    expect(res.state.currentPlayer).toBe('player2');
   });
 
   it('serializa y deserializa el estado sin perder información', () => {

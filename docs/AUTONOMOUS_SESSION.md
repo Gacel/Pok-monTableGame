@@ -171,6 +171,26 @@
 
 ---
 
+## Segunda tanda (petición del usuario): draft + combate interactivo
+
+### F14 — Draft de equipos 3v3 (pool de 12) [backend] ✅
+- **Qué:** roster de 12 Pokémon (`MatchManager.ROSTER_NAMES`, mezcla de tipos/patrones).
+  `GET /api/game/roster` (12 plantillas cacheadas) y `POST /api/game/start`
+  (`{player1:[3], player2:[3]}` → coloca 3v3 y arranca). Partida por defecto ahora 3v3.
+- **Verificación:** smoke HTTP → roster=12, start coloca 3+3 (status active), start inválido → 400.
+
+### F15 — Combate interactivo por turnos [backend] ✅
+- **Qué:** `GameService` con máquina de combate. Atacar ya **no** resuelve al instante:
+  entra en `status:'combat'` con `CombatState` (atacante/defensor, HP vivos, turno).
+  Acciones `ATACAR / HABILIDAD / OBJETO / HUIR` (`POST /api/game/combat/action` y WSS
+  `combat_action`), validadas y resueltas en servidor (HABILIDAD ×1.6 cuesta 1 candy;
+  OBJETO cura 30% cuesta 2 candies; HUIR con golpe libre del rival). Al KO el vencedor
+  ocupa la casilla y se comprueba victoria.
+- **Verificación:** `tsc` limpio, **23/23 tests**, smoke HTTP de guardas.
+- **Commit:** `feat(game): 3v3 draft + interactive turn-based combat`
+
+---
+
 ## Resumen del estado al cierre de la sesión
 
 **Hecho y verificado (Docker):**
