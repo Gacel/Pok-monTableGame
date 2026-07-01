@@ -18,8 +18,8 @@ describe('Board & Resources', () => {
     // Radius 1 means 7 tiles
     expect(board.tiles.size).toBe(7);
 
-    const charizard: Pokemon = { id: 'p1', playerId: 'player1', type: 'FIRE', movementPattern: 'FLYING' };
-    const blastoise: Pokemon = { id: 'p2', playerId: 'player2', type: 'WATER', movementPattern: 'TANK' };
+    const charizard: Pokemon = { id: 'p1', playerId: 'player1', type: 'FIRE', movementPattern: 'FLYING', hp: 100, maxHp: 100 };
+    const blastoise: Pokemon = { id: 'p2', playerId: 'player2', type: 'WATER', movementPattern: 'TANK', hp: 100, maxHp: 100 };
 
     board.setOccupant({ q: 0, r: 0 }, charizard); // Center is FIRE (hash 0)
     board.setOccupant({ q: 1, r: 0 }, blastoise); // (1,0) hash 1 -> WATER
@@ -35,8 +35,8 @@ describe('Board & Resources', () => {
 describe('Movement Patterns', () => {
   it('TANK (Rey) only moves to adjacent empty tiles', () => {
     const board = Board.generateBasic(2); // Radius 2
-    const blastoise: Pokemon = { id: 'p2', playerId: 'player2', type: 'WATER', movementPattern: 'TANK' };
-    const dummy: Pokemon = { id: 'p3', playerId: 'player1', type: 'GRASS', movementPattern: 'TANK' };
+    const blastoise: Pokemon = { id: 'p2', playerId: 'player2', type: 'WATER', movementPattern: 'TANK', hp: 100, maxHp: 100 };
+    const dummy: Pokemon = { id: 'p3', playerId: 'player1', type: 'GRASS', movementPattern: 'TANK', hp: 100, maxHp: 100 };
     
     board.setOccupant({ q: 0, r: 0 }, blastoise);
     // Block one adjacent tile
@@ -51,7 +51,7 @@ describe('Movement Patterns', () => {
 
   it('FLYING (Alfil) moves in diagonals and stops at obstacles', () => {
     const board = Board.generateBasic(4); 
-    const charizard: Pokemon = { id: 'p1', playerId: 'player1', type: 'FIRE', movementPattern: 'FLYING' };
+    const charizard: Pokemon = { id: 'p1', playerId: 'player1', type: 'FIRE', movementPattern: 'FLYING', hp: 100, maxHp: 100 };
     board.setOccupant({ q: 0, r: 0 }, charizard);
 
     const moves = getLegalMoves({ q: 0, r: 0 }, board);
@@ -63,7 +63,7 @@ describe('Movement Patterns', () => {
   
   it('SPEEDSTER (Caballo) jumps exactly to L-shapes', () => {
     const board = Board.generateBasic(3); 
-    const pikachu: Pokemon = { id: 'p4', playerId: 'player1', type: 'GRASS', movementPattern: 'SPEEDSTER' };
+    const pikachu: Pokemon = { id: 'p4', playerId: 'player1', type: 'GRASS', movementPattern: 'SPEEDSTER', hp: 100, maxHp: 100 };
     board.setOccupant({ q: 0, r: 0 }, pikachu);
 
     const moves = getLegalMoves({ q: 0, r: 0 }, board);

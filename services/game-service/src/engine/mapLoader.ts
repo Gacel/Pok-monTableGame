@@ -59,7 +59,6 @@ export class MapLoader {
         
         // Offset coordinates (staggered) to axial conversion
         if (data.staggeraxis === 'y') {
-           const staggerOffset = data.staggerindex === 'even' ? 1 : 0;
            // Odd-r offset to axial (Pointy top)
            q = col - Math.floor((row - (row & 1)) / 2);
            r = row;

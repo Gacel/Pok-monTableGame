@@ -2,14 +2,22 @@ import { Hex } from './hex.js';
 
 export type Biome = 'FIRE' | 'WATER' | 'GRASS' | 'SAND' | 'ICE';
 
+export type MovementPattern = 'FLYING' | 'TANK' | 'SPEEDSTER';
+
 export interface Pokemon {
   id: string;
   playerId: string;
   name?: string;
   type: Biome; // Simplified: matches biome types
-  movementPattern: 'FLYING' | 'TANK' | 'SPEEDSTER';
+  movementPattern: MovementPattern;
   hp: number;
   maxHp: number;
+  /** Ataque base (por defecto 50 si no se especifica). */
+  atk?: number;
+  /** Defensa base (por defecto 40 si no se especifica). */
+  def?: number;
+  /** Nivel de combate; usado como umbral para evolución. */
+  level?: number;
 }
 
 export interface Tile {

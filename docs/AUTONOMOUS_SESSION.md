@@ -63,4 +63,24 @@
   publicar `main`, purga ese commit o parte de `feat/overnight-improvements`.
 - **Commit:** `security: stop tracking .agents/mcp.json (contained API key)`
 
+### F2 — Fix routing Nginx ✅
+- **Qué:** `/api/auth`, `/api/users`, `/api/poke`, `/ws` reenrutados a `game-service`.
+- **Por qué:** apuntaban a `hello` → auth rota vía gateway (404).
+- **Commit:** `fix(gateway): route /api/auth and /api/users to game-service`
+
+### F3a — Motor de combate y entorno (lógica pura + tests) ✅
+- **Qué:**
+  - `engine/environment.ts`: ventaja de tipo (FIRE>GRASS>WATER>FIRE), terreno FIRE
+    (+20% ATK fuego, −15% DEF planta), río WATER bloquea a FIRE (`canEnter`).
+  - `engine/combat.ts`: combate por turnos determinista (`computeDamage`,
+    `resolveCombat`) con log; no muta las entradas.
+  - `engine/movement.ts`: nuevo `getMoveOptions` que separa **movimientos** (casilla
+    vacía, respetando terreno) de **ataques** (enemigo alcanzable). `getLegalMoves`
+    se mantiene por compatibilidad.
+  - `board.ts`: `Pokemon` extendido con `atk/def/level`.
+  - Se corrigieron los tests preexistentes (`engine.test.ts` faltaban `hp/maxHp`;
+    `mapLoader.test.ts` usaba un mapeo de bioma incorrecto vs. el loader).
+- **Verificación:** `vitest` → **18/18 tests OK** (incluye 12 nuevos de combate/entorno).
+- **Commit:** `feat(engine): deterministic combat + environment modifiers + attack moves`
+
 <!-- Las siguientes entradas se añaden a medida que se completan. -->
