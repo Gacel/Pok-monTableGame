@@ -2,6 +2,8 @@ import { GameState } from '../models/GameState';
 import { BoardView } from '../views/BoardView';
 import { HUDView } from '../views/HUDView';
 import { EntityView } from '../views/EntityView';
+import { WsClient } from '../net/WsClient';
+import type { WsMessage } from '../net/WsClient';
 import type { Hex, MatchState } from '../models/Types';
 
 /**
@@ -22,6 +24,7 @@ export class GameController {
   private initialCameraOffsetY = 0;
   private hasDragged = false;
   private busy = false;
+  private wsClient: WsClient | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -44,9 +47,32 @@ export class GameController {
       await this.preloadSprites(state);
       this.state.setMatch(state);
       this.renderAll();
+      this.connectRealtime();
     } catch (e) {
       console.error(e);
       this.hudView.flashToast('Error al cargar la partida');
+    }
+  }
+
+  /** Sincronización en vivo: aplica el estado difundido por el servidor (WSS). */
+  private connectRealtime(): void {
+    if (this.wsClient) return;
+    this.wsClient = new WsClient((msg: WsMessage) => this.onRealtimeMessage(msg));
+    this.wsClient.connect();
+  }
+
+  private async onRealtimeMessage(msg: WsMessage): Promise<void> {
+    if (msg.type === 'state' && msg.state) {
+      const state = msg.state as MatchState;
+      await this.preloadSprites(state);
+      // No pisamos una selección local en curso si el estado no cambió de turno.
+      this.state.setMatch(state);
+      if (msg.combat) {
+        const c = msg.combat as { winnerId?: string };
+        this.hudView.flashToast(`Combate: gana ${String(c.winnerId ?? '').toUpperCase()}`, '#7c3aed');
+      }
+    } else if (msg.type === 'chat' && msg.text) {
+      this.hudView.flashToast(`💬 ${msg.text}`, '#1d4ed8');
     }
   }
 

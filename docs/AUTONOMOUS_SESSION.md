@@ -154,4 +154,12 @@
   tras un movimiento validado, y el chat se propaga (`WS_SMOKE_OK`).
 - **Commit:** `feat(game): WSS board sync + chat (server-authoritative broadcast)`
 
+### F12 — Cliente WSS en el frontend (sync en vivo entre pestañas) ✅
+- **Qué:** `net/WsClient.ts` (conexión + reconexión automática) integrado en
+  `GameController`: al iniciar conecta a `/ws` y **aplica el estado difundido** por el
+  servidor (movimientos de otro cliente, combate, chat) → dos pestañas sincronizadas.
+  Los movimientos se siguen enviando por REST (que difunde por WSS).
+- **Verificación (Docker):** `tsc --noEmit` del frontend limpio.
+- **Commit:** `feat(frontend): live WSS state sync (WsClient)`
+
 <!-- Las siguientes entradas se añaden a medida que se completan. -->
