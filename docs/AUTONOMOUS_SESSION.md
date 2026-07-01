@@ -83,4 +83,25 @@
 - **Verificación:** `vitest` → **18/18 tests OK** (incluye 12 nuevos de combate/entorno).
 - **Commit:** `feat(engine): deterministic combat + environment modifiers + attack moves`
 
+### F3b — Refactor backend a MVC + reglas autoritativas ✅
+- **Qué:** se descompuso el monolito `server.ts` en capas MVC limpias:
+  - **Modelos** (`src/models/`): `db.ts` (conexión + migraciones: `pokemons`,
+    `users`, `matches`, `match_state`), `UserModel`, `PokemonModel`, `MatchModel`.
+  - **Servicios** (`src/services/`): `PokemonService` (caché-primero DB→PokeAPI),
+    `GameService` (partida autoritativa: turnos, validación, combate, recursos,
+    condición de victoria, serialización), `MatchManager` (ciclo de vida + persistencia).
+  - **Controladores** (`src/controllers/`): `Auth`, `User`, `Game` (finos, validan input).
+  - **Rutas** (`src/routes/`): con esquemas de validación Fastify.
+  - **`app.ts`** (build) + **`server.ts`** (boot + graceful shutdown que persiste).
+  - Se eliminó `database.ts`.
+- **Reglas conectadas:** el endpoint `move` ahora valida turno, propiedad de la
+  pieza, y legalidad por patrón; los enemigos alcanzables inician **combate**; se
+  colectan **recursos** por turno; se detecta **victoria**.
+- **Verificación (Docker):** `tsc --noEmit` limpio + **smoke test real** arrancando
+  el servidor: `/health` OK, estado con 2 jugadores, `moves` para (0,0) devuelve
+  movimientos + ataque a (3,3), movimiento ilegal → 400, `login` persiste en SQLite.
+- **Nuevos endpoints:** `GET /api/game/state`, `GET /api/game/moves?q&r`,
+  `POST /api/game/reset` (además de `board` y `move` existentes).
+- **Commit:** `refactor(game): MVC layers + authoritative turns/combat/resources`
+
 <!-- Las siguientes entradas se añaden a medida que se completan. -->
