@@ -137,4 +137,10 @@
 - **Verificación:** `vitest` → **22/22 tests OK**; `tsc --noEmit` limpio.
 - **Commit:** `test(game): GameService integration (turns, combat, resources, persistence)`
 
+### F10 — Documentación de contrato y estado ✅
+- **Qué:** `services/game-service/README.md` (contrato HTTP + arquitectura MVC + modelo
+  de juego + envs), sección 11 en `LOCAL_DEV.md` (verificación por Docker sin Node), y
+  actualización del roadmap del `README.md` al estado real.
+- **Commit:** `docs: game-service contract README + docker-only verification + roadmap`
+
 <!-- Las siguientes entradas se añaden a medida que se completan. -->

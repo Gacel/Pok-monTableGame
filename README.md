@@ -72,13 +72,17 @@ Esto compilará y ejecutará:
 
 ## 🗺️ Mapa de Ruta (Roadmap)
 
-El desarrollo está organizado en las siguientes fases detalladas en [`docs/IMPLEMENTATION_PLAN.md`](./docs/IMPLEMENTATION_PLAN.md):
+El desarrollo está organizado en las siguientes fases detalladas en [`docs/IMPLEMENTATION_PLAN.md`](./docs/IMPLEMENTATION_PLAN.md). El estado detallado y el registro de avances está en [`docs/AUTONOMOUS_SESSION.md`](./docs/AUTONOMOUS_SESSION.md); la arquitectura (objetivo vs. real) en [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md).
 
-- [x] **FASE 0**: Cimientos del repo, Monorepo & Gateway.
-- [ ] **FASE 1**: Seguridad & Auth (Vault, JWT, OAuth2, 2FA, RabbitMQ).
-- [ ] **FASE 2**: Comunicación & Core de juego (Tablero Hexagonal, Movimientos, WSS).
-- [ ] **FASE 3**: Datos & Frontend (PokeAPI Proxy, SPA, Interfaz de partida).
+- [x] **FASE 0**: Cimientos del repo, Monorepo & Gateway (SSL).
+- [ ] **FASE 1**: Seguridad & Auth (Vault, JWT, OAuth2, 2FA, RabbitMQ) — *pendiente; auth mock provisional en game-service*.
+- [~] **FASE 2**: Core de juego — ✅ tablero hexagonal, patrones de movimiento, **combate por turnos**, **modificadores de terreno**, **recursos (Catan)**, backend **MVC** autoritativo con persistencia SQLite y graceful shutdown. WSS pendiente.
+- [~] **FASE 3**: Frontend — ✅ SPA (TS + Tailwind) con render del tablero, **turnos, resaltado de movimientos/ataques, combate, recursos y pantalla de victoria**. PokeAPI proxy + Redis y user-service pendientes.
 - [ ] **FASE 4**: IA & Hardening (Oponente automático, tests de carga, auditoría final).
+
+> **Arquitectura MVC** aplicada en backend (`models`/`controllers`/`routes`/`services` +
+> `engine` puro) y frontend (`models`/`views`/`controllers`). El **servidor es la única
+> fuente de verdad**: valida turno, propiedad y legalidad antes de mutar el estado.
 
 ## 📜 Licencia
 

@@ -145,3 +145,37 @@ git add -A && git commit -m "feat(<área>): <componente>"
 ```
 
 > Recuerda la **Definición de Done** de `CLAUDE.md §7` para cada componente.
+
+---
+
+## 11. Verificar sin Node instalado en el host (solo Docker)
+
+Si la máquina **no tiene Node/npm**, puedes hacer typecheck y tests usando
+contenedores efímeros. Instala primero las dependencias del workspace una vez
+(se persisten en `node_modules/` vía bind-mount):
+
+```bash
+docker run --rm -v "$PWD:/app" -w /app node:20-alpine npm install
+```
+
+**Typecheck de un servicio** (rápido, sobre el bind-mount):
+
+```bash
+docker run --rm -v "$PWD:/app" -w /app/services/game-service \
+  node:20-alpine npx tsc --noEmit
+```
+
+**Tests** — el filesystem de Windows puede romper ficheros con nombres hasheados
+de `vitest`/`tsx`. Copiando el servicio a un fs Linux dentro del contenedor se evita:
+
+```bash
+docker run --rm -v "$PWD:/src:ro" node:20-alpine sh -c '
+  mkdir -p /build/services && cp /src/tsconfig.base.json /build/tsconfig.base.json &&
+  cp -r /src/services/game-service /build/services/ &&
+  cd /build/services/game-service && rm -rf node_modules &&
+  npm install --silent && npx vitest run'
+```
+
+> En PowerShell, sustituye `$PWD` por la ruta absoluta (p.ej. `F:\Transcendence`)
+> y `localhost` por `127.0.0.1` al hacer smoke tests dentro del contenedor
+> (el server escucha en IPv4).
