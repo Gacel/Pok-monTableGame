@@ -1,0 +1,12 @@
+# Contexto de build en la raíz (npm workspaces): excluir todo lo que no debe
+# viajar al daemon. Las dependencias se instalan DENTRO de la imagen.
+**/node_modules
+.git
+**/dist
+**/data
+**/*.db
+**/*.db-*
+.env
+**/.env
+docs
+*.md

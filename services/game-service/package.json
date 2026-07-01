@@ -9,6 +9,7 @@
     "build": "tsc"
   },
   "dependencies": {
+    "@transcendence/shared": "0.1.0",
     "@fastify/websocket": "^8.3.1",
     "fastify": "^4.26.2",
     "sqlite": "^5.1.1",

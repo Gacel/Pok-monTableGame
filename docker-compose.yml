@@ -28,17 +28,23 @@ services:
     restart: unless-stopped
   game-service:
     build:
-      context: ./services/game-service
+      # Contexto en la raíz: la imagen necesita packages/shared (npm workspaces).
+      context: .
+      dockerfile: services/game-service/Dockerfile
     container_name: transcendence-game-service
     environment:
       PORT: 3001
       LOG_LEVEL: info
+    volumes:
+      - game-data:/app/services/game-service/data
     networks:
       - transcendence-net
     restart: unless-stopped
   frontend:
     build:
-      context: ./services/frontend
+      # Contexto en la raíz: la imagen necesita packages/shared (npm workspaces).
+      context: .
+      dockerfile: services/frontend/Dockerfile
     container_name: transcendence-frontend
     networks:
       - transcendence-net

@@ -1,6 +1,8 @@
 # docker-compose.override.yml — ajustes SOLO para desarrollo local.
 # Compose lo carga automáticamente junto a docker-compose.yml.
 # Aquí: exposición de puertos al host y hot-reload por bind mount.
+# NOTA: game-service y frontend viven en /app/services/<svc> dentro de la
+# imagen (contexto de build en la raíz para npm workspaces + packages/shared).
 
 services:
   hello:
@@ -13,17 +15,19 @@ services:
     ports:
       - '3001:3001'
     volumes:
-      - ./services/game-service/src:/app/src
-      - ./services/game-service/data:/app/data
-      - ./services/game-service/test:/app/test
-      - ./tsconfig.base.json:/tsconfig.base.json
+      - ./services/game-service/src:/app/services/game-service/src
+      - ./services/game-service/data:/app/services/game-service/data
+      - ./services/game-service/test:/app/services/game-service/test
+      - ./packages/shared:/app/packages/shared
+      - ./tsconfig.base.json:/app/tsconfig.base.json
     command: ['npm', 'run', 'dev']
   frontend:
     ports:
       - '5173:5173'
     volumes:
-      - ./services/frontend/src:/app/src
-      - ./services/frontend/public:/app/public
-      - ./services/frontend/index.html:/app/index.html
-      - ./services/frontend/vite.config.ts:/app/vite.config.ts
+      - ./services/frontend/src:/app/services/frontend/src
+      - ./services/frontend/public:/app/services/frontend/public
+      - ./services/frontend/index.html:/app/services/frontend/index.html
+      - ./services/frontend/vite.config.ts:/app/services/frontend/vite.config.ts
+      - ./packages/shared:/app/packages/shared
     command: ['npm', 'run', 'dev', '--', '--host', '0.0.0.0']
