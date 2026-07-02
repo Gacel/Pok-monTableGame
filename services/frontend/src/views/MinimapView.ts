@@ -29,6 +29,14 @@ export class MinimapView {
     ICE: '#bfe3f5',
   };
 
+  /** Color de cada jugador (mismos que el HUD y el banner de turno). */
+  private static readonly PLAYER_COLORS: Record<string, string> = {
+    player1: '#3b82f6', // Azul
+    player2: '#ef4444', // Rojo
+    player3: '#a855f7', // Violeta
+    player4: '#eab308', // Amarillo
+  };
+
   constructor(state: GameState, boardView: BoardView, mainCanvas: HTMLCanvasElement) {
     this.state = state;
     this.boardView = boardView;
@@ -101,7 +109,7 @@ export class MinimapView {
       ctx.fillRect(x - cell / 2, y - cell / 2, cell, cell);
     }
 
-    // Piezas: puntos por jugador (P1 rojo, P2 azul).
+    // Piezas: cada Pokémon con el color de SU jugador (P1..P4).
     for (const t of tiles) {
       if (!t.occupant) continue;
       const p = this.boardView.hexToPixel(t.hex.q, t.hex.r);
@@ -109,7 +117,7 @@ export class MinimapView {
       const y = offY + (p.y - b.minY) * scale;
       ctx.beginPath();
       ctx.arc(x, y, Math.max(2, cell * 0.7), 0, Math.PI * 2);
-      ctx.fillStyle = t.occupant.playerId === 'player1' ? '#f87171' : '#60a5fa';
+      ctx.fillStyle = MinimapView.PLAYER_COLORS[t.occupant.playerId] ?? '#e5e7eb';
       ctx.strokeStyle = '#000';
       ctx.lineWidth = 0.5;
       ctx.fill();
