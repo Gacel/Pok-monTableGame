@@ -15,6 +15,6 @@ EXPOSE 3000
 
 # Healthcheck a nivel de imagen (wget viene en alpine)
 HEALTHCHECK --interval=10s --timeout=3s --start-period=10s --retries=5 \
-  CMD wget -qO- http://localhost:3000/health || exit 1
+  CMD wget -qO- http://127.0.0.1:3000/health || exit 1
 
 CMD ["npm", "run", "start"]
