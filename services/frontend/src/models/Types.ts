@@ -60,7 +60,7 @@ export interface PlayerResources {
 }
 
 export type MatchStatus = 'active' | 'combat' | 'finished';
-export type CombatAction = 'ATACAR' | 'HABILIDAD' | 'OBJETO' | 'HUIR' | 'MOVE';
+export type CombatAction = 'ATACAR' | 'HABILIDAD' | 'OBJETO' | 'HUIR' | 'MOVE' | 'TARGET';
 
 /** Estado de un combate interactivo (espejo del CombatState del servidor). */
 export interface CombatState {
@@ -72,6 +72,12 @@ export interface CombatState {
   defender: Pokemon;
   attackerPlayer: string;
   defenderPlayer: string;
+  /** Todos los defensores que participan (varios contra uno). */
+  defenders: Pokemon[];
+  /** Hexes paralelos a `defenders`. */
+  defenderHexes: Hex[];
+  /** Id del defensor al que el atacante dirige sus acciones. */
+  targetId: string;
   turnActorId: string;
   round: number;
   log: string[];
