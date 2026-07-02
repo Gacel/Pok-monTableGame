@@ -51,14 +51,10 @@ export class LoginView {
       }
     });
 
-    document.getElementById('btn-google')?.addEventListener('click', async () => {
+    document.getElementById('btn-google')?.addEventListener('click', () => {
       const btn = document.getElementById('btn-google') as HTMLButtonElement;
-      btn.innerText = 'CONECTANDO...';
-      const mockGoogleEmail = "google_user_" + Math.floor(Math.random() * 1000) + "@gmail.com";
-      const success = await authState.loginWithEmail(mockGoogleEmail);
-      if (!success) {
-        btn.innerText = 'GOOGLE LOGIN';
-      }
+      btn.innerText = 'REDIRIGIENDO...';
+      window.location.href = '/api/auth/google/login';
     });
   }
 }

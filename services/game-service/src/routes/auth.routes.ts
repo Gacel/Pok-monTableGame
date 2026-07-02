@@ -33,4 +33,10 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     },
     AuthController.register
   );
+
+  // Define Google OAuth callback route
+  app.get(
+    '/api/auth/google/callback',
+    AuthController.googleCallback
+  );
 }

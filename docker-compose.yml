@@ -32,6 +32,8 @@ services:
       context: .
       dockerfile: services/game-service/Dockerfile
     container_name: transcendence-game-service
+    env_file:
+      - .env
     environment:
       PORT: 3001
       LOG_LEVEL: info

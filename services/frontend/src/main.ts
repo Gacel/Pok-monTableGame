@@ -23,6 +23,15 @@ let gameController: GameController | null = null;
 let currentLobby: LobbyView | null = null;
 
 async function bootstrap() {
+  // Catch token from OAuth callback
+  const urlParams = new URLSearchParams(window.location.search);
+  const tokenFromUrl = urlParams.get('token');
+  if (tokenFromUrl) {
+    localStorage.setItem('token', tokenFromUrl);
+    window.history.replaceState({}, document.title, window.location.pathname);
+    authState.sessionToken = tokenFromUrl;
+  }
+
   const hasSession = await authState.checkSession();
 
   if (!hasSession) {
