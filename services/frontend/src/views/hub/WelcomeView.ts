@@ -41,7 +41,7 @@ export class WelcomeView {
         
         <!-- Title / Logo placeholder -->
         <div id="logo-container" class="relative z-10 flex flex-col items-center origin-center w-full px-4 hidden">
-          <img src="/assets/welcome/logo.png" alt="Logo" class="animate-logo-intro object-contain drop-shadow-[0_4px_4px_rgba(0,0,0,0.8)] max-w-[90vw]">
+          <img src="/assets/welcome/logo.png" alt="Logo" class="animate-logo-intro object-contain drop-shadow-[0_6px_6px_rgba(0,0,0,0.85)]" style="width: 620px; max-width: 68%;">
         </div>
 
         <!-- Press Start prompt -->

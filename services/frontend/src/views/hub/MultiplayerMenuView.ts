@@ -1,53 +1,130 @@
-import { showLocalSetup, showLobby, showMainMenu } from '../../main';
+import type { GameMode } from '@transcendence/shared';
+import { showPlayMenu, startLocalGame, showLobby } from '../../main';
+import { FONT, hubPanel, panelTitle, panelCard, menuButton, backButton } from './panel';
+
+type Channel = 'local' | 'online';
+
+/** Config de un modo del árbol → parámetros reales del motor. Ver docs/FRONTEND_MENU.md §4.2 */
+interface ModePreset {
+  key: string;
+  icon: string;
+  label: string;
+  desc: string;
+  players: number;
+  gameMode: GameMode;
+}
+
+const MODES: ModePreset[] = [
+  { key: '1v1', icon: '⚔️', label: '1 VS 1', desc: 'Duelo · 2 jugadores · FFA', players: 2, gameMode: 'ffa' },
+  { key: '2v2', icon: '🤝', label: '2 VS 2', desc: 'Parejas · 4 jugadores · P1+P3 vs P2+P4', players: 4, gameMode: 'teams' },
+  { key: 'br', icon: '👑', label: 'BATTLE ROYALE', desc: 'Todos contra todos · 3-4 jugadores', players: 4, gameMode: 'ffa' },
+];
 
 /**
- * Capa VISTA: submenú MULTIJUGADOR. Dos caminos:
- *  - LOCAL  → 2-4 jugadores en la misma pantalla (hot-seat).
- *  - ONLINE → crear partida (anfitrión) o buscar partida (lobby).
+ * Capa VISTA: MULTIJUGADOR. Dos pasos:
+ *  1) canal: LOCAL (misma pantalla) o EN LÍNEA (otro navegador).
+ *  2) modo:  1 VS 1 / 2 VS 2 / BATTLE ROYALE → lanza el flujo real (draft/partida).
  */
 export class MultiplayerMenuView {
   private container: HTMLElement;
+  private step: 'channel' | 'mode' = 'channel';
+  private channel: Channel = 'local';
 
   constructor(container: HTMLElement) {
     this.container = container;
   }
 
   public render() {
-    this.container.innerHTML = `
-      <div class="transform scale-125 lg:scale-150 origin-center transition-transform">
-        <div class="relative w-full max-w-2xl mx-auto p-1 bg-gray-900" style="border: 4px solid #fff; border-radius: 8px; box-shadow: 0 0 0 4px #000, 0 0 20px rgba(0,0,0,0.8);">
-          <div class="bg-blue-900 border-4 border-black p-4 flex flex-col items-center min-h-[400px] relative" style="border-radius: 4px; box-shadow: inset 0 0 20px rgba(0,0,0,0.5);">
+    if (this.step === 'channel') this.renderChannel();
+    else this.renderMode();
+  }
 
-          <div class="bg-white border-4 border-gray-800 p-4 shadow-[4px_4px_0_#000] rounded-lg w-full max-w-sm relative mt-8">
-            <h3 class="text-black text-xs mb-4 text-center border-b-2 border-gray-300 pb-2" style="font-family: 'Press Start 2P', monospace;">MULTIJUGADOR</h3>
+  private renderChannel() {
+    const bigOption = (
+      id: string,
+      badge: string,
+      icon: string,
+      title: string,
+      desc: string,
+      color: string,
+      border: string
+    ) => `
+      <button id="${id}" class="flex flex-col items-center justify-center text-center rounded-lg border-b-8 ${border} active:border-b-0 active:mt-2 transition-all ${color}" style="${FONT} padding:36px 28px; box-shadow:0 6px 0 #000; min-height:230px;">
+        <span class="text-[9px] bg-yellow-400 text-black px-2 py-1 rounded mb-3">${badge}</span>
+        <span style="font-size:44px;">${icon}</span>
+        <span style="font-size:20px;" class="mt-3">${title}</span>
+        <span class="text-[10px] opacity-80 mt-3 leading-relaxed" style="max-width:260px;">${desc}</span>
+      </button>`;
 
-            <button id="btn-local" class="w-full mb-4 py-3 bg-red-600 hover:bg-red-500 text-white border-b-4 border-red-800 active:border-b-0 active:mt-1 transition-all rounded flex flex-col items-center gap-2" style="font-family: 'Press Start 2P', monospace; box-shadow: 0 4px 0 #000;">
-              <span class="text-[8px] bg-yellow-400 text-black px-2 py-1 rounded">👥 MISMA PANTALLA</span>
-              <span class="text-[12px]">▶ PARTIDA LOCAL</span>
-              <span class="text-[7px] text-yellow-200">2-4 jugadores · por turnos</span>
-            </button>
-
-            <button id="btn-online" class="w-full mb-4 py-3 bg-blue-600 hover:bg-blue-500 text-white border-b-4 border-blue-800 active:border-b-0 active:mt-1 transition-all rounded flex flex-col items-center gap-2" style="font-family: 'Press Start 2P', monospace; box-shadow: 0 4px 0 #000;">
-              <span class="text-[8px] bg-yellow-400 text-black px-2 py-1 rounded">🌐 OTRO NAVEGADOR</span>
-              <span class="text-[12px]">▶ ONLINE</span>
-              <span class="text-[7px] text-yellow-200">Crear partida · Buscar partida</span>
-            </button>
-
-            <p class="text-black text-[7px] leading-relaxed mb-2 bg-gray-100 border border-gray-300 rounded p-2" style="font-family: 'Press Start 2P', monospace;">
-              Todos contra todos (2-4) o 2 vs 2 (4 jugadores). Elige 3 Pokémon, controla biomas para ganar candies y derrota a tus rivales.
-            </p>
-
-            <button id="btn-back" class="text-left w-full p-1 text-black text-[9px] hover:bg-gray-200 transition-colors flex items-center group focus:outline-none border-t-2 border-gray-200 pt-3" style="font-family: 'Press Start 2P', monospace;">
-              <span class="ml-2">◀ VOLVER</span>
-            </button>
-          </div>
-        </div>
+    this.container.innerHTML = hubPanel(
+      `
+      ${panelTitle('MULTIJUGADOR')}
+      <div class="grid grid-cols-2 gap-8 w-full" style="max-width:800px;">
+        ${bigOption('btn-local', '👥 MISMA PANTALLA', '🎮', 'PARTIDA LOCAL', 'Varios jugadores por turnos en este mismo navegador.', 'bg-red-600 hover:bg-red-500 text-white', 'border-red-800')}
+        ${bigOption('btn-online', '🌐 OTRO NAVEGADOR', '📡', 'EN LÍNEA', 'Crea o busca una sala y juega contra otros jugadores.', 'bg-blue-600 hover:bg-blue-500 text-white', 'border-blue-800')}
       </div>
-      </div>
-    `;
+      ${backButton()}
+      `
+    );
 
-    document.getElementById('btn-local')?.addEventListener('click', () => showLocalSetup());
-    document.getElementById('btn-online')?.addEventListener('click', () => showLobby());
-    document.getElementById('btn-back')?.addEventListener('click', () => showMainMenu());
+    document.getElementById('btn-local')?.addEventListener('click', () => {
+      this.channel = 'local';
+      this.step = 'mode';
+      this.render();
+    });
+    document.getElementById('btn-online')?.addEventListener('click', () => {
+      this.channel = 'online';
+      this.step = 'mode';
+      this.render();
+    });
+    document.getElementById('btn-back')?.addEventListener('click', () => showPlayMenu());
+  }
+
+  private renderMode() {
+    const channelLabel = this.channel === 'local' ? 'LOCAL · misma pantalla' : 'EN LÍNEA · otro navegador';
+    const color = this.channel === 'local' ? 'red' : 'blue';
+
+    this.container.innerHTML = hubPanel(
+      `
+      ${panelTitle('ELIGE MODO')}
+      ${panelCard(
+        `
+        <p class="text-gray-700 text-center mb-6" style="${FONT} font-size:11px;">${channelLabel}</p>
+        <div class="flex flex-col gap-4" style="width:560px; max-width:100%;">
+          ${MODES.map((m) =>
+            menuButton({
+              id: `btn-mode-${m.key}`,
+              label: m.label,
+              icon: m.icon,
+              sublabel: m.desc,
+              color: color as 'red' | 'blue',
+            })
+          ).join('')}
+        </div>`,
+        'flex flex-col items-center'
+      )}
+      ${backButton()}
+      `,
+      { minHeight: 700 }
+    );
+
+    for (const m of MODES) {
+      document.getElementById(`btn-mode-${m.key}`)?.addEventListener('click', () => {
+        this.launch(m);
+      });
+    }
+    document.getElementById('btn-back')?.addEventListener('click', () => {
+      this.step = 'channel';
+      this.render();
+    });
+  }
+
+  /** Lanza el flujo real ya desarrollado con la config del modo elegido. */
+  private launch(m: ModePreset) {
+    if (this.channel === 'local') {
+      startLocalGame({ players: m.players, gameMode: m.gameMode });
+    } else {
+      showLobby({ capacity: m.players, gameMode: m.gameMode });
+    }
   }
 }

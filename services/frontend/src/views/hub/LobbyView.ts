@@ -35,9 +35,17 @@ export class LobbyView {
   private ws: WsClient | null = null;
   private finished = false;
 
-  constructor(container: HTMLElement, callbacks: LobbyCallbacks) {
+  constructor(
+    container: HTMLElement,
+    callbacks: LobbyCallbacks,
+    preset?: { capacity: number; gameMode: GameMode }
+  ) {
     this.container = container;
     this.cb = callbacks;
+    if (preset) {
+      this.capacity = preset.capacity;
+      this.gameMode = preset.gameMode;
+    }
   }
 
   public async render(): Promise<void> {

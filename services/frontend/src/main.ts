@@ -1,5 +1,5 @@
 import './style.css';
-import type { RoomInfo } from '@transcendence/shared';
+import type { RoomInfo, GameMode } from '@transcendence/shared';
 import { GameController } from './controllers/GameController';
 import { authState } from './auth/AuthState';
 import { apiFetch } from './net/api';
@@ -8,7 +8,12 @@ import type { OnlineSession } from './state/MatchSession';
 import { LoginView } from './views/hub/LoginView';
 import { AvatarCreationView } from './views/hub/AvatarCreationView';
 import { MainMenuView } from './views/hub/MainMenuView';
+import { PlayMenuView } from './views/hub/PlayMenuView';
+import { SinglePlayerMenuView } from './views/hub/SinglePlayerMenuView';
 import { MultiplayerMenuView } from './views/hub/MultiplayerMenuView';
+import { CommunityMenuView } from './views/hub/CommunityMenuView';
+import { ShopMenuView } from './views/hub/ShopMenuView';
+import { AuctionHouseView } from './views/hub/AuctionHouseView';
 import { LocalSetupView } from './views/hub/LocalSetupView';
 import type { LocalGameConfig } from './views/hub/LocalSetupView';
 import { SettingsView } from './views/hub/SettingsView';
@@ -90,9 +95,34 @@ export function showMainMenu() {
   menuView.render();
 }
 
+export function showPlayMenu() {
+  resetHubLayer();
+  new PlayMenuView(hubLayer).render();
+}
+
+export function showSinglePlayerMenu() {
+  resetHubLayer();
+  new SinglePlayerMenuView(hubLayer).render();
+}
+
 export function showMultiplayerMenu() {
   resetHubLayer();
   new MultiplayerMenuView(hubLayer).render();
+}
+
+export function showCommunityMenu() {
+  resetHubLayer();
+  new CommunityMenuView(hubLayer).render();
+}
+
+export function showShopMenu() {
+  resetHubLayer();
+  new ShopMenuView(hubLayer).render();
+}
+
+export function showAuctionHouse() {
+  resetHubLayer();
+  new AuctionHouseView(hubLayer).render();
 }
 
 export function showLocalSetup() {
@@ -172,13 +202,17 @@ async function onLocalDraftConfirmed(
 // ----------------------------------------------------------- PARTIDA ONLINE
 // Lobby (crear/buscar) → sala de espera → draft de tu equipo → Tablero
 
-export function showLobby() {
+export function showLobby(preset?: { capacity: number; gameMode: GameMode }) {
   resetHubLayer();
-  currentLobby = new LobbyView(hubLayer, {
-    onBack: showMultiplayerMenu,
-    onDraft: (room) => showOnlineDraft(room),
-    onGameStart: (room) => enterOnlineGame(room),
-  });
+  currentLobby = new LobbyView(
+    hubLayer,
+    {
+      onBack: showMultiplayerMenu,
+      onDraft: (room) => showOnlineDraft(room),
+      onGameStart: (room) => enterOnlineGame(room),
+    },
+    preset
+  );
   void currentLobby.render();
 }
 
