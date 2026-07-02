@@ -1,23 +1,35 @@
 import { Board, Biome, Pokemon, Tile } from '../engine/board.js';
-import { Hex, hexEqual } from '../engine/hex.js';
+import { Hex, hexEqual, hexNeighbors } from '../engine/hex.js';
 import { getMoveOptions, MoveOptions } from '../engine/movement.js';
 import { computeDamage, computeMoveDamage } from '../engine/combat.js';
 import { terrainDamage } from '../engine/environment.js';
 import { collectResources, PlayerResources } from '../engine/resources.js';
 
 export type MatchStatus = 'active' | 'combat' | 'finished';
-export type CombatAction = 'ATACAR' | 'HABILIDAD' | 'OBJETO' | 'HUIR' | 'MOVE';
+export type CombatAction = 'ATACAR' | 'HABILIDAD' | 'OBJETO' | 'HUIR' | 'MOVE' | 'TARGET';
 
-/** Estado de un combate interactivo por turnos entre dos Pokémon. */
+/**
+ * Estado de un combate interactivo por turnos. Modela "varios contra uno": un
+ * atacante solitario contra uno o VARIOS defensores del mismo jugador que están
+ * a rango del punto de combate. El atacante elige a qué defensor dirige cada
+ * acción (`targetId`). Los campos `defender*` reflejan el objetivo actual del
+ * atacante (compatibilidad con render de 1 contra 1).
+ */
 export interface CombatState {
   attackerId: string;
-  defenderId: string;
+  defenderId: string; // objetivo actual del atacante (espejo de targetId)
   attackerHex: Hex;
-  defenderHex: Hex;
+  defenderHex: Hex; // hex del objetivo actual
   attacker: Pokemon; // copia viva (hp actual)
-  defender: Pokemon;
+  defender: Pokemon; // objetivo actual (misma referencia que defenders[i])
   attackerPlayer: string;
   defenderPlayer: string;
+  /** Todos los defensores que participan (varios contra uno). */
+  defenders: Pokemon[];
+  /** Hexes paralelos a `defenders`. */
+  defenderHexes: Hex[];
+  /** Id del defensor al que el atacante dirige sus acciones. */
+  targetId: string;
   /** Id del Pokémon que debe elegir acción ahora. */
   turnActorId: string;
   round: number;
@@ -185,26 +197,70 @@ export class GameService {
   // ------------------------------------------------------------------- combate
   private initiateCombat(from: Hex, to: Hex): void {
     const attacker = { ...this.board.getOccupant(from)!, hasActed: true };
-    const defender = { ...this.board.getOccupant(to)! };
+    const primary = { ...this.board.getOccupant(to)! };
+    const defenderPlayer = primary.playerId;
+
+    // "Varios contra uno": todos los Pokémon del jugador defensor que están a
+    // rango (adyacentes al punto de combate) se unen a la defensa contra el
+    // atacante solitario. El primer defensor es el objetivo inicial.
+    const defenders: Pokemon[] = [primary];
+    const defenderHexes: Hex[] = [{ ...to }];
+    for (const nb of hexNeighbors(to)) {
+      const occ = this.board.getOccupant(nb);
+      if (occ && occ.playerId === defenderPlayer && occ.id !== primary.id && occ.id !== attacker.id) {
+        defenders.push({ ...occ });
+        defenderHexes.push({ ...nb });
+      }
+    }
+
     this.combat = {
       attackerId: attacker.id,
-      defenderId: defender.id,
+      defenderId: primary.id,
       attackerHex: from,
       defenderHex: to,
       attacker,
-      defender,
+      defender: primary,
       attackerPlayer: attacker.playerId,
-      defenderPlayer: defender.playerId,
+      defenderPlayer,
+      defenders,
+      defenderHexes,
+      targetId: primary.id,
       turnActorId: attacker.id, // el atacante actúa primero
       round: 1,
-      log: [`¡${nameOf(attacker)} ataca a ${nameOf(defender)}!`],
+      log: [`¡${nameOf(attacker)} ataca a ${nameOf(primary)}!`],
       status: 'active',
       winnerId: null,
       loserId: null,
       outcome: null,
     };
     this.status = 'combat';
-    this.log.push(`Combate: ${nameOf(attacker)} vs ${nameOf(defender)}.`);
+    const extra = defenders.length - 1;
+    this.log.push(
+      `Combate: ${nameOf(attacker)} vs ${nameOf(primary)}${extra > 0 ? ` (+${extra} de refuerzo)` : ''}.`
+    );
+  }
+
+  /** Índice de un defensor por id (o -1). */
+  private defenderIndex(id: string): number {
+    return this.combat ? this.combat.defenders.findIndex((d) => d.id === id) : -1;
+  }
+
+  /** Defensores aún en pie, en orden. */
+  private livingDefenders(): Pokemon[] {
+    return this.combat ? this.combat.defenders.filter((d) => d.hp > 0) : [];
+  }
+
+  /** Fija el objetivo del atacante y sincroniza los campos espejo `defender*`. */
+  private setTarget(id: string): boolean {
+    const c = this.combat;
+    if (!c) return false;
+    const idx = this.defenderIndex(id);
+    if (idx < 0 || c.defenders[idx]!.hp <= 0) return false;
+    c.targetId = id;
+    c.defenderId = id;
+    c.defender = c.defenders[idx]!;
+    c.defenderHex = c.defenderHexes[idx]!;
+    return true;
   }
 
   private terrainOf(hex: Hex): Biome {
@@ -233,7 +289,7 @@ export class GameService {
   }
 
   /** Aplica una acción de combate para el Pokémon cuyo turno es. */
-  combatAction(action: CombatAction, moveName?: string): PlayResult {
+  combatAction(action: CombatAction, moveName?: string, targetId?: string): PlayResult {
     if (this.status !== 'combat' || !this.combat) {
       return { ok: false, error: 'No hay combate en curso', state: this.getStateDTO() };
     }
@@ -241,11 +297,38 @@ export class GameService {
     if (c.status !== 'active') {
       return { ok: false, error: 'Fase de combate cerrada', state: this.getStateDTO() };
     }
-    const actorId = c.turnActorId;
-    const actor = actorId === c.attackerId ? c.attacker : c.defender;
-    const target = actorId === c.attackerId ? c.defender : c.attacker;
-    const actorTerrain = this.terrainOf(actorId === c.attackerId ? c.attackerHex : c.defenderHex);
-    const targetTerrain = this.terrainOf(actorId === c.attackerId ? c.defenderHex : c.attackerHex);
+
+    const actorIsAttacker = c.turnActorId === c.attackerId;
+
+    // Selección de objetivo: solo el atacante y solo entre defensores vivos.
+    if (action === 'TARGET') {
+      if (!actorIsAttacker) {
+        return { ok: false, error: 'Solo el atacante elige objetivo', state: this.getStateDTO() };
+      }
+      if (!targetId || !this.setTarget(targetId)) {
+        return { ok: false, error: 'Objetivo no válido', state: this.getStateDTO() };
+      }
+      return { ok: true, state: this.getStateDTO() };
+    }
+
+    // El atacante puede reapuntar en la misma acción (targetId opcional).
+    if (actorIsAttacker && targetId) this.setTarget(targetId);
+
+    const actor = actorIsAttacker
+      ? c.attacker
+      : (c.defenders.find((d) => d.id === c.turnActorId) ?? c.defender);
+    const target = actorIsAttacker
+      ? (c.defenders.find((d) => d.id === c.targetId && d.hp > 0) ?? this.livingDefenders()[0])
+      : c.attacker;
+    if (!target) {
+      return { ok: false, error: 'No hay objetivo válido', state: this.getStateDTO() };
+    }
+    const actorHex = actorIsAttacker ? c.attackerHex : c.defenderHexes[this.defenderIndex(actor.id)]!;
+    const targetHex = actorIsAttacker
+      ? c.defenderHexes[this.defenderIndex(target.id)]!
+      : c.attackerHex;
+    const actorTerrain = this.terrainOf(actorHex);
+    const targetTerrain = this.terrainOf(targetHex);
 
     switch (action) {
       case 'MOVE': {
@@ -305,18 +388,52 @@ export class GameService {
       }
     }
 
-    // KO por daño → pasa a fase de resultado (no se finaliza hasta "continuar").
-    if (target.hp <= 0) {
-      c.outcome = 'ko';
-      c.winnerId = actor.id;
-      c.loserId = target.id;
+    // KO por daño (OBJETO cura, no puede tumbar a nadie).
+    if (action !== 'OBJETO' && target.hp <= 0) {
       c.log.push(`¡${nameOf(target)} se ha debilitado!`);
-      c.status = 'finished';
-    } else {
-      c.turnActorId = target.id; // pasa el turno al rival
+      if (!actorIsAttacker) {
+        // Un defensor tumbó al atacante → gana el bando defensor.
+        c.outcome = 'ko';
+        c.winnerId = actor.id;
+        c.loserId = c.attackerId;
+        c.status = 'finished';
+        return { ok: true, state: this.getStateDTO() };
+      }
+      // El atacante tumbó a un defensor: ¿quedan más?
+      const living = this.livingDefenders();
+      if (living.length === 0) {
+        c.outcome = 'ko';
+        c.winnerId = c.attackerId;
+        c.loserId = target.id;
+        c.status = 'finished';
+        return { ok: true, state: this.getStateDTO() };
+      }
+      // Aún hay defensores: se reapunta al primero vivo y responden ellos.
+      this.setTarget(living[0]!.id);
+      c.turnActorId = living[0]!.id;
       c.round += 1;
+      return { ok: true, state: this.getStateDTO() };
     }
+
+    // Sin KO: pasa el turno al siguiente actor (atacante ⇄ ronda de defensores).
+    c.turnActorId = this.nextCombatActor(actorIsAttacker, actor.id);
+    c.round += 1;
     return { ok: true, state: this.getStateDTO() };
+  }
+
+  /**
+   * Siguiente en actuar. Tras el atacante actúan, en orden, todos los defensores
+   * vivos; cuando el último defensor termina, el turno vuelve al atacante.
+   */
+  private nextCombatActor(actorIsAttacker: boolean, actorId: string): string {
+    const c = this.combat!;
+    const living = this.livingDefenders();
+    if (actorIsAttacker) {
+      return living.length ? living[0]!.id : c.attackerId;
+    }
+    const idx = living.findIndex((d) => d.id === actorId);
+    if (idx >= 0 && idx + 1 < living.length) return living[idx + 1]!.id;
+    return c.attackerId;
   }
 
   /** Cierra un combate ya resuelto (fase de resultado): aplica el tablero y sigue. */
@@ -332,20 +449,35 @@ export class GameService {
     const c = this.combat;
     if (!c) return;
 
+    // Vuelca los defensores al tablero: los vivos con su HP, los KO se retiran.
+    const writeDefenders = () => {
+      c.defenders.forEach((d, i) => {
+        this.board.setOccupant(c.defenderHexes[i]!, d.hp > 0 ? { ...d } : null);
+      });
+    };
+
     if (c.outcome === 'ko') {
       const attackerWon = c.winnerId === c.attackerId;
       this.board.setOccupant(c.attackerHex, null);
       if (attackerWon) {
-        this.board.setOccupant(c.defenderHex, { ...c.attacker, hasActed: true });
+        // Cayeron TODOS los defensores: se limpian sus casillas y el atacante
+        // ocupa la casilla de combate INICIAL (adyacente a su origen), no la del
+        // último reapuntado, que podría quedar lejos.
+        c.defenders.forEach((_, i) => this.board.setOccupant(c.defenderHexes[i]!, null));
+        this.board.setOccupant(c.defenderHexes[0] ?? c.defenderHex, { ...c.attacker, hasActed: true });
         this.log.push(`${nameOf(c.attacker)} vence y ocupa la casilla.`);
       } else {
-        this.board.setOccupant(c.defenderHex, { ...c.defender });
-        this.log.push(`${nameOf(c.defender)} resiste el ataque.`);
+        // Cayó el atacante: los defensores supervivientes permanecen.
+        writeDefenders();
+        this.log.push(`${nameOf(c.attacker)} ha sido derrotado.`);
       }
     } else {
-      // Huida: ambos sobreviven en sus casillas, con el HP actualizado.
-      this.board.setOccupant(c.attackerHex, { ...c.attacker, hasActed: true });
-      this.board.setOccupant(c.defenderHex, { ...c.defender });
+      // Huida: el atacante (si sobrevive) vuelve a su casilla; defensores igual.
+      this.board.setOccupant(
+        c.attackerHex,
+        c.attacker.hp > 0 ? { ...c.attacker, hasActed: true } : null
+      );
+      writeDefenders();
       this.log.push('El combate termina en huida.');
     }
 
@@ -392,11 +524,15 @@ export class GameService {
       return { ok: false, error: 'Ese jugador no está en la partida', state: this.getStateDTO() };
     }
 
-    // Si hay combate en curso se cancela: ambos Pokémon vuelven al tablero
-    // con su HP actual antes de retirar las piezas del que abandona.
+    // Si hay combate en curso se cancela: el atacante y TODOS los defensores
+    // vuelven al tablero con su HP actual antes de retirar las piezas del que
+    // abandona.
     if (this.combat) {
-      this.board.setOccupant(this.combat.attackerHex, { ...this.combat.attacker, hasActed: true });
-      this.board.setOccupant(this.combat.defenderHex, { ...this.combat.defender });
+      const c = this.combat;
+      this.board.setOccupant(c.attackerHex, c.attacker.hp > 0 ? { ...c.attacker, hasActed: true } : null);
+      c.defenders.forEach((d, i) => {
+        this.board.setOccupant(c.defenderHexes[i]!, d.hp > 0 ? { ...d } : null);
+      });
       this.combat = null;
       this.status = 'active';
     }
@@ -514,6 +650,14 @@ export class GameService {
   static deserialize(json: string): GameService {
     const d = JSON.parse(json);
     const board = Board.deserialize(d.tiles);
+    // Compatibilidad: combates guardados antes de "varios contra uno" no tienen
+    // `defenders`; se normalizan al defensor único que sí guardaban.
+    const combat: CombatState | null = d.combat ?? null;
+    if (combat && !Array.isArray((combat as Partial<CombatState>).defenders)) {
+      combat.defenders = [combat.defender];
+      combat.defenderHexes = [combat.defenderHex];
+      combat.targetId = combat.defenderId;
+    }
     return new GameService(
       d.id,
       board,
@@ -524,7 +668,7 @@ export class GameService {
       d.winner,
       d.resources,
       d.log ?? [],
-      d.combat ?? null,
+      combat,
       d.alliances ?? null,
       d.eliminated ?? []
     );

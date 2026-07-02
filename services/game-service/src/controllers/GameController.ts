@@ -16,6 +16,7 @@ interface OptionsQuery {
 interface CombatBody {
   action?: string;
   moveName?: string;
+  targetId?: string;
 }
 interface StartBody {
   player1?: unknown;
@@ -25,7 +26,7 @@ interface StartBody {
   gameMode?: unknown;
 }
 
-const COMBAT_ACTIONS: CombatAction[] = ['ATACAR', 'HABILIDAD', 'OBJETO', 'HUIR', 'MOVE'];
+const COMBAT_ACTIONS: CombatAction[] = ['ATACAR', 'HABILIDAD', 'OBJETO', 'HUIR', 'MOVE', 'TARGET'];
 
 function isHex(h: unknown): h is Hex {
   return (
@@ -129,7 +130,9 @@ export const GameController = {
     }
     const moveName =
       typeof request.body?.moveName === 'string' ? request.body.moveName.slice(0, 40) : undefined;
-    const result = matchManager.get().combatAction(action, moveName);
+    const targetId =
+      typeof request.body?.targetId === 'string' ? request.body.targetId.slice(0, 40) : undefined;
+    const result = matchManager.get().combatAction(action, moveName, targetId);
     if (!result.ok) {
       return reply.code(400).send({ success: false, error: result.error, state: result.state });
     }

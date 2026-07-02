@@ -45,7 +45,7 @@ export class GameController {
     this.entityView = new EntityView(this.state, this.boardView);
     this.combatView = new CombatView(
       this.state,
-      (a, moveName) => this.sendCombatAction(a, moveName),
+      (a, moveName, targetId) => this.sendCombatAction(a, moveName, targetId),
       () => this.sendCombatContinue()
     );
     this.minimapView = new MinimapView(this.state, this.boardView, this.canvas);
@@ -285,7 +285,11 @@ export class GameController {
     }
   }
 
-  private async sendCombatAction(action: CombatAction, moveName?: string): Promise<void> {
+  private async sendCombatAction(
+    action: CombatAction,
+    moveName?: string,
+    targetId?: string
+  ): Promise<void> {
     if (this.busy) return;
     // Online: solo actúa el dueño del Pokémon al que le toca en el combate.
     const combat = this.state.match?.combat;
@@ -299,9 +303,12 @@ export class GameController {
     }
     this.busy = true;
     try {
+      const body: Record<string, string> = { action };
+      if (moveName) body.moveName = moveName;
+      if (targetId) body.targetId = targetId;
       const res = await apiFetch(this.apiPath('/combat/action'), {
         method: 'POST',
-        body: JSON.stringify(moveName ? { action, moveName } : { action }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (res.ok && data.success) {

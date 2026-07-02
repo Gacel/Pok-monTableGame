@@ -8,7 +8,7 @@ import type { CombatAction, CombatState, PlayerResources, Pokemon, PokemonMove }
  */
 export class CombatView {
   private state: GameState;
-  private onAction: (action: CombatAction, moveName?: string) => void;
+  private onAction: (action: CombatAction, moveName?: string, targetId?: string) => void;
   private onContinue: () => void;
   private overlay: HTMLElement | null;
 
@@ -22,7 +22,7 @@ export class CombatView {
 
   constructor(
     state: GameState,
-    onAction: (action: CombatAction, moveName?: string) => void,
+    onAction: (action: CombatAction, moveName?: string, targetId?: string) => void,
     onContinue: () => void
   ) {
     this.state = state;
@@ -75,6 +75,8 @@ export class CombatView {
         <div class="flex-1 relative">
           <!-- Defensor: izquierda -->
           <div class="absolute top-2 left-10">${this.hpBar(combat.defender, !actorIsAttacker && !finished)}</div>
+          <!-- Varios contra uno: selector de objetivo entre los defensores -->
+          ${this.defendersBar(combat, !finished && actorIsAttacker && myTurn)}
           <!-- Atacante: derecha -->
           <div class="absolute top-2 right-10">${this.hpBar(combat.attacker, actorIsAttacker && !finished)}</div>
 
@@ -104,7 +106,48 @@ export class CombatView {
           if (a) this.onAction(a, btn.dataset.move || undefined);
         });
       });
+      // Selección de objetivo (varios contra uno): el atacante fija el defensor.
+      this.overlay.querySelectorAll<HTMLButtonElement>('button[data-target]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const id = btn.dataset.target;
+          if (id) this.onAction('TARGET', undefined, id);
+        });
+      });
     }
+  }
+
+  /**
+   * Barra de objetivos cuando hay VARIOS defensores. Cada retrato muestra el HP,
+   * resalta al objetivo actual y (si el atacante puede elegir) permite fijar a
+   * quién dirige las acciones. Con un solo defensor no se muestra.
+   */
+  private defendersBar(combat: CombatState, canPick: boolean): string {
+    const defs = combat.defenders ?? [];
+    if (defs.length <= 1) return '';
+    const chips = defs
+      .map((d) => {
+        const dead = d.hp <= 0;
+        const isTarget = d.id === combat.targetId;
+        const pct = Math.max(0, Math.min(100, (d.hp / (d.maxHp || 1)) * 100));
+        const barCol = pct > 50 ? 'bg-green-500' : pct > 20 ? 'bg-yellow-500' : 'bg-red-500';
+        const border = isTarget ? '#facc15' : dead ? '#374151' : '#64748b';
+        const clickable = canPick && !dead && !isTarget;
+        return `
+          <button data-target="${dead ? '' : this.escape(d.id)}" ${clickable ? '' : 'disabled'}
+            title="${this.escape((d.name ?? d.id).toUpperCase())} (${Math.max(0, d.hp)}/${d.maxHp})"
+            class="flex flex-col items-center gap-0.5 p-1 rounded ${dead ? 'opacity-40 grayscale' : ''} ${clickable ? 'hover:scale-105 cursor-pointer' : 'cursor-default'}"
+            style="border:2px solid ${border};background:rgba(0,0,0,0.55);">
+            <img src="${this.sprite(d)}" alt="${this.escape(d.name ?? d.id)}" class="w-10 h-10 object-contain" style="image-rendering:pixelated;transform:scaleX(-1);" />
+            <div class="w-10 h-1.5 bg-gray-800 rounded overflow-hidden"><div class="h-full ${barCol}" style="width:${pct}%"></div></div>
+            ${isTarget ? '<span class="text-[7px] text-yellow-400" style="font-family:\'Press Start 2P\',monospace;">OBJETIVO</span>' : ''}
+          </button>`;
+      })
+      .join('');
+    return `
+      <div class="absolute top-2 left-1/2 -translate-x-1/2 flex gap-2 items-start">
+        ${chips}
+      </div>
+      ${canPick ? `<div class="absolute top-20 left-1/2 -translate-x-1/2 text-[7px] text-gray-300" style="font-family:'Press Start 2P',monospace;">Elige objetivo</div>` : ''}`;
   }
 
   private sprite(p: Pokemon): string {

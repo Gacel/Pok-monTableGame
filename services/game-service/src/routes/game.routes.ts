@@ -64,8 +64,12 @@ export async function gameRoutes(app: FastifyInstance): Promise<void> {
           type: 'object',
           required: ['action'],
           properties: {
-            action: { type: 'string', enum: ['ATACAR', 'HABILIDAD', 'OBJETO', 'HUIR', 'MOVE'] },
+            action: {
+              type: 'string',
+              enum: ['ATACAR', 'HABILIDAD', 'OBJETO', 'HUIR', 'MOVE', 'TARGET'],
+            },
             moveName: { type: 'string', maxLength: 40 },
+            targetId: { type: 'string', maxLength: 40 },
           },
         },
       },
@@ -117,8 +121,12 @@ export async function gameRoutes(app: FastifyInstance): Promise<void> {
           type: 'object',
           required: ['action'],
           properties: {
-            action: { type: 'string', enum: ['ATACAR', 'HABILIDAD', 'OBJETO', 'HUIR', 'MOVE'] },
+            action: {
+              type: 'string',
+              enum: ['ATACAR', 'HABILIDAD', 'OBJETO', 'HUIR', 'MOVE', 'TARGET'],
+            },
             moveName: { type: 'string', maxLength: 40 },
+            targetId: { type: 'string', maxLength: 40 },
           },
         },
       },

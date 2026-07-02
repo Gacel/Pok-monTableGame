@@ -17,13 +17,14 @@ interface MoveBody {
 interface CombatBody {
   action?: string;
   moveName?: string;
+  targetId?: string;
 }
 interface OptionsQuery {
   q?: string;
   r?: string;
 }
 
-const COMBAT_ACTIONS: CombatAction[] = ['ATACAR', 'HABILIDAD', 'OBJETO', 'HUIR', 'MOVE'];
+const COMBAT_ACTIONS: CombatAction[] = ['ATACAR', 'HABILIDAD', 'OBJETO', 'HUIR', 'MOVE', 'TARGET'];
 
 function isHex(h: unknown): h is Hex {
   return (
@@ -138,7 +139,9 @@ export const OnlineGameController = {
     }
     const moveName =
       typeof request.body?.moveName === 'string' ? request.body.moveName.slice(0, 40) : undefined;
-    return commit(actor.matchId, actor.game.combatAction(action, moveName), reply);
+    const targetId =
+      typeof request.body?.targetId === 'string' ? request.body.targetId.slice(0, 40) : undefined;
+    return commit(actor.matchId, actor.game.combatAction(action, moveName, targetId), reply);
   },
 
   async combatContinue(request: FastifyRequest<{ Params: MatchParams }>, reply: FastifyReply) {
