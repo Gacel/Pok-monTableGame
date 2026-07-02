@@ -47,6 +47,9 @@ export class LobbyView {
       if (this.screen === 'browse') {
         await this.refreshList();
         if (this.screen === 'browse') this.drawList();
+      } else if (this.screen === 'waiting' && this.room) {
+        // Respaldo del WS: aunque el socket falle, la sala avanza igualmente.
+        await this.refreshRoom(this.room.id);
       }
     }, POLL_MS);
   }
@@ -61,8 +64,42 @@ export class LobbyView {
 
   /** El draft confirmó equipo: refresca la sala de espera. */
   public setRoom(room: RoomInfo): void {
-    this.room = room;
-    if (this.screen === 'waiting' && !this.finished) this.draw();
+    this.applyRoom(room);
+  }
+
+  /**
+   * Estado nuevo de la sala (WS, respuesta REST o polling): única puerta de
+   * entrada. Si la partida ya está activa, se entra al tablero desde aquí.
+   */
+  private applyRoom(room: RoomInfo): void {
+    if (this.finished) return;
+    const mine = this.room?.youAre ?? null;
+    this.room = { ...room, youAre: mine ?? room.youAre };
+    if (this.room.status === 'active' || this.room.status === 'combat') {
+      this.finished = true;
+      this.destroy();
+      this.cb.onGameStart(this.room);
+      return;
+    }
+    if (this.screen === 'waiting') this.draw();
+  }
+
+  /** Pide la sala por REST (respaldo cuando el WS no entrega eventos). */
+  private async refreshRoom(id: string): Promise<void> {
+    try {
+      const res = await apiFetch(`/api/lobby/matches/${id}`);
+      if (res.status === 404) {
+        // La sala ya no existe (anfitrión la cerró o caducó).
+        this.onRoomMessage({ type: 'room_closed', matchId: id });
+        return;
+      }
+      if (res.ok) {
+        const data = await res.json();
+        if (data.room) this.applyRoom(data.room as RoomInfo);
+      }
+    } catch {
+      /* red caída: se reintenta en el siguiente tick */
+    }
   }
 
   private async refreshList(): Promise<void> {
@@ -138,15 +175,7 @@ export class LobbyView {
   private onRoomMessage(msg: WsMessage): void {
     if (this.finished) return;
     if (msg.type === 'room' && msg.room) {
-      const mine = this.room?.youAre ?? null;
-      this.room = { ...msg.room, youAre: mine ?? msg.room.youAre };
-      if (this.room.status === 'active') {
-        this.finished = true;
-        this.destroy();
-        this.cb.onGameStart(this.room);
-        return;
-      }
-      if (this.screen === 'waiting') this.draw();
+      this.applyRoom(msg.room);
     } else if (msg.type === 'room_closed') {
       this.room = null;
       this.screen = 'browse';

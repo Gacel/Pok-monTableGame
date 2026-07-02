@@ -15,6 +15,12 @@ export default defineConfig({
       '/api': {
         target: 'http://game-service:3001',
         changeOrigin: true
+      },
+      // WebSocket de salas/partidas: imprescindible al entrar por el dev
+      // server (5173) en vez del gateway; nginx ya lo proxya en 443.
+      '/ws': {
+        target: 'ws://game-service:3001',
+        ws: true
       }
     }
   }
