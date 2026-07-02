@@ -584,12 +584,29 @@ export class GameController {
       const el = document.getElementById(`hud-${slot}`);
       if (el) {
         el.style.cursor = 'pointer';
-        el.addEventListener('click', () => {
+        // Delegación: el HUD se repinta con innerHTML, así que en vez de atar un
+        // listener por miniatura (que se perdería), se escucha en el contenedor y
+        // se resuelve QUÉ Pokémon se clicó mirando su data-poke-id. Antes solo
+        // funcionaba el Pokémon "resaltado" (activo); ahora responde cualquiera.
+        el.addEventListener('click', (e) => {
           const match = this.state.match;
-          if (match && match.players[i]) {
-            const tile = this.state.getLastInteractedTile(match.players[i]);
-            this.centerOnTile(tile, true);
+          const playerId = match?.players[i];
+          if (!match || !playerId) return;
+          const pill = (e.target as HTMLElement | null)?.closest('[data-poke-id]') as
+            | HTMLElement
+            | null;
+          const pokeId = pill?.dataset.pokeId;
+          if (pokeId) {
+            const tile = this.state.currentTiles.find(
+              (t) => t.occupant?.id === pokeId && t.occupant?.playerId === playerId
+            );
+            if (tile) {
+              this.state.setLastInteractedPokemon(playerId, pokeId);
+              this.centerOnTile(tile, true);
+              return;
+            }
           }
+          this.centerOnTile(this.state.getLastInteractedTile(playerId), true);
         });
       }
     });
