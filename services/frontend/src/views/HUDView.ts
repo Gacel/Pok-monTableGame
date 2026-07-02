@@ -128,7 +128,7 @@ export class HUDView {
             const barBg = pPct > 50 ? 'bg-green-500' : pPct > 20 ? 'bg-yellow-500' : 'bg-red-500';
             const spriteUrl = this.state.pokeGifs[p.name ?? ''] ?? '';
             return `
-              <div class="flex items-center gap-1.5 flex-1 min-w-0 bg-gray-800 border border-gray-600 rounded px-1.5 py-1 shadow transition-transform hover:scale-105 cursor-pointer ${rightSide ? 'flex-row-reverse' : ''}" title="${p.name ?? 'Pokémon'} (${p.hp}/${p.maxHp})">
+              <div data-poke-id="${p.id}" class="flex items-center gap-1.5 flex-1 min-w-0 bg-gray-800 border border-gray-600 rounded px-1.5 py-1 shadow transition-transform hover:scale-105 cursor-pointer ${rightSide ? 'flex-row-reverse' : ''}" title="${p.name ?? 'Pokémon'} (${p.hp}/${p.maxHp})">
                 <img src="${spriteUrl}" class="w-8 h-8 object-contain flex-shrink-0" style="image-rendering: pixelated;" />
                 <div class="flex-1 min-w-0 h-2 bg-gray-900 rounded overflow-hidden border border-gray-700 flex ${rightSide ? 'justify-end' : ''}">
                   <div class="h-full ${barBg}" style="width: ${pPct}%;"></div>
