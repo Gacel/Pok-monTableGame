@@ -10,6 +10,7 @@ import { apiFetch } from '../net/api';
 import { MatchSession } from '../state/MatchSession';
 import type { OnlineSession } from '../state/MatchSession';
 import type { Hex, MatchState, CombatAction } from '../models/Types';
+import { authState } from '../auth/AuthState';
 
 /**
  * Capa CONTROLADOR (frontend): traduce input del usuario a peticiones al servidor
@@ -62,7 +63,20 @@ export class GameController {
   public setSession(session: OnlineSession | null): void {
     this.session = session;
     this.state.mySlot = session?.mySlot ?? null;
-    this.state.playerNames = session?.playerNames ?? {};
+    // Los jugadores se nombran por su login, no como "PlayerX". Online: el
+    // username de cada slot. Local (hot-seat): P1 es el usuario logueado y el
+    // resto "Jugador N" (no hay más logins en una sola máquina).
+    if (session) {
+      this.state.playerNames = session.playerNames ?? {};
+    } else {
+      const me = authState.user?.username;
+      this.state.playerNames = {
+        player1: me && me.trim() ? me : 'Jugador 1',
+        player2: 'Jugador 2',
+        player3: 'Jugador 3',
+        player4: 'Jugador 4',
+      };
+    }
     // El socket anterior apuntaba a otra sala: se reconecta al entrar.
     if (this.wsClient) {
       this.wsClient.close();

@@ -71,7 +71,10 @@ export class HUDView {
       const occ = tile.occupant;
 
       const nameEl = document.getElementById(`hud-${slot}-name`);
-      if (nameEl) nameEl.textContent = occ.name ? occ.name.toUpperCase() : (playerId ?? slot).toUpperCase();
+      if (nameEl)
+        nameEl.textContent = occ.name
+          ? occ.name.toUpperCase()
+          : this.state.labelFor(playerId).toUpperCase() || slot.toUpperCase();
 
       const avatarEl = document.getElementById(`hud-${slot}-avatar`) as HTMLImageElement | null;
       if (avatarEl && occ.name) avatarEl.src = this.state.pokeGifs[occ.name] ?? '';
