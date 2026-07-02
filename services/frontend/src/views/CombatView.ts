@@ -48,6 +48,11 @@ export class CombatView {
     // El borde/indicador de turno usa el color del jugador EN CUESTIÓN (P1..P4).
     const turnColor = CombatView.PLAYER_COLORS[actorPlayer] ?? '#facc15';
 
+    // Online: si el combate no es de MI Pokémon, las acciones quedan bloqueadas
+    // (sombreadas, no clicables). En local hot-seat siempre puede actuar quien
+    // tiene el turno, así que se permite interactuar.
+    const myTurn = this.state.mySlot === null || actorPlayer === this.state.mySlot;
+
     const lastLog = combat.log[combat.log.length - 1] ?? '';
 
     this.overlay.classList.remove('hidden');
@@ -62,7 +67,7 @@ export class CombatView {
               : `<div class="text-lg" style="font-family:'Press Start 2P',monospace;color:${turnColor};text-shadow:2px 2px 0 #000;">
                    TURNO: ${(actor.name ?? actor.id).toUpperCase()} <span class="text-white text-sm">(${this.escape(this.state.labelFor(actorPlayer).toUpperCase())})</span>
                  </div>
-                 <div class="text-[9px] text-gray-300 mt-2" style="font-family:'Press Start 2P',monospace;">Elige tu acción</div>`
+                 <div class="text-[9px] mt-2" style="font-family:'Press Start 2P',monospace;color:${myTurn ? '#d1d5db' : turnColor};">${myTurn ? 'Elige tu acción' : `Esperando a ${this.escape(this.state.labelFor(actorPlayer).toUpperCase())}…`}</div>`
           }
         </div>
 
@@ -86,7 +91,7 @@ export class CombatView {
 
         <!-- Panel inferior (borde superior con el color del jugador en turno) -->
         <div class="bg-black bg-opacity-90 p-4 min-h-[120px]" style="border-top:4px solid ${finished ? '#eab308' : turnColor};">
-          ${finished ? this.resultPanel(combat) : this.actionPanel(combat, actorIsAttacker)}
+          ${finished ? this.resultPanel(combat) : this.actionPanel(combat, actorIsAttacker, myTurn)}
         </div>
       </div>`;
 
@@ -134,7 +139,7 @@ export class CombatView {
     return res.GRASS_CANDY;
   }
 
-  private actionPanel(combat: CombatState, actorIsAttacker: boolean): string {
+  private actionPanel(combat: CombatState, actorIsAttacker: boolean, interactive = true): string {
     const match = this.state.match!;
     const actor = actorIsAttacker ? combat.attacker : combat.defender;
     const res = match.resources[actorIsAttacker ? combat.attackerPlayer : combat.defenderPlayer];
@@ -144,7 +149,8 @@ export class CombatView {
 
     const moveBtn = (m: PokemonMove) => {
       const special = m.damageClass === 'special';
-      const enabled = !special || this.candyOf(res, m.type) >= 1;
+      // Fuera de tu turno (online) nada es clicable: se sombrea todo.
+      const enabled = interactive && (!special || this.candyOf(res, m.type) >= 1);
       const cost = special ? `${this.candyIcon(m.type)}1` : 'gratis';
       const label = m.name.replace(/-/g, ' ').toUpperCase();
       const sub = `${m.type} · P${m.power} · ${cost}`;
@@ -189,8 +195,8 @@ export class CombatView {
           ${moveButtons}
         </div>
         <div class="grid grid-cols-2 gap-2">
-          ${utilBtn('OBJETO', 'OBJETO', 'cura 30% · 2 caramelos', total >= 2)}
-          ${utilBtn('HUIR', 'HUIR', 'con riesgo', true)}
+          ${utilBtn('OBJETO', 'OBJETO', 'cura 30% · 2 caramelos', interactive && total >= 2)}
+          ${utilBtn('HUIR', 'HUIR', 'con riesgo', interactive)}
         </div>
       </div>`;
   }
