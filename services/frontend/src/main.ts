@@ -246,6 +246,14 @@ function enterGame(session: OnlineSession | null) {
   gameController.start();
 }
 
+// Salir de la partida al menú principal (p. ej. tras pulsar ABANDONAR).
+document.addEventListener('return-to-menu', () => {
+  gameLayer.classList.add('hidden');
+  const sidebar = document.getElementById('right-sidebar');
+  if (sidebar) sidebar.classList.add('hidden');
+  showMainMenu();
+});
+
 // Inicializar y reescalar al cargar la página
 if ((window as any)._resizeGameArea) {
   window.removeEventListener('resize', (window as any)._resizeGameArea);
