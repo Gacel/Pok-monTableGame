@@ -14,7 +14,7 @@ interface RosterEntry {
 /** Configuración del draft: local secuencial (N jugadores) u online (solo tú). */
 export type DraftConfig =
   | { mode: 'local'; players: number; gameMode: GameMode }
-  | { mode: 'online'; playerLabel: string };
+  | { mode: 'online'; playerLabel: string; reserved?: string[] };
 
 const TEAM_SIZE = 3;
 
@@ -130,8 +130,13 @@ export class DraftView {
   }
 
   private draw(): void {
-    // En local no se repite Pokémon entre jugadores; online cada uno es libre.
-    const taken = new Set(this.picks.slice(0, this.phase).flat());
+    // No se repite Pokémon: en local, los ya elegidos por jugadores anteriores;
+    // en online, los reservados por el resto de entrenadores de la sala.
+    const taken = new Set(
+      this.config.mode === 'online'
+        ? (this.config.reserved ?? [])
+        : this.picks.slice(0, this.phase).flat()
+    );
     const picks = this.currentPicks();
     const color = this.phaseColor();
 

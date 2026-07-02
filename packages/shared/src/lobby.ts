@@ -72,6 +72,11 @@ export interface RoomInfo {
   players: RoomPlayer[];
   /** Slot del usuario que consulta, o null si no participa. */
   youAre: PlayerSlot | null;
+  /**
+   * Pokémon ya reservados por OTROS jugadores de la sala. El draft online los
+   * muestra bloqueados para que dos entrenadores no elijan el mismo Pokémon.
+   */
+  reserved?: string[];
 }
 
 export interface CreateRoomRequest {
