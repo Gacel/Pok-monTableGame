@@ -18,7 +18,11 @@ services:
       context: ./gateway
     container_name: transcendence-gateway
     ports:
+      - "80:80"
       - "443:443"
+    volumes:
+      - letsencrypt:/etc/letsencrypt
+      - certbot_webroot:/var/www/certbot:ro
     depends_on:
       - hello
       - game-service
@@ -26,6 +30,16 @@ services:
     networks:
       - transcendence-net
     restart: unless-stopped
+  certbot:
+    image: certbot/certbot
+    container_name: transcendence-certbot
+    restart: unless-stopped
+    volumes:
+      - letsencrypt:/etc/letsencrypt
+      - certbot_webroot:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot; sleep 12h & wait $${!}; done;'"
+    networks:
+      - transcendence-net
   game-service:
     build:
       # Contexto en la raíz: la imagen necesita packages/shared (npm workspaces).
@@ -66,3 +80,5 @@ volumes:
   vault-data:
   redis-data:
   rabbitmq-data:
+  letsencrypt:
+  certbot_webroot:
