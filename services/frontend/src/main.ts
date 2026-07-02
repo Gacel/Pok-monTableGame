@@ -169,7 +169,10 @@ function showOnlineDraft(room: RoomInfo) {
   const draftLayer = document.getElementById('draft-layer') as HTMLElement;
   draftLayer.classList.remove('hidden');
   const label = authState.user?.username ?? 'TU EQUIPO';
-  const view = new DraftView(draftLayer, { mode: 'online', playerLabel: label }, (teams) => {
+  const view = new DraftView(
+    draftLayer,
+    { mode: 'online', playerLabel: label, reserved: room.reserved ?? [] },
+    (teams) => {
     void (async () => {
       try {
         const res = await apiFetch(`/api/lobby/matches/${room.id}/team`, {

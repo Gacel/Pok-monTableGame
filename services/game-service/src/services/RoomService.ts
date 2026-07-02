@@ -29,6 +29,10 @@ export class RoomError extends Error {
 function toRoomInfo(row: RoomRow, userId: string | null): RoomInfo {
   const players = parseRoomPlayers(row);
   const you = userId ? players.find((p) => p.userId === userId) : undefined;
+  // Pokémon ya elegidos por el RESTO de jugadores: el draft online los bloquea.
+  const reserved = [
+    ...new Set(players.filter((p) => p.userId !== userId).flatMap((p) => p.team ?? [])),
+  ];
   return {
     id: row.id,
     name: row.name ?? row.id,
@@ -43,6 +47,7 @@ function toRoomInfo(row: RoomRow, userId: string | null): RoomInfo {
       ready: p.team !== null,
     })),
     youAre: you?.slot ?? null,
+    reserved,
   };
 }
 
@@ -149,6 +154,16 @@ export const RoomService = {
       new Set(team).size === team.length;
     if (!valid) {
       throw new RoomError(400, `Elige ${DRAFT_TEAM_SIZE} Pokémon distintos del roster`);
+    }
+
+    // No dos entrenadores con el mismo Pokémon: se rechaza si otro jugador de la
+    // sala ya lo reservó (fuente de verdad autoritativa, evita "transferencias").
+    const reservedByOthers = new Set(
+      players.filter((p) => p.userId !== userId).flatMap((p) => p.team ?? [])
+    );
+    const clash = team.find((n) => reservedByOthers.has(n));
+    if (clash) {
+      throw new RoomError(409, `Otro jugador ya eligió a ${clash.toUpperCase()}`);
     }
 
     me.team = [...team];
