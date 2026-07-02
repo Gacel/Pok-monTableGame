@@ -14,6 +14,7 @@ import type { LocalGameConfig } from './views/hub/LocalSetupView';
 import { SettingsView } from './views/hub/SettingsView';
 import { LobbyView } from './views/hub/LobbyView';
 import { DraftView } from './views/hub/DraftView';
+import { WelcomeView } from './views/hub/WelcomeView';
 
 const hubLayer = document.getElementById('hub-layer') as HTMLElement;
 const gameLayer = document.getElementById('game-layer') as HTMLElement;
@@ -35,7 +36,7 @@ async function bootstrap() {
   const hasSession = await authState.checkSession();
 
   if (!hasSession) {
-    showLogin();
+    showWelcome();
   } else {
     if (!authState.user || !authState.user.username) {
       showAvatarCreation();
@@ -61,6 +62,14 @@ function resetHubLayer() {
   hubLayer.style.display = '';
   hubLayer.classList.remove('opacity-0');
   hubLayer.innerHTML = '';
+}
+
+function showWelcome() {
+  resetHubLayer();
+  const welcomeView = new WelcomeView(hubLayer, () => {
+    showLogin();
+  });
+  welcomeView.render();
 }
 
 function showLogin() {
@@ -274,7 +283,7 @@ resizeGameArea();
 // Suscripción al estado de autenticación
 authState.subscribe(() => {
   if (!authState.sessionToken) {
-    showLogin();
+    showWelcome();
   } else if (!authState.user || !authState.user.username) {
     showAvatarCreation();
   } else {
