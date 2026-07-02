@@ -60,7 +60,7 @@ export class CombatView {
             finished
               ? `<div class="text-lg text-yellow-400" style="font-family:'Press Start 2P',monospace;text-shadow:2px 2px 0 #000;">RESULTADO</div>`
               : `<div class="text-lg" style="font-family:'Press Start 2P',monospace;color:${turnColor};text-shadow:2px 2px 0 #000;">
-                   TURNO: ${(actor.name ?? actor.id).toUpperCase()} <span class="text-white text-sm">(${actorPlayer})</span>
+                   TURNO: ${(actor.name ?? actor.id).toUpperCase()} <span class="text-white text-sm">(${this.escape(this.state.labelFor(actorPlayer).toUpperCase())})</span>
                  </div>
                  <div class="text-[9px] text-gray-300 mt-2" style="font-family:'Press Start 2P',monospace;">Elige tu acción</div>`
           }
