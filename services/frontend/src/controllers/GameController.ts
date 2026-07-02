@@ -552,6 +552,9 @@ export class GameController {
       if (res.ok && data.success) {
         this.state.selectedHex = null;
         this.applyMatchState(data.state as MatchState);
+        // Quien abandona sale SIEMPRE al menú principal (la partida sigue para
+        // el resto en online; en local se cierra al volver al menú).
+        this.exitToMenu();
       } else {
         this.hudView.flashToast(data.error ?? 'Error al abandonar partida');
       }
@@ -561,6 +564,16 @@ export class GameController {
     } finally {
       this.busy = false;
     }
+  }
+
+  /** Cierra el socket, limpia la sesión y avisa a la SPA para volver al menú. */
+  private exitToMenu(): void {
+    MatchSession.clear();
+    if (this.wsClient) {
+      this.wsClient.close();
+      this.wsClient = null;
+    }
+    document.dispatchEvent(new CustomEvent('return-to-menu'));
   }
 
   private setupKeyboardShortcuts(): void {
