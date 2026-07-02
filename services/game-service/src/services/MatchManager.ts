@@ -138,6 +138,18 @@ export class MatchManager {
         return tpl;
       });
 
+    // Regla de draft: ningún Pokémon puede repetirse, ni dentro de un equipo ni
+    // entre equipos. Validación autoritativa en el servidor (no confiar en la UI).
+    const seen = new Set<string>();
+    for (let i = 1; i <= 4; i++) {
+      for (const n of teams[`player${i}`] ?? []) {
+        if (seen.has(n)) {
+          throw new Error(`Pokémon repetido en el draft: ${n}`);
+        }
+        seen.add(n);
+      }
+    }
+
     const teamArrays: PokemonTemplate[][] = [];
     for (let i = 1; i <= 4; i++) {
       const names = teams[`player${i}`];
