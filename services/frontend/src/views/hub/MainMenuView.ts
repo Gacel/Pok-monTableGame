@@ -6,12 +6,13 @@ import {
   showAuctionHouse,
   showSettings,
 } from '../../main';
-import { FONT, hubPanel, panelCard } from './panel';
+import { FONT, hubPanel, panelCard, panelTitle, menuButton } from './panel';
 
 /**
  * Capa VISTA: menú principal (raíz del árbol). Secciones:
  * JUGAR · COMUNIDAD · TIENDA · CASA DE SUBASTAS. Configuración y Cerrar sesión
- * quedan como acciones secundarias. Ver docs/FRONTEND_MENU.md §4.
+ * quedan como acciones secundarias. Disposición en lista vertical (estilo tienda).
+ * Ver docs/FRONTEND_MENU.md §4-5.
  */
 export class MainMenuView {
   private container: HTMLElement;
@@ -27,22 +28,11 @@ export class MainMenuView {
     const spriteName =
       user.avatarUrl === 'boy' ? 'red' : user.avatarUrl === 'girl' ? 'may' : user.avatarUrl || 'red';
 
-    const section = (
-      id: string,
-      icon: string,
-      title: string,
-      desc: string,
-      color: string,
-      border: string
-    ) => `
-      <button id="${id}" class="group flex flex-col items-start justify-center text-left rounded-lg border-b-8 ${border} active:border-b-0 active:mt-2 transition-all ${color}" style="${FONT} padding:26px 28px; box-shadow:0 6px 0 #000; min-height:150px;">
-        <span style="font-size:22px;" class="flex items-center gap-3">${icon} ${title}</span>
-        <span class="text-[11px] opacity-80 mt-3 leading-relaxed">${desc}</span>
-      </button>`;
-
     this.container.innerHTML = hubPanel(
       `
-      <!-- Top bar: entrenador -->
+      ${panelTitle('MENÚ PRINCIPAL')}
+
+      <!-- Barra del entrenador -->
       ${panelCard(
         `
         <div class="flex justify-between items-center gap-6">
@@ -57,24 +47,28 @@ export class MainMenuView {
             <span>${user.coins}</span> <span class="text-yellow-500" style="font-size:22px;">🪙</span>
           </div>
         </div>`,
-        'w-full mb-8'
+        'mb-6'
       )}
 
-      <!-- Rejilla de secciones -->
-      <div class="grid grid-cols-2 gap-6 w-full" style="max-width:900px;">
-        ${section('btn-play', '🎮', 'JUGAR', 'Un jugador (vs IA) o Multijugador (local y online)', 'bg-red-600 hover:bg-red-500 text-white', 'border-red-800')}
-        ${section('btn-community', '👥', 'COMUNIDAD', 'Amigos conectados · añadir amigo · enviar regalo', 'bg-blue-600 hover:bg-blue-500 text-white', 'border-blue-800')}
-        ${section('btn-shop', '🛒', 'TIENDA', 'Cosméticos · Pokéballs sorpresa · recuperar Pokémon', 'bg-yellow-400 hover:bg-yellow-300 text-black', 'border-yellow-600')}
-        ${section('btn-auction', '⚖️', 'CASA DE SUBASTAS', 'Compra y vende todo lo comercializable', 'bg-purple-600 hover:bg-purple-500 text-white', 'border-purple-800')}
-      </div>
+      <!-- Secciones en lista vertical -->
+      ${panelCard(
+        `<div class="flex flex-col gap-4" style="width:560px; max-width:100%;">
+          ${menuButton({ id: 'btn-play', label: 'JUGAR', icon: '🎮', sublabel: 'Un jugador (vs IA) o multijugador', color: 'red' })}
+          ${menuButton({ id: 'btn-community', label: 'COMUNIDAD', icon: '👥', sublabel: 'Amigos · añadir · enviar regalo', color: 'blue' })}
+          ${menuButton({ id: 'btn-shop', label: 'TIENDA', icon: '🛒', sublabel: 'Cosméticos · pokéballs · recuperar', color: 'yellow' })}
+          ${menuButton({ id: 'btn-auction', label: 'CASA DE SUBASTAS', icon: '⚖️', sublabel: 'Todo lo comercializable', color: 'purple' })}
+        </div>`,
+        'flex flex-col items-center'
+      )}
 
       <!-- Acciones secundarias -->
-      <div class="flex items-center gap-6 mt-10">
+      <div class="flex items-center gap-6 mt-8">
         <button id="btn-settings" class="text-white hover:text-yellow-300 flex items-center gap-2" style="${FONT} font-size:13px;">⚙️ CONFIGURACIÓN</button>
         <span class="text-gray-500">·</span>
         <button id="btn-logout" class="text-white hover:text-red-400 underline" style="${FONT} font-size:13px;">CERRAR SESIÓN</button>
       </div>
-      `
+      `,
+      { minHeight: 820 }
     );
 
     document.getElementById('btn-play')?.addEventListener('click', () => showPlayMenu());

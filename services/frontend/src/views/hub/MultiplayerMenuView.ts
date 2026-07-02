@@ -40,31 +40,19 @@ export class MultiplayerMenuView {
   }
 
   private renderChannel() {
-    const bigOption = (
-      id: string,
-      badge: string,
-      icon: string,
-      title: string,
-      desc: string,
-      color: string,
-      border: string
-    ) => `
-      <button id="${id}" class="flex flex-col items-center justify-center text-center rounded-lg border-b-8 ${border} active:border-b-0 active:mt-2 transition-all ${color}" style="${FONT} padding:36px 28px; box-shadow:0 6px 0 #000; min-height:230px;">
-        <span class="text-[9px] bg-yellow-400 text-black px-2 py-1 rounded mb-3">${badge}</span>
-        <span style="font-size:44px;">${icon}</span>
-        <span style="font-size:20px;" class="mt-3">${title}</span>
-        <span class="text-[10px] opacity-80 mt-3 leading-relaxed" style="max-width:260px;">${desc}</span>
-      </button>`;
-
     this.container.innerHTML = hubPanel(
       `
       ${panelTitle('MULTIJUGADOR')}
-      <div class="grid grid-cols-2 gap-8 w-full" style="max-width:800px;">
-        ${bigOption('btn-local', '👥 MISMA PANTALLA', '🎮', 'PARTIDA LOCAL', 'Varios jugadores por turnos en este mismo navegador.', 'bg-red-600 hover:bg-red-500 text-white', 'border-red-800')}
-        ${bigOption('btn-online', '🌐 OTRO NAVEGADOR', '📡', 'EN LÍNEA', 'Crea o busca una sala y juega contra otros jugadores.', 'bg-blue-600 hover:bg-blue-500 text-white', 'border-blue-800')}
-      </div>
+      ${panelCard(
+        `<div class="flex flex-col gap-4" style="width:560px; max-width:100%;">
+          ${menuButton({ id: 'btn-local', label: 'PARTIDA LOCAL', icon: '🎮', sublabel: 'Misma pantalla · varios jugadores por turnos', color: 'red' })}
+          ${menuButton({ id: 'btn-online', label: 'EN LÍNEA', icon: '📡', sublabel: 'Otro navegador · crear o buscar sala', color: 'blue' })}
+        </div>`,
+        'flex flex-col items-center'
+      )}
       ${backButton()}
-      `
+      `,
+      { minHeight: 560 }
     );
 
     document.getElementById('btn-local')?.addEventListener('click', () => {

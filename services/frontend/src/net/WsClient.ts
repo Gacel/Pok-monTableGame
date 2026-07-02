@@ -27,15 +27,16 @@ export class WsClient {
     this.onMessage = onMessage;
   }
 
-  /** Sin `matchId` conecta a la sala local (hot-seat); con él, a la sala online. */
+  /** Sin `matchId` conecta a la sala local (hot-seat); con él, a la sala online.
+   *  El token (JWT) se envía SIEMPRE por query string: el servidor exige auth
+   *  para abrir el socket en ambos modos. */
   connect(matchId?: string): void {
     this.matchId = matchId ?? null;
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-    let url = `${proto}://${location.host}/ws`;
-    if (this.matchId) {
-      const token = encodeURIComponent(authState.sessionToken ?? '');
-      url += `?matchId=${encodeURIComponent(this.matchId)}&token=${token}`;
-    }
+    const params = new URLSearchParams();
+    if (this.matchId) params.set('matchId', this.matchId);
+    params.set('token', authState.sessionToken ?? '');
+    const url = `${proto}://${location.host}/ws?${params.toString()}`;
     try {
       this.ws = new WebSocket(url);
     } catch {

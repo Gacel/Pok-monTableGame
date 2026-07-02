@@ -2,29 +2,29 @@ import { FastifyInstance } from 'fastify';
 import { AuthController } from '../controllers/AuthController.js';
 
 export async function authRoutes(app: FastifyInstance): Promise<void> {
-  app.post(
-    '/api/auth/login',
-    {
-      schema: {
-        body: {
-          type: 'object',
-          required: ['email'],
-          properties: { email: { type: 'string', maxLength: 254 } },
-        },
+  const emailSchema = {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['email'],
+        properties: { email: { type: 'string', maxLength: 254 } },
       },
     },
-    AuthController.login
-  );
+  };
 
+  // Registro (crea cuenta) y login (entra a cuenta existente).
+  app.post('/api/auth/signup', emailSchema, AuthController.signup);
+  app.post('/api/auth/login', emailSchema, AuthController.login);
+
+  // Perfil (nombre + avatar) del usuario autenticado. El id sale del JWT.
   app.post(
     '/api/auth/register',
     {
       schema: {
         body: {
           type: 'object',
-          required: ['token', 'username', 'avatarUrl'],
+          required: ['username', 'avatarUrl'],
           properties: {
-            token: { type: 'string', maxLength: 64 },
             username: { type: 'string', maxLength: 16 },
             avatarUrl: { type: 'string', maxLength: 128 },
           },

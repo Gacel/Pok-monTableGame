@@ -6,8 +6,23 @@ import { userRoutes } from './routes/user.routes.js';
 import { gameRoutes } from './routes/game.routes.js';
 import { lobbyRoutes } from './routes/lobby.routes.js';
 import { wsRoutes } from './routes/ws.routes.js';
+import { bearerToken } from './auth/identity.js';
+import { verifyToken } from './auth/jwt.js';
 
 const SERVICE = 'game-service';
+
+/**
+ * Rutas públicas (no exigen JWT): producen el token o son de salud.
+ * `/ws` se exime aquí porque su auth se hace dentro del handler (el token viaja
+ * en query string, no en header; ver ws.routes.ts).
+ */
+const PUBLIC_PATHS = new Set<string>([
+  '/health',
+  '/api/auth/signup',
+  '/api/auth/login',
+  '/api/auth/google/login',
+  '/api/auth/google/callback',
+]);
 
 /**
  * Construye la instancia Fastify con todas las rutas registradas.
@@ -19,6 +34,19 @@ export function buildApp(): FastifyInstance {
   });
 
   app.get('/health', async () => ({ status: 'ok', service: SERVICE }));
+
+  // Hook global de autenticación: exige JWT válido en TODOS los endpoints,
+  // salvo los públicos (PUBLIC_PATHS) y /ws (auth propia por query string).
+  app.addHook('onRequest', async (request, reply) => {
+    const path = request.url.split('?')[0] ?? request.url;
+    if (PUBLIC_PATHS.has(path) || path === '/ws') return;
+
+    const payload = verifyToken(bearerToken(request) ?? '');
+    if (!payload) {
+      return reply.code(401).send({ success: false, error: 'No autenticado' });
+    }
+    (request as typeof request & { userId?: string }).userId = payload.sub;
+  });
 
   app.register(websocket);
 

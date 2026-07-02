@@ -1,17 +1,19 @@
 import type { FastifyRequest } from 'fastify';
 import { UserModel, UserRecord } from '../models/UserModel.js';
+import { verifyToken } from './jwt.js';
 
 /**
  * Resolución de identidad a partir del token de sesión.
  *
- * TRANSICIÓN: con el auth mock actual el token ES el id de usuario (ver
- * AuthController). Cuando llegue el auth-service con JWT real, basta con
- * sustituir el cuerpo de `resolveUser` por la verificación de la firma.
+ * El token es un **JWT firmado** (ver auth/jwt.ts). Se verifica la firma y se
+ * carga el usuario del `sub`. Un token forjado o expirado → `null`.
  */
 export async function resolveUser(token: string | undefined | null): Promise<UserRecord | null> {
   const clean = (token ?? '').trim();
-  if (!clean || clean.length > 128) return null;
-  const user = await UserModel.findById(clean);
+  if (!clean || clean.length > 4096) return null;
+  const payload = verifyToken(clean);
+  if (!payload) return null;
+  const user = await UserModel.findById(payload.sub);
   return user ?? null;
 }
 

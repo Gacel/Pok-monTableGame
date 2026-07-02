@@ -512,7 +512,7 @@ export class GameController {
     }
     this.busy = true;
     try {
-      const res = await fetch('/api/game/reset', { method: 'POST' });
+      const res = await apiFetch('/api/game/reset', { method: 'POST' });
       const data = await res.json();
       if (res.ok && data.success) {
         this.state.selectedHex = null;

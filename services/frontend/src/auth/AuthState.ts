@@ -1,7 +1,14 @@
+import { apiFetch } from '../net/api';
+
+export interface AuthResult {
+  ok: boolean;
+  error?: string;
+}
+
 export class AuthState {
   public user: any = null;
   public sessionToken: string | null = null;
-  
+
   private listeners: Set<() => void> = new Set();
 
   constructor() {
@@ -25,25 +32,35 @@ export class AuthState {
     return false;
   }
 
-  public async loginWithEmail(email: string) {
+  /** Login (cuenta existente) o signup (crear cuenta) según `path`. */
+  private async authWithEmail(path: string, email: string): Promise<AuthResult> {
     try {
-      const res = await fetch('/api/auth/login', {
+      const res = await fetch(path, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email })
+        body: JSON.stringify({ email }),
       });
-      if (res.ok) {
-        const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.token) {
         this.sessionToken = data.token;
         localStorage.setItem('token', data.token);
         this.user = data.user;
         this.notify();
-        return true;
+        return { ok: true };
       }
+      return { ok: false, error: data.error ?? 'No se pudo completar la operación' };
     } catch (e) {
-      console.error("Login error", e);
+      console.error('Auth error', e);
+      return { ok: false, error: 'Error de red' };
     }
-    return false;
+  }
+
+  public loginWithEmail(email: string): Promise<AuthResult> {
+    return this.authWithEmail('/api/auth/login', email);
+  }
+
+  public signupWithEmail(email: string): Promise<AuthResult> {
+    return this.authWithEmail('/api/auth/signup', email);
   }
 
   public async fetchUserProfile() {
@@ -69,10 +86,9 @@ export class AuthState {
   public async registerAvatar(username: string, avatarUrl: string) {
     if (!this.sessionToken) return false;
     try {
-      const res = await fetch('/api/auth/register', {
+      const res = await apiFetch('/api/auth/register', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: this.sessionToken, username, avatarUrl })
+        body: JSON.stringify({ username, avatarUrl }),
       });
       if (res.ok) {
         const data = await res.json();
@@ -81,7 +97,7 @@ export class AuthState {
         return true;
       }
     } catch (e) {
-      console.error("Registration error", e);
+      console.error('Registration error', e);
     }
     return false;
   }
