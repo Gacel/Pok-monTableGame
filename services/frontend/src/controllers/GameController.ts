@@ -341,6 +341,9 @@ export class GameController {
       'wheel',
       (e) => {
         e.preventDefault();
+        // Durante el combate (o al terminar) el tablero está bajo el overlay:
+        // el zoom queda bloqueado para que no se "asome" el mapa por detrás.
+        if (this.state.match && this.state.match.status !== 'active') return;
         const delta = e.deltaY > 0 ? -0.1 : 0.1;
         let newZoom = this.state.zoom + delta;
         if (newZoom < 0.3) newZoom = 0.3;
