@@ -249,6 +249,26 @@ export class GameController {
     this.hudView.render();
     this.combatView.render();
     this.minimapView.render();
+    this.updateTurnControls();
+  }
+
+  /**
+   * Adapta los controles al jugador: "Finalizar turno" solo tiene sentido para
+   * el jugador de turno. En online se OCULTA a los demás (no deben ver ni pulsar
+   * el botón cuando no les toca); en local hot-seat se comparte pantalla, así
+   * que permanece visible salvo durante el combate o al terminar la partida.
+   */
+  private updateTurnControls(): void {
+    const btn = document.getElementById('btn-end-turn') as HTMLButtonElement | null;
+    if (!btn) return;
+    const match = this.state.match;
+    const inMatch = match?.status === 'active';
+    if (this.session) {
+      const show = inMatch && this.isMyTurn();
+      btn.style.display = show ? '' : 'none';
+    } else {
+      btn.style.display = inMatch ? '' : 'none';
+    }
   }
 
   private async sendCombatAction(action: CombatAction, moveName?: string): Promise<void> {
