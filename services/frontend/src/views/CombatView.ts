@@ -12,6 +12,14 @@ export class CombatView {
   private onContinue: () => void;
   private overlay: HTMLElement | null;
 
+  /** Color de cada jugador (mismos que el HUD, el banner y el minimapa). */
+  private static readonly PLAYER_COLORS: Record<string, string> = {
+    player1: '#3b82f6', // Azul
+    player2: '#ef4444', // Rojo
+    player3: '#a855f7', // Violeta
+    player4: '#eab308', // Amarillo
+  };
+
   constructor(
     state: GameState,
     onAction: (action: CombatAction, moveName?: string) => void,
@@ -37,8 +45,8 @@ export class CombatView {
     const actorIsAttacker = combat.turnActorId === combat.attackerId;
     const actor = actorIsAttacker ? combat.attacker : combat.defender;
     const actorPlayer = actorIsAttacker ? combat.attackerPlayer : combat.defenderPlayer;
-    const isP1 = actorPlayer === match.players[0];
-    const turnColor = isP1 ? '#f87171' : '#60a5fa';
+    // El borde/indicador de turno usa el color del jugador EN CUESTIÓN (P1..P4).
+    const turnColor = CombatView.PLAYER_COLORS[actorPlayer] ?? '#facc15';
 
     const lastLog = combat.log[combat.log.length - 1] ?? '';
 
@@ -76,8 +84,8 @@ export class CombatView {
           </div>
         </div>
 
-        <!-- Panel inferior -->
-        <div class="bg-black bg-opacity-90 border-t-4 border-yellow-500 p-4 min-h-[120px]">
+        <!-- Panel inferior (borde superior con el color del jugador en turno) -->
+        <div class="bg-black bg-opacity-90 p-4 min-h-[120px]" style="border-top:4px solid ${finished ? '#eab308' : turnColor};">
           ${finished ? this.resultPanel(combat) : this.actionPanel(combat, actorIsAttacker)}
         </div>
       </div>`;
