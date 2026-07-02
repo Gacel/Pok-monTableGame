@@ -47,6 +47,7 @@ async function openAndMigrate(): Promise<Database> {
 
     CREATE TABLE IF NOT EXISTS users (
       id         TEXT PRIMARY KEY,
+      email      TEXT,
       username   TEXT,
       avatarUrl  TEXT,
       level      INTEGER NOT NULL DEFAULT 1,
@@ -93,6 +94,13 @@ async function openAndMigrate(): Promise<Database> {
     );
     CREATE INDEX IF NOT EXISTS idx_pokemon_moves_pokemon ON pokemon_moves(pokemon_name);
   `);
+
+  // Migración defensiva: columna `email` en users (si la tabla ya existía).
+  const userCols = await db.all(`PRAGMA table_info(users)`);
+  const userNames = new Set(userCols.map((c: { name: string }) => c.name));
+  if (!userNames.has('email')) await db.exec(`ALTER TABLE users ADD COLUMN email TEXT`);
+  // Índice único de email (múltiples NULL permitidos en SQLite).
+  await db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email)`);
 
   // Migración defensiva: añade columnas atk/def si la tabla pokemons ya existía.
   const cols = await db.all(`PRAGMA table_info(pokemons)`);

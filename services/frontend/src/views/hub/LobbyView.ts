@@ -112,7 +112,7 @@ export class LobbyView {
 
   private async refreshList(): Promise<void> {
     try {
-      const res = await fetch('/api/lobby/matches');
+      const res = await apiFetch('/api/lobby/matches');
       if (res.ok) {
         const data = await res.json();
         this.matches = (data.matches ?? []) as LobbySummary[];

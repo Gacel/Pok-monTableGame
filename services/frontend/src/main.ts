@@ -181,9 +181,8 @@ async function onLocalDraftConfirmed(
   const payload: Record<string, unknown> = { gameMode: config.gameMode };
   teams.forEach((team, i) => (payload[`player${i + 1}`] = team));
   try {
-    const res = await fetch('/api/game/start', {
+    const res = await apiFetch('/api/game/start', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
     if (!res.ok) {

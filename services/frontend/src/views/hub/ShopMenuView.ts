@@ -1,5 +1,14 @@
 import { showMainMenu } from '../../main';
-import { hubPanel, panelTitle, panelCard, menuButton, backButton } from './panel';
+import { FONT, hubPanel, panelTitle, panelCard, menuButton, backButton } from './panel';
+
+/** Sprites reales de pokéballs (bitmap PokeAPI). Mostrados a tamaño avatar. */
+const BALL_SPRITE = 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items';
+const BALLS = [
+  { key: 'normal', name: 'NORMAL', sprite: 'poke-ball.png', price: 500 },
+  { key: 'super', name: 'SUPERBALL', sprite: 'great-ball.png', price: 1000 },
+  { key: 'ultra', name: 'ULTRABALL', sprite: 'ultra-ball.png', price: 2000 },
+  { key: 'master', name: 'MASTERBALL', sprite: 'master-ball.png', price: 10000 },
+];
 
 /**
  * Capa VISTA: TIENDA (placeholders navegables; sin economía todavía).
@@ -45,21 +54,26 @@ export class ShopMenuView {
   }
 
   private renderBalls() {
+    const ballCard = (b: (typeof BALLS)[number]) => `
+      <div class="flex flex-col items-center justify-between gap-2 rounded border-4 border-gray-800 bg-white shadow-[4px_4px_0_#000] opacity-90" style="padding:18px 14px;">
+        <img src="${BALL_SPRITE}/${b.sprite}" alt="${b.name}" class="w-16 h-16 object-contain" style="image-rendering: pixelated;" />
+        <span class="text-black" style="${FONT} font-size:11px;">${b.name}</span>
+        <span class="text-gray-700 flex items-center gap-1" style="${FONT} font-size:10px;">${b.price} 🪙</span>
+        <span class="text-gray-400" style="${FONT} font-size:8px;">🔒 pronto</span>
+      </div>`;
+
     this.container.innerHTML = hubPanel(
       `
       ${panelTitle('POKÉBALL SORPRESA')}
       ${panelCard(
-        `<div class="grid grid-cols-2 gap-4" style="width:640px; max-width:100%;">
-          ${menuButton({ label: 'NORMAL', icon: '⚪', sublabel: '500 🪙', color: 'gray', disabled: true })}
-          ${menuButton({ label: 'SUPERBALL', icon: '🔵', sublabel: '1000 🪙', color: 'blue', disabled: true })}
-          ${menuButton({ label: 'ULTRABALL', icon: '🟡', sublabel: '2000 🪙', color: 'yellow', disabled: true })}
-          ${menuButton({ label: 'MASTERBALL', icon: '🟣', sublabel: '10000 🪙', color: 'purple', disabled: true })}
+        `<div class="grid grid-cols-4 gap-4" style="width:720px; max-width:100%;">
+          ${BALLS.map(ballCard).join('')}
         </div>`,
         'flex flex-col items-center'
       )}
       ${backButton()}
       `,
-      { minHeight: 640 }
+      { minHeight: 560 }
     );
     document.getElementById('btn-back')?.addEventListener('click', () => {
       this.step = 'root';

@@ -55,19 +55,27 @@ export async function wsRoutes(app: FastifyInstance): Promise<void> {
     const query = request.query as WsQuery;
     const matchId = (query.matchId ?? '').trim();
 
+    // Exigir JWT válido para abrir el socket (token por query string).
+    const user = await resolveUser(query.token);
+    if (!user) {
+      socket.close(4401, 'No autenticado');
+      return;
+    }
+
     if (!matchId) {
       // ---- Sala LOCAL (hot-seat en un solo navegador) -----------------
-      hub.join(LOCAL_ROOM, socket, { userId: null, username: null, slot: null });
+      // El actor sigue siendo currentPlayer (turno compartido), pero el socket
+      // exige un usuario autenticado.
+      hub.join(LOCAL_ROOM, socket, { userId: user.id, username: user.username, slot: null });
       hub.send(socket, { type: 'state', state: matchManager.get().getStateDTO() });
     } else {
       // ---- Sala ONLINE -------------------------------------------------
       let room;
       try {
-        const user = await resolveUser(query.token);
-        room = await RoomService.get(matchId, user?.id ?? null);
+        room = await RoomService.get(matchId, user.id);
         hub.join(matchId, socket, {
-          userId: user?.id ?? null,
-          username: user?.username ?? null,
+          userId: user.id,
+          username: user.username ?? null,
           slot: room.youAre,
         });
       } catch {

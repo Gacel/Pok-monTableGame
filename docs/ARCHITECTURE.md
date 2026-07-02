@@ -142,7 +142,15 @@ al microservicio `pokeapi-proxy` + Redis, C3.1.)*
 
 - HTTPS + WSS estrictos (certs self-signed en local).
 - Validación y sanitización **server-side** en cada ruta Fastify antes de tocar SQLite.
-- Secretos desde Vault (pendiente); nada sensible en `.env`.
+- **JWT firmado (implementado):** `signup`/`login`/`google` emiten un JWT (`jsonwebtoken`,
+  secreto en `JWT_SECRET`). Un hook `onRequest` global exige JWT en **todos** los
+  endpoints salvo la allowlist (`/health`, `/api/auth/signup`, `/api/auth/login`,
+  `/api/auth/google/*`). `/ws` verifica el token por query string dentro del handler.
+  Ver `services/game-service/src/auth/jwt.ts`, `app.ts` (hook) e `identity.ts`.
+  Usuarios persistidos en SQLite con `email` (registro real; `login` solo cuentas
+  existentes, `signup` crea).
+- Secretos desde Vault (pendiente): `JWT_SECRET` hoy sale de `.env` dev (placeholder);
+  migrar a Vault (C1.1). Nada sensible real en `.env`.
 - WAF ModSecurity en el gateway (pendiente).
 
 ---

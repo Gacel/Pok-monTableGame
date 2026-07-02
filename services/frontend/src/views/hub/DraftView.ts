@@ -1,5 +1,6 @@
 import type { MovementPattern, PokemonType } from '../../models/Types';
 import type { GameMode } from '@transcendence/shared';
+import { apiFetch } from '../../net/api';
 
 interface RosterEntry {
   name: string;
@@ -70,7 +71,7 @@ export class DraftView {
   async render(): Promise<void> {
     this.container.innerHTML = this.loadingHtml('Cargando Pokémon…');
     try {
-      const res = await fetch('/api/game/roster');
+      const res = await apiFetch('/api/game/roster');
       const data = await res.json();
       this.roster = (data.roster ?? []) as RosterEntry[];
       await this.preloadSprites();

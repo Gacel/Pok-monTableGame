@@ -165,6 +165,20 @@ Los modos del árbol se traducen a la config existente (`LocalGameConfig` / lobb
   demasiado pequeño (`max-w-[90vw]` con `object-contain` pero sin ancho real forzado).
   Agrandarlo para que domine la pantalla, respetando la animación intro/pulse/float.
 
+### 5.1 Disposición uniforme (estilo tienda)
+
+Todas las pantallas del hub usan la **misma disposición**: `panelTitle` + `panelCard`
+con una **lista vertical de `menuButton`** (icono + etiqueta + sublínea) y `backButton`.
+Es la disposición del menú de la TIENDA, aplicada a MainMenu, JUGAR, MULTIJUGADOR
+(paso canal), COMUNIDAD y UN JUGADOR. Los submenús con muchos ítems homogéneos
+(regalo, pokéball sorpresa) usan rejilla dentro de la misma tarjeta.
+
+### 5.2 Pokéballs (bitmap real)
+
+En TIENDA → POKÉBALL SORPRESA, cada bola es el **sprite bitmap real** de PokeAPI
+(`poke-ball`/`great-ball`/`ultra-ball`/`master-ball`) a **tamaño avatar** (`w-16 h-16`,
+`image-rendering: pixelated`). Ver `ShopMenuView.ts` (`BALL_SPRITE`, `BALLS`).
+
 ---
 
 ## 6. Inventario de vistas del hub

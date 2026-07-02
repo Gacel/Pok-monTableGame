@@ -2,6 +2,7 @@ import { getDb } from './db.js';
 
 export interface UserRecord {
   id: string;
+  email?: string | null;
   username: string | null;
   avatarUrl: string | null;
   level: number;
@@ -16,9 +17,29 @@ export const UserModel = {
     return db.get<UserRecord>('SELECT * FROM users WHERE id = ?', id);
   },
 
+  async findByEmail(email: string): Promise<UserRecord | undefined> {
+    const db = await getDb();
+    return db.get<UserRecord>('SELECT * FROM users WHERE email = ?', email);
+  },
+
   async create(id: string): Promise<UserRecord> {
     const db = await getDb();
     await db.run('INSERT OR IGNORE INTO users (id, level, coins) VALUES (?, 1, 0)', id);
+    const user = await this.findById(id);
+    if (!user) throw new Error('No se pudo crear el usuario');
+    return user;
+  },
+
+  /** Crea (o recupera) un usuario guardando su email. Base del registro real. */
+  async createWithEmail(id: string, email: string): Promise<UserRecord> {
+    const db = await getDb();
+    await db.run(
+      'INSERT OR IGNORE INTO users (id, email, level, coins) VALUES (?, ?, 1, 0)',
+      id,
+      email
+    );
+    // Si ya existía sin email (datos antiguos), lo completa.
+    await db.run('UPDATE users SET email = ? WHERE id = ? AND (email IS NULL OR email = "")', email, id);
     const user = await this.findById(id);
     if (!user) throw new Error('No se pudo crear el usuario');
     return user;

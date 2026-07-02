@@ -23,6 +23,12 @@ export class LoginView {
               ENTRAR
             </button>
 
+            <button id="btn-register" class="w-96 max-w-full py-4 bg-green-600 hover:bg-green-500 text-white border-b-4 border-green-800 active:border-b-0 active:mt-1 transition-all text-sm" style="font-family: 'Press Start 2P', monospace; box-shadow: 0 4px 0 #000;">
+              REGISTRARSE
+            </button>
+
+            <p id="login-error" class="text-red-300 text-[10px] text-center min-h-[14px]" style="font-family: 'Press Start 2P', monospace;"></p>
+
             <!-- Separador -->
             <div class="w-96 max-w-full border-t-2 border-dashed border-gray-500 my-1"></div>
 
@@ -38,16 +44,37 @@ export class LoginView {
       </div>
     `;
 
+    const errorEl = () => document.getElementById('login-error') as HTMLParagraphElement | null;
+    const emailVal = () => (document.getElementById('email-input') as HTMLInputElement).value.trim();
+
     document.getElementById('btn-login')?.addEventListener('click', async () => {
-      const email = (document.getElementById('email-input') as HTMLInputElement).value;
+      const email = emailVal();
       if (!email) return;
       const btn = document.getElementById('btn-login') as HTMLButtonElement;
+      const el = errorEl();
+      if (el) el.innerText = '';
       btn.innerText = 'CONECTANDO...';
-      const success = await authState.loginWithEmail(email);
-      if (!success) {
+      const result = await authState.loginWithEmail(email);
+      if (!result.ok) {
         btn.innerText = 'ENTRAR';
-        btn.classList.replace('bg-red-600', 'bg-gray-600');
-        setTimeout(() => btn.classList.replace('bg-gray-600', 'bg-red-600'), 1000);
+        if (el) el.innerText = result.error ?? 'No se pudo entrar';
+      }
+    });
+
+    document.getElementById('btn-register')?.addEventListener('click', async () => {
+      const email = emailVal();
+      const el = errorEl();
+      if (!email) {
+        if (el) el.innerText = 'Escribe un correo para registrarte';
+        return;
+      }
+      const btn = document.getElementById('btn-register') as HTMLButtonElement;
+      if (el) el.innerText = '';
+      btn.innerText = 'CREANDO...';
+      const result = await authState.signupWithEmail(email);
+      if (!result.ok) {
+        btn.innerText = 'REGISTRARSE';
+        if (el) el.innerText = result.error ?? 'No se pudo registrar';
       }
     });
 
