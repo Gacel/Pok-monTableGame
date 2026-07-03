@@ -93,6 +93,15 @@ async function openAndMigrate(): Promise<Database> {
       PRIMARY KEY (pokemon_name, move_name)
     );
     CREATE INDEX IF NOT EXISTS idx_pokemon_moves_pokemon ON pokemon_moves(pokemon_name);
+
+    -- Amistades (COMUNIDAD). Bidireccional: se guardan las dos direcciones.
+    CREATE TABLE IF NOT EXISTS friendships (
+      user_id    TEXT NOT NULL,
+      friend_id  TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (user_id, friend_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_friendships_user ON friendships(user_id);
   `);
 
   // Migración defensiva: columna `email` en users (si la tabla ya existía).

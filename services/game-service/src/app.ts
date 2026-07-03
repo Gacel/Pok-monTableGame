@@ -5,6 +5,7 @@ import { authRoutes } from './routes/auth.routes.js';
 import { userRoutes } from './routes/user.routes.js';
 import { gameRoutes } from './routes/game.routes.js';
 import { lobbyRoutes } from './routes/lobby.routes.js';
+import { friendRoutes } from './routes/friend.routes.js';
 import { wsRoutes } from './routes/ws.routes.js';
 import { bearerToken } from './auth/identity.js';
 import { verifyToken } from './auth/jwt.js';
@@ -71,6 +72,7 @@ export function buildApp(): FastifyInstance {
   app.register(userRoutes);
   app.register(gameRoutes);
   app.register(lobbyRoutes);
+  app.register(friendRoutes);
   app.register(wsRoutes);
 
   return app;
