@@ -42,7 +42,8 @@ export const LobbyController = {
     if (!user) return;
     const name = String(request.body?.name ?? '');
     const capacity = Number(request.body?.capacity ?? 2);
-    const gameMode = (request.body?.gameMode === 'teams' ? 'teams' : 'ffa') as GameMode;
+    const gm = request.body?.gameMode;
+    const gameMode = (gm === 'teams' || gm === 'arena' ? gm : 'ffa') as GameMode;
     try {
       const room = await RoomService.create(
         user.id,

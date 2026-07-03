@@ -139,6 +139,18 @@ Los modos del árbol se traducen a la config existente (`LocalGameConfig` / lobb
 | 1 VS 1 | 2 | `ffa` | LOCAL: `startLocalGame({players:2, gameMode:'ffa'})`. ONLINE: sala 2. |
 | 2 VS 2 | 4 | `teams` | Alianzas P1+P3 vs P2+P4 (`lobby.ts`). |
 | BATTLE ROYALE | 3-4 | `ffa` | Todos contra todos (tope `MAX_PLAYERS=4`). |
+| ARENA | 4 | `arena` | Mapa ≥4x (`GAME_ARENA_MAP_RADIUS=42` → 5419 tiles), spawns **aleatorios** (`pickRandomSpawns`), partida **persistente** (`GameService.persistent` → `checkWinCondition` no finaliza). |
+
+### 4.3 Modo ARENA — estado (fase 1 hecha)
+
+**Hecho (fase 1):** modo `arena` en `GameMode`; mapa ≥4x por modo (`MatchManager.loadBoard`);
+spawns aleatorios (`engine/spawns.ts:pickRandomSpawns` + seed no determinista);
+partida persistente que no termina (`GameService.persistent`, expuesto en el DTO).
+Verificado: 4.30x tiles, spawns distintos por partida, `persistent:true`.
+
+**Pendiente (fase 2):** entrada/salida **en caliente** (join a una arena `active`),
+turnos dinámicos cuando entran/salen jugadores, y una arena global de `matchId`
+fijo exenta del barrido/`evict` para que esté "siempre viva" con reingreso.
 
 > **Survival en multijugador** (booleano): si activo, al vencer al Pokémon de otro
 > jugador lo capturas (se suma a tus opciones de draft) o se elimina según el caso.

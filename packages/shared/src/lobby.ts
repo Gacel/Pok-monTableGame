@@ -7,8 +7,9 @@
 /** Cómo se juega la partida: en un solo navegador o entre navegadores. */
 export type MatchMode = 'local' | 'online';
 
-/** Modo de juego: todos contra todos (2-4) o por parejas (exactamente 4). */
-export type GameMode = 'ffa' | 'teams';
+/** Modo de juego: todos contra todos (2-4), por parejas (4), o ARENA (mapa
+ *  gigante, spawns aleatorios, partida persistente que no termina). */
+export type GameMode = 'ffa' | 'teams' | 'arena';
 
 /**
  * Ciclo de vida de una sala/partida.

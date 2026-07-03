@@ -5,8 +5,8 @@ import { TEAMS_MODE_ALLIANCES, TEAMS_MODE_PLAYERS } from '@transcendence/shared'
 import { Board, Pokemon, Tile } from '../engine/board.js';
 import { MapLoader, TiledMapData } from '../engine/mapLoader.js';
 import { generateEcosystem } from '../engine/mapGenerator.js';
-import { largestLandComponent, pickCornerSpawns } from '../engine/spawns.js';
-import { hashStringToSeed } from '../engine/rng.js';
+import { largestLandComponent, pickCornerSpawns, pickRandomSpawns } from '../engine/spawns.js';
+import { hashStringToSeed, makeRng } from '../engine/rng.js';
 import { GameService } from './GameService.js';
 import { PokemonService } from './PokemonService.js';
 import { PokemonTemplate } from '../models/PokemonModel.js';
@@ -18,6 +18,8 @@ const MAP_PATH = process.env.GAME_MAP_PATH;
 /** Seed estable ⇒ mismo ecosistema en cada partida nueva; las guardadas no regeneran. */
 const MAP_SEED = process.env.GAME_MAP_SEED ?? 'transcendence-default';
 const MAP_RADIUS = Number(process.env.GAME_MAP_RADIUS ?? 20);
+/** ARENA: mapa ≥4x (R=42 → 5419 tiles ≈ 4.3x de los 1261 de R=20). */
+const ARENA_MAP_RADIUS = Number(process.env.GAME_ARENA_MAP_RADIUS ?? 42);
 const TEAM_SIZE = 3;
 
 /**
@@ -73,10 +75,15 @@ export class MatchManager {
    */
   private placements(
     board: Board,
-    teams: PokemonTemplate[][]
+    teams: PokemonTemplate[][],
+    gameMode: GameMode = 'ffa'
   ): { hex: Tile['hex']; pokemon: Pokemon }[] {
     const component = largestLandComponent(board);
-    const hexClusters = pickCornerSpawns(board, component, TEAM_SIZE, teams.length);
+    // ARENA: spawns aleatorios (distintos cada partida). Resto: esquinas fijas.
+    const hexClusters =
+      gameMode === 'arena'
+        ? pickRandomSpawns(board, component, TEAM_SIZE, teams.length, makeRng(this.freshSeed()))
+        : pickCornerSpawns(board, component, TEAM_SIZE, teams.length);
 
     const build = (tpl: PokemonTemplate, playerId: string, i: number): Pokemon => ({
       ...tpl,
@@ -178,13 +185,14 @@ export class MatchManager {
     gameMode: GameMode = 'ffa'
   ): Promise<GameService> {
     const teamArrays = await this.resolveTeams(teams);
-    const board = this.loadBoard();
-    const placements = await this.withMoves(this.placements(board, teamArrays));
+    const board = this.loadBoard(gameMode);
+    const placements = await this.withMoves(this.placements(board, teamArrays, gameMode));
     this.match = GameService.create(
       DEFAULT_MATCH_ID,
       board,
       placements,
-      this.alliancesFor(gameMode, teamArrays.length)
+      this.alliancesFor(gameMode, teamArrays.length),
+      gameMode === 'arena'
     );
     await this.persist();
     return this.match;
@@ -214,13 +222,14 @@ export class MatchManager {
     gameMode: GameMode
   ): Promise<GameService> {
     const teamArrays = await this.resolveTeams(teams);
-    const board = this.loadBoard();
-    const placements = await this.withMoves(this.placements(board, teamArrays));
+    const board = this.loadBoard(gameMode);
+    const placements = await this.withMoves(this.placements(board, teamArrays, gameMode));
     const game = GameService.create(
       id,
       board,
       placements,
-      this.alliancesFor(gameMode, teamArrays.length)
+      this.alliancesFor(gameMode, teamArrays.length),
+      gameMode === 'arena'
     );
     this.onlineMatches.set(id, game);
     await this.persistMatch(id);
@@ -245,7 +254,12 @@ export class MatchManager {
     }
   }
 
-  private loadBoard(): Board {
+  /** Semilla no determinista (spawns aleatorios de ARENA distintos cada partida). */
+  private freshSeed(): number {
+    return hashStringToSeed(crypto.randomUUID());
+  }
+
+  private loadBoard(gameMode: GameMode = 'ffa'): Board {
     // Opt-in: mapa Tiled manual si se define GAME_MAP_PATH.
     if (MAP_PATH) {
       try {
@@ -255,8 +269,9 @@ export class MatchManager {
         // Si el Tiled indicado falla, caemos al ecosistema procedural.
       }
     }
-    // Por defecto: ecosistema procedural grande y coherente (seed estable).
-    return generateEcosystem(hashStringToSeed(MAP_SEED), { radius: MAP_RADIUS });
+    // ARENA usa un mapa ≥4x más grande; el resto, el tamaño normal (seed estable).
+    const radius = gameMode === 'arena' ? ARENA_MAP_RADIUS : MAP_RADIUS;
+    return generateEcosystem(hashStringToSeed(MAP_SEED), { radius });
   }
 
   get(): GameService {
