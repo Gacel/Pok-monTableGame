@@ -2,7 +2,7 @@ import { FastifyInstance } from 'fastify';
 import type { SocketStream } from '@fastify/websocket';
 import type { WebSocket } from 'ws';
 import type { PlayerSlot } from '@transcendence/shared';
-import { matchManager } from '../services/MatchManager.js';
+import { matchManager, ARENA_ID } from '../services/MatchManager.js';
 import { RoomService } from '../services/RoomService.js';
 import { resolveUser } from '../auth/identity.js';
 import { hub, LOCAL_ROOM } from '../realtime/hub.js';
@@ -202,7 +202,11 @@ export async function wsRoutes(app: FastifyInstance): Promise<void> {
     const onGone = () => {
       const ctx = hub.ctxOf(socket);
       hub.leave(socket);
-      if (ctx && ctx.matchId !== LOCAL_ROOM && ctx.userId) {
+      if (!ctx || !ctx.userId) return;
+      if (ctx.matchId === ARENA_ID) {
+        // ARENA: al irse (y sin otros sockets suyos) se retira del mundo vivo.
+        if (!hub.hasUser(ARENA_ID, ctx.userId)) void RoomService.leaveArena(ctx.userId);
+      } else if (ctx.matchId !== LOCAL_ROOM) {
         void RoomService.handleDisconnect(ctx.matchId, ctx.userId);
       }
     };

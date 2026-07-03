@@ -215,6 +215,53 @@ export function showLobby(preset?: { capacity: number; gameMode: GameMode }) {
   void currentLobby.render();
 }
 
+// ------------------------------------------------------------------- ARENA
+// Mundo vivo persistente: eliges equipo y entras directo (aunque estés solo).
+
+export function startArena() {
+  hideSidebar();
+  const draftLayer = document.getElementById('draft-layer') as HTMLElement;
+  draftLayer.classList.remove('hidden');
+  const label = authState.user?.username ?? 'TU EQUIPO';
+  void (async () => {
+    let reserved: string[] = [];
+    try {
+      const res = await apiFetch('/api/arena');
+      const data = await res.json();
+      reserved = (data.room?.reserved ?? []) as string[];
+    } catch {
+      /* sin datos: el servidor validará colisiones */
+    }
+    const view = new DraftView(
+      draftLayer,
+      { mode: 'online', playerLabel: label, reserved },
+      (teams) => {
+        void (async () => {
+          try {
+            const res = await apiFetch('/api/arena/join', {
+              method: 'POST',
+              body: JSON.stringify({ team: teams[0] }),
+            });
+            const data = await res.json();
+            draftLayer.classList.add('hidden');
+            if (res.ok && data.room) {
+              enterOnlineGame(data.room as RoomInfo);
+            } else {
+              alert(data.error ?? 'No se pudo entrar en la ARENA');
+              showMainMenu();
+            }
+          } catch {
+            draftLayer.classList.add('hidden');
+            alert('Error de red al entrar en la ARENA');
+            showMainMenu();
+          }
+        })();
+      }
+    );
+    void view.render();
+  })();
+}
+
 function showOnlineDraft(room: RoomInfo) {
   hideSidebar();
   const draftLayer = document.getElementById('draft-layer') as HTMLElement;
