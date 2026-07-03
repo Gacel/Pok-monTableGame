@@ -40,6 +40,8 @@ export interface PublicUser {
   username: string | null;
   avatarUrl: string | null;
   level: number;
+  /** Presencia (derivada de sockets abiertos). Solo se rellena en algunas rutas. */
+  online?: boolean;
 }
 
 /** Respuesta estándar de healthcheck para todos los servicios. */
