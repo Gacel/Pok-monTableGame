@@ -20,6 +20,8 @@ export interface SocketCtx {
 class RealtimeHub {
   private rooms: Map<string, Set<WebSocket>> = new Map();
   private ctx: WeakMap<WebSocket, SocketCtx> = new WeakMap();
+  /** Presencia global: nº de sockets abiertos por usuario (varias salas/pestañas). */
+  private online: Map<string, number> = new Map();
 
   join(matchId: string, socket: WebSocket, ctx: Omit<SocketCtx, 'matchId'>): void {
     let room = this.rooms.get(matchId);
@@ -29,6 +31,7 @@ class RealtimeHub {
     }
     room.add(socket);
     this.ctx.set(socket, { matchId, ...ctx });
+    if (ctx.userId) this.online.set(ctx.userId, (this.online.get(ctx.userId) ?? 0) + 1);
   }
 
   leave(socket: WebSocket): void {
@@ -39,6 +42,16 @@ class RealtimeHub {
       room.delete(socket);
       if (room.size === 0) this.rooms.delete(ctx.matchId);
     }
+    if (ctx.userId) {
+      const n = (this.online.get(ctx.userId) ?? 0) - 1;
+      if (n <= 0) this.online.delete(ctx.userId);
+      else this.online.set(ctx.userId, n);
+    }
+  }
+
+  /** Presencia: ¿tiene el usuario algún socket abierto (en cualquier sala)? */
+  isOnline(userId: string): boolean {
+    return (this.online.get(userId) ?? 0) > 0;
   }
 
   ctxOf(socket: WebSocket): SocketCtx | undefined {

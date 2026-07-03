@@ -1,0 +1,4 @@
+# Scripts de shell SIEMPRE con saltos de línea LF (si no, el shebang con CRLF
+# rompe la ejecución dentro de los contenedores Linux: "/bin/sh^M: not found").
+*.sh text eol=lf
+gateway/gen-certs.sh text eol=lf

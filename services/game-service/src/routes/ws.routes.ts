@@ -62,7 +62,17 @@ export async function wsRoutes(app: FastifyInstance): Promise<void> {
       return;
     }
 
-    if (!matchId) {
+    if (matchId.startsWith('dm:')) {
+      // ---- Chat directo (DM) entre dos amigos: sala 'dm:<idA>:<idB>' ----
+      // Los ids van ordenados, así ambos extremos comparten la misma sala.
+      const ids = matchId.slice(3).split(':');
+      if (ids.length !== 2 || !ids.includes(user.id)) {
+        socket.close(4403, 'Canal no autorizado');
+        return;
+      }
+      hub.join(matchId, socket, { userId: user.id, username: user.username, slot: null });
+      // El chat se difunde a la sala en el handler de 'chat' (abajo).
+    } else if (!matchId) {
       // ---- Sala LOCAL (hot-seat en un solo navegador) -----------------
       // El actor sigue siendo currentPlayer (turno compartido), pero el socket
       // exige un usuario autenticado.

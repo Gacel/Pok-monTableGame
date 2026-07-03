@@ -94,7 +94,7 @@ async function openAndMigrate(): Promise<Database> {
     );
     CREATE INDEX IF NOT EXISTS idx_pokemon_moves_pokemon ON pokemon_moves(pokemon_name);
 
-    -- Amistades (COMUNIDAD). Bidireccional: se guardan las dos direcciones.
+    -- Amistades ACEPTADAS (COMUNIDAD). Bidireccional: se guardan las dos direcciones.
     CREATE TABLE IF NOT EXISTS friendships (
       user_id    TEXT NOT NULL,
       friend_id  TEXT NOT NULL,
@@ -102,6 +102,15 @@ async function openAndMigrate(): Promise<Database> {
       PRIMARY KEY (user_id, friend_id)
     );
     CREATE INDEX IF NOT EXISTS idx_friendships_user ON friendships(user_id);
+
+    -- Solicitudes de amistad PENDIENTES (deben confirmarse por el receptor).
+    CREATE TABLE IF NOT EXISTS friend_requests (
+      from_id    TEXT NOT NULL,
+      to_id      TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (from_id, to_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_friend_requests_to ON friend_requests(to_id);
   `);
 
   // Migración defensiva: columna `email` en users (si la tabla ya existía).
