@@ -96,7 +96,8 @@ export const GameController = {
     if (Object.keys(teams).length < 2) {
       return reply.code(400).send({ success: false, error: 'Se necesitan al menos 2 jugadores' });
     }
-    const gameMode = (request.body?.gameMode === 'teams' ? 'teams' : 'ffa') as GameMode;
+    const gm = request.body?.gameMode;
+    const gameMode = (gm === 'teams' || gm === 'arena' ? gm : 'ffa') as GameMode;
     try {
       const game = await matchManager.startMatch(teams, gameMode);
       hub.broadcast(LOCAL_ROOM, { type: 'state', state: game.getStateDTO() });

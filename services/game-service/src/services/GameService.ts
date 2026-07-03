@@ -55,6 +55,8 @@ export interface MatchStateDTO {
   alliances: string[][] | null;
   /** Jugadores ya eliminados (sin Pokémon o que abandonaron). */
   eliminated: string[];
+  /** ARENA: partida persistente que nunca termina (no mostrar "victoria"). */
+  persistent: boolean;
 }
 
 export interface PlayResult {
@@ -90,14 +92,17 @@ export class GameService {
     private log: string[],
     private combat: CombatState | null = null,
     private alliances: string[][] | null = null,
-    private eliminated: string[] = []
+    private eliminated: string[] = [],
+    /** ARENA: la partida NUNCA termina (siempre viva, aunque quede 0-1 jugadores). */
+    private persistent: boolean = false
   ) {}
 
   static create(
     id: string,
     board: Board,
     placements: { hex: Hex; pokemon: Pokemon }[],
-    alliances: string[][] | null = null
+    alliances: string[][] | null = null,
+    persistent = false
   ): GameService {
     const players: string[] = [];
     const resources: Record<string, PlayerResources> = {};
@@ -117,9 +122,11 @@ export class GameService {
       'active',
       null,
       resources,
-      ['¡Comienza la partida!'],
+      [persistent ? '¡Bienvenido a la ARENA!' : '¡Comienza la partida!'],
       null,
-      alliances
+      alliances,
+      [],
+      persistent
     );
   }
 
@@ -144,6 +151,7 @@ export class GameService {
       combat: this.combat,
       alliances: this.alliances,
       eliminated: this.eliminated,
+      persistent: this.persistent,
     };
   }
 
@@ -601,6 +609,10 @@ export class GameService {
       }
     }
 
+    // ARENA: partida persistente, nunca termina (se registran eliminaciones pero
+    // el mundo sigue vivo aunque no quede nadie).
+    if (this.persistent) return;
+
     const alive = this.players.filter((p) => !this.eliminated.includes(p));
     if (alive.length === 0) {
       this.status = 'finished';
@@ -644,6 +656,7 @@ export class GameService {
       combat: this.combat,
       alliances: this.alliances,
       eliminated: this.eliminated,
+      persistent: this.persistent,
     });
   }
 
@@ -670,7 +683,8 @@ export class GameService {
       d.log ?? [],
       combat,
       d.alliances ?? null,
-      d.eliminated ?? []
+      d.eliminated ?? [],
+      d.persistent ?? false
     );
   }
 

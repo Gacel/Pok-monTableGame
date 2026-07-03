@@ -1,5 +1,7 @@
 import { Board, Biome } from './board.js';
 import { Hex, hexNeighbors, hexDistance } from './hex.js';
+import type { Rng } from './rng.js';
+import { seededInt } from './rng.js';
 
 /** ¿Es un bioma transitable a pie (todo menos agua)? */
 export function isLandTransitable(biome: Biome): boolean {
@@ -114,6 +116,49 @@ export function pickOppositeSpawns(
   const team1 = clusterAround(board, poleA, component, perTeam, taken);
   const team2 = clusterAround(board, poleB, component, perTeam, taken);
   return { team1, team2 };
+}
+
+/**
+ * Spawns ALEATORIOS (modo ARENA): elige un centro aleatorio por equipo dentro de
+ * la componente de tierra, maximizando la separación entre equipos (muestreo:
+ * de varios candidatos aleatorios se queda el más lejano a los ya elegidos).
+ * Luego agrupa `perTeam` casillas alrededor de cada centro (`clusterAround`).
+ */
+export function pickRandomSpawns(
+  board: Board,
+  component: Set<string>,
+  perTeam: number,
+  numTeams: number,
+  rng: Rng
+): Hex[][] {
+  if (component.size < perTeam * numTeams) {
+    throw new Error(
+      `Componente de tierra demasiado pequeña (${component.size}) para ${perTeam * numTeams} spawns`
+    );
+  }
+  const hexes = Array.from(component).map(parseKey);
+  const centers: Hex[] = [];
+  const taken = new Set<string>();
+  const result: Hex[][] = [];
+  const SAMPLES = 48; // candidatos aleatorios por equipo (más = más separación)
+
+  for (let t = 0; t < numTeams; t++) {
+    let best = hexes[seededInt(rng, 0, hexes.length - 1)]!;
+    let bestMinDist = -1;
+    for (let s = 0; s < SAMPLES; s++) {
+      const cand = hexes[seededInt(rng, 0, hexes.length - 1)]!;
+      const minDist = centers.length
+        ? Math.min(...centers.map((c) => hexDistance(c, cand)))
+        : Infinity;
+      if (minDist > bestMinDist) {
+        bestMinDist = minDist;
+        best = cand;
+      }
+    }
+    centers.push(best);
+    result.push(clusterAround(board, best, component, perTeam, taken));
+  }
+  return result;
 }
 
 /**
