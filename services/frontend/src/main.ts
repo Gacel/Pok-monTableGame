@@ -71,10 +71,22 @@ function resetHubLayer() {
 
 function showWelcome() {
   resetHubLayer();
-  const welcomeView = new WelcomeView(hubLayer, () => {
-    showLogin();
-  });
-  welcomeView.render();
+  const welcomeLayer = document.getElementById('welcome-layer');
+  if (welcomeLayer) {
+    welcomeLayer.classList.remove('pointer-events-none');
+    const welcomeView = new WelcomeView(welcomeLayer, () => {
+      welcomeLayer.innerHTML = '';
+      welcomeLayer.classList.add('pointer-events-none');
+      showLogin();
+    });
+    welcomeView.render();
+  } else {
+    // Fallback if index.html is not updated
+    const welcomeView = new WelcomeView(hubLayer, () => {
+      showLogin();
+    });
+    welcomeView.render();
+  }
 }
 
 function showLogin() {

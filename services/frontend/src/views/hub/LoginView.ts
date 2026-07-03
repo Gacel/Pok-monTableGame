@@ -37,8 +37,7 @@ export class LoginView {
               GOOGLE LOGIN
             </button>
           </div>
-
-          <p class="mt-12 text-xs text-gray-400" style="font-family: 'Press Start 2P', monospace;">© 2026 ft_transcendence</p>
+          <p class="mt-8 text-[10px] text-gray-400" style="font-family: 'Press Start 2P', monospace;">© 2026 jvalle-d, sbenitez</p>
         </div>
       </div>
       </div>
