@@ -22,6 +22,18 @@ export const UserModel = {
     return db.get<UserRecord>('SELECT * FROM users WHERE email = ?', email);
   },
 
+  /** Busca usuarios por nombre (para "añadir amigo"), excluyendo a `excludeId`. */
+  async searchByUsername(query: string, excludeId: string): Promise<UserRecord[]> {
+    const db = await getDb();
+    return db.all<UserRecord[]>(
+      `SELECT * FROM users
+       WHERE username IS NOT NULL AND username LIKE ? AND id != ?
+       ORDER BY username LIMIT 20`,
+      `%${query}%`,
+      excludeId
+    );
+  },
+
   async create(id: string): Promise<UserRecord> {
     const db = await getDb();
     await db.run('INSERT OR IGNORE INTO users (id, level, coins) VALUES (?, 1, 0)', id);

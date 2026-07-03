@@ -34,6 +34,14 @@ export type MovementPattern = (typeof MOVEMENT_PATTERNS)[number];
 /** Estado de presencia de un usuario (status-service). */
 export type PresenceStatus = 'online' | 'offline' | 'in-game';
 
+/** Vista pública de un usuario (COMUNIDAD): nunca expone email ni datos sensibles. */
+export interface PublicUser {
+  id: string;
+  username: string | null;
+  avatarUrl: string | null;
+  level: number;
+}
+
 /** Respuesta estándar de healthcheck para todos los servicios. */
 export interface HealthResponse {
   status: 'ok';
