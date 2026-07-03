@@ -133,6 +133,8 @@ que **todo el stack acumulado sigue levantando** (regla de "no romper lo anterio
 | Secreto vacío al arrancar | Vault sin bootstrap | re-ejecuta `infra/vault/bootstrap.sh` |
 | WSS no conecta | falta JWT en handshake o ruta `/ws` mal proxied | revisa gateway y token |
 | Cambios no aparecen | imagen cacheada | `make rebuild s=<servicio>` |
+| `vite`/`tsx: not found` (code 127) al arrancar un servicio | capa de `npm install` cacheada/corrupta que omitió devDependencies | reconstruir sin caché: `docker compose build --no-cache <servicio>` y luego `up -d` |
+| 502 en `/api/...` tras recrear un backend | Nginx cacheó la IP vieja del upstream (el contenedor cambió de IP) | `docker restart transcendence-gateway` para re-resolver. Ojo: el gateway no arranca si algún upstream (`frontend`, `game-service`) está caído |
 
 ---
 
