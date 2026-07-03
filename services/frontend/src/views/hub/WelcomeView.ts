@@ -1,3 +1,5 @@
+import { playClickSound } from '../../utils/audio';
+
 export class WelcomeView {
   private container: HTMLElement;
   private onStart: () => void;
@@ -120,7 +122,11 @@ export class WelcomeView {
         @keyframes bgFantasy {
           0% { 
             transform: scale(1.4) rotate(3deg); 
-            filter: blur(20px) brightness(0.2) saturate(300%) hue-rotate(-90deg); 
+            filter: blur(10px) brightness(0.3) saturate(0%) hue-rotate(0deg); 
+          }
+          15% {
+            transform: scale(1.35) rotate(2deg);
+            filter: blur(15px) brightness(0.8) saturate(250%) hue-rotate(-60deg);
           }
           40% { 
             transform: scale(1.2) rotate(-2deg); 
@@ -144,6 +150,99 @@ export class WelcomeView {
           75% { transform: scale3d(1.05, 0.95, 1); }
           100% { transform: scale3d(1, 1, 1); }
         }
+        @keyframes pokeballStruggle {
+          0%, 15% { 
+            transform: rotate(0deg) translateX(0px); 
+            filter: brightness(1) drop-shadow(0 0 20px rgba(255,255,255,0.15)); 
+          }
+          
+          /* Primer tambaleo (suave) */
+          18% { transform: rotate(-12deg) translateX(-1px); }
+          22% { transform: rotate(8deg) translateX(1px); }
+          26% { transform: rotate(-4deg) translateX(0px); }
+          30%, 45% { 
+            transform: rotate(0deg) translateX(0px); 
+            filter: brightness(1) drop-shadow(0 0 20px rgba(255,255,255,0.15)); 
+          }
+          
+          /* Segundo tambaleo (medio) */
+          48% { transform: rotate(15deg) translateX(1px); filter: brightness(1.1) drop-shadow(0 0 25px rgba(255,150,150,0.3)); }
+          52% { transform: rotate(-12deg) translateX(-1px); }
+          56% { transform: rotate(8deg) translateX(1px); }
+          60%, 75% { 
+            transform: rotate(0deg) translateX(0px); 
+            filter: brightness(1) drop-shadow(0 0 20px rgba(255,255,255,0.15)); 
+          }
+
+          /* Tercer tambaleo (fuerte con resplandor rojo) */
+          78% { transform: rotate(-25deg) translateX(-2px); filter: brightness(1.3) drop-shadow(0 0 35px rgba(255,50,50,0.6)); }
+          81% { transform: rotate(30deg) translateX(2px); filter: brightness(1.6) drop-shadow(0 0 50px rgba(255,0,0,0.9)); }
+          84% { transform: rotate(-20deg) translateX(-1px); filter: brightness(1.3) drop-shadow(0 0 35px rgba(255,50,50,0.6)); }
+          87% { transform: rotate(12deg) translateX(1px); filter: brightness(1.1) drop-shadow(0 0 25px rgba(255,100,100,0.4)); }
+          90%, 100% { 
+            transform: rotate(0deg) translateX(0px); 
+            filter: brightness(1) drop-shadow(0 0 20px rgba(255,255,255,0.15)); 
+          }
+        }
+        @keyframes pokeballHover {
+          0% { transform: rotate(0deg) scale(1); }
+          
+          /* Vibración corta fluye hacia latido */
+          5% { transform: rotate(-4deg) scale(1.02) translateX(-1px); }
+          10% { transform: rotate(4deg) scale(1.02) translateX(1px); }
+          15% { transform: rotate(-2deg) scale(1.01) translateX(0); }
+          
+          /* Latido fuerte empalmado */
+          20% { transform: scale(1.08); }
+          25% { transform: scale(0.98) rotate(2deg); }
+          
+          /* Sacudida violenta y rápida */
+          30% { transform: rotate(6deg) scale(1.02) translateX(1px); }
+          33% { transform: rotate(-7deg) scale(1.03) translateX(-2px); }
+          36% { transform: rotate(8deg) scale(1.04) translateX(2px); }
+          39% { transform: rotate(-6deg) scale(1.02) translateX(-1px); }
+          
+          /* Doble latido fluyendo desde la sacudida */
+          44% { transform: scale(1.06) rotate(0deg); }
+          48% { transform: scale(0.99) rotate(-2deg); }
+          52% { transform: scale(1.08) rotate(1deg); }
+          57% { transform: scale(1) rotate(0deg); }
+
+          /* Tensión agónica hacia un lado (lenta) */
+          65% { transform: rotate(-12deg) scale(1.02); }
+          72% { transform: rotate(-14deg) scale(1.03); }
+          
+          /* Chasquido fuerte al lado opuesto (liberación de tensión) */
+          75% { transform: rotate(8deg) scale(1.02) translateX(2px); }
+          
+          /* Temblores leves enlazando de vuelta al inicio */
+          80% { transform: rotate(-3deg) scale(1.01); }
+          85% { transform: rotate(4deg) scale(1.01); }
+          90% { transform: rotate(-4deg) scale(1.01); }
+          95% { transform: rotate(2deg) scale(1.01); }
+          
+          100% { transform: rotate(0deg) scale(1); }
+        }
+        .animate-pokeball-struggle:hover {
+          animation: pokeballHover 3.5s ease-in-out infinite !important;
+          transform-origin: center 75%;
+          cursor: pointer;
+          filter: brightness(1.2) drop-shadow(0 0 30px rgba(255,255,255,0.5)) !important;
+        }
+        @keyframes pokeballOpen {
+          0% { transform: scale(1); filter: brightness(1); }
+          20% { transform: scale(0.9); filter: brightness(1.5); }
+          50% { transform: scale(1.5); filter: brightness(5) drop-shadow(0 0 100px white); opacity: 1; }
+          100% { transform: scale(3); filter: brightness(10) drop-shadow(0 0 200px white); opacity: 0; }
+        }
+        .animate-pokeball-open {
+          animation: pokeballOpen 0.5s ease-out forwards !important;
+          pointer-events: none;
+        }
+        .animate-pokeball-struggle {
+          animation: pokeballStruggle 3.5s ease-in-out infinite;
+          transform-origin: 50% 75%;
+        }
         .animate-jelly-wobble {
           animation: jellyWobble 0.8s both;
         }
@@ -157,7 +256,7 @@ export class WelcomeView {
       <div id="welcome-screen" class="absolute inset-0 w-full h-full bg-black flex flex-col items-center justify-center overflow-hidden group select-none">
         
         <!-- Background Image (Starts distorted/dark to match 0% of bgFantasy) -->
-        <img id="welcome-bg" src="/assets/welcome/${randomBg}" alt="Fondo" class="absolute inset-0 w-full h-full object-cover" draggable="false" style="transform: scale(1.4) rotate(3deg); filter: blur(20px) brightness(0.2) saturate(300%) hue-rotate(-90deg);">
+        <img id="welcome-bg" src="/assets/welcome/${randomBg}" alt="Fondo" class="absolute inset-0 w-full h-full object-cover" draggable="false" style="transform: scale(1.4) rotate(3deg); filter: blur(10px) brightness(0.3) saturate(0%) hue-rotate(0deg);">
         
         <!-- Title / Logo (Calculates exact object-cover scale factor for 16:9, safely clamped on mobile) -->
         <div id="logo-container" class="relative z-10 flex flex-col items-center justify-center w-full hidden">
@@ -184,8 +283,11 @@ export class WelcomeView {
         </div>
 
         <!-- Initial prompt (before animation) -->
-        <div id="initial-prompt" class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 text-gray-300 text-xs md:text-sm text-center animate-pulse tracking-widest drop-shadow-lg pointer-events-none" style="font-family: 'Press Start 2P', monospace;">
-          CLICK OR PRESS ENTER TO BEGIN
+        <div id="initial-prompt" class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 flex flex-col items-center gap-8">
+          <img src="/assets/welcome/masterball_fondo.png" alt="Masterball" class="w-32 h-32 md:w-48 md:h-48 object-contain animate-pokeball-struggle transition-transform">
+          <div class="text-gray-300 text-xs md:text-sm text-center tracking-widest drop-shadow-lg animate-pulse pointer-events-none" style="font-family: 'Press Start 2P', monospace;">
+            CLICK OR PRESS ENTER TO BEGIN
+          </div>
         </div>
 
         <p class="absolute bottom-6 right-6 text-xs text-white z-10 drop-shadow-lg" style="font-family: 'Press Start 2P', monospace; text-shadow: 2px 2px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000;">© 2026 jvalle-d, sbenitez</p>
@@ -292,6 +394,7 @@ export class WelcomeView {
     const playStartAnimationAndProceed = () => {
       if (isProceeding) return;
       isProceeding = true;
+      playClickSound();
       
       const inner = document.getElementById('press-start-inner');
       if (inner) {
@@ -323,7 +426,15 @@ export class WelcomeView {
 
       if (this.state === 'INITIAL') {
         this.state = 'CINEMATIC';
-        if (initialPrompt) initialPrompt.style.display = 'none';
+        
+        const mb = initialPrompt?.querySelector('img');
+        if (mb) mb.classList.add('animate-pokeball-open');
+        const text = initialPrompt?.querySelector('div');
+        if (text) text.style.display = 'none';
+        
+        setTimeout(() => {
+          if (initialPrompt) initialPrompt.style.display = 'none';
+        }, 500);
         
         audio.play().catch(console.error);
 

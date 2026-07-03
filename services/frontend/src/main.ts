@@ -20,6 +20,7 @@ import { SettingsView } from './views/hub/SettingsView';
 import { LobbyView } from './views/hub/LobbyView';
 import { DraftView } from './views/hub/DraftView';
 import { WelcomeView } from './views/hub/WelcomeView';
+import { playClickSound } from './utils/audio';
 
 const hubLayer = document.getElementById('hub-layer') as HTMLElement;
 const gameLayer = document.getElementById('game-layer') as HTMLElement;
@@ -380,6 +381,19 @@ authState.subscribe(() => {
     showAvatarCreation();
   } else {
     showMainMenu();
+  }
+});
+
+// --- Efectos de Sonido Globales ---
+document.body.addEventListener('click', (e) => {
+  const target = e.target as HTMLElement;
+  // Reproduce sonido al hacer click en botones (excepto elementos de la intro que se gestionan solos)
+  if (
+    target.closest('button') || 
+    target.closest('a') || 
+    target.closest('[role="button"]')
+  ) {
+    playClickSound();
   }
 });
 
