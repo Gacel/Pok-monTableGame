@@ -141,16 +141,30 @@ Los modos del árbol se traducen a la config existente (`LocalGameConfig` / lobb
 | BATTLE ROYALE | 3-4 | `ffa` | Todos contra todos (tope `MAX_PLAYERS=4`). |
 | ARENA | 4 | `arena` | Mapa ≥4x (`GAME_ARENA_MAP_RADIUS=42` → 5419 tiles), spawns **aleatorios** (`pickRandomSpawns`), partida **persistente** (`GameService.persistent` → `checkWinCondition` no finaliza). |
 
-### 4.3 Modo ARENA — estado (fase 1 hecha)
+### 4.3 Modo ARENA — mundo vivo (hecho)
 
-**Hecho (fase 1):** modo `arena` en `GameMode`; mapa ≥4x por modo (`MatchManager.loadBoard`);
-spawns aleatorios (`engine/spawns.ts:pickRandomSpawns` + seed no determinista);
-partida persistente que no termina (`GameService.persistent`, expuesto en el DTO).
-Verificado: 4.30x tiles, spawns distintos por partida, `persistent:true`.
+ARENA **no es una partida con anfitrión ni sala de espera**: es un **mundo único
+persistente** (`matchId = 'arena'`) al que se **entra directamente** (aunque estés
+solo). Otros entran/salen del mismo mapa en caliente (máx `MAX_PLAYERS=4`).
 
-**Pendiente (fase 2):** entrada/salida **en caliente** (join a una arena `active`),
-turnos dinámicos cuando entran/salen jugadores, y una arena global de `matchId`
-fijo exenta del barrido/`evict` para que esté "siempre viva" con reingreso.
+- **Mundo global persistente:** `GameService.createArena` (0 jugadores, `persistent`,
+  nunca termina); fila de partida `active` reutilizando la infra online (slots por
+  usuario en `players_json`). No aparece en el lobby (`listOpenRooms` solo `waiting`),
+  no se barre ni se desaloja. Reutiliza `OnlineGameController`/WS para las acciones.
+- **Mapa ≥4x:** `MatchManager.loadBoard('arena')` con `GAME_ARENA_MAP_RADIUS=42`
+  (5419 tiles ≈ 4.3x). Spawns **aleatorios** (`pickRandomSpawns`, seed no determinista).
+- **Entrada directa:** `POST /api/arena/join {team}` → asigna slot libre, coloca el
+  equipo en spawn aleatorio (`GameService.addPlayer`), devuelve la sala → el cliente
+  entra como online. `POST /api/arena/leave` y la desconexión WS retiran al jugador
+  (`GameService.removePlayer`); el mundo sigue vivo.
+- **Frontend:** MULTIJUGADOR → **ARENA** (botón directo) → draft → `startArena()`.
+
+Verificado e2e: entrar solo (player1), mapa 5419 tiles, hot-join de 3 jugadores,
+salir, y persistencia (`status active` tras entrar/salir).
+
+**Pendiente/pulido:** turnos con jugadores entrando/saliendo a mitad de ronda
+(hoy `switchPlayer` ya salta ausentes/eliminados; falta pulir UX cuando el
+`currentPlayer` se desconecta), y respawn tras caer.
 
 > **Survival en multijugador** (booleano): si activo, al vencer al Pokémon de otro
 > jugador lo capturas (se suma a tus opciones de draft) o se elimina según el caso.

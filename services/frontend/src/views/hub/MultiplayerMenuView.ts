@@ -1,5 +1,5 @@
 import type { GameMode } from '@transcendence/shared';
-import { showPlayMenu, startLocalGame, showLobby } from '../../main';
+import { showPlayMenu, startLocalGame, showLobby, startArena } from '../../main';
 import { FONT, hubPanel, panelTitle, panelCard, menuButton, backButton } from './panel';
 
 type Channel = 'local' | 'online';
@@ -18,7 +18,6 @@ const MODES: ModePreset[] = [
   { key: '1v1', icon: '⚔️', label: '1 VS 1', desc: 'Duelo · 2 jugadores · FFA', players: 2, gameMode: 'ffa' },
   { key: '2v2', icon: '🤝', label: '2 VS 2', desc: 'Parejas · 4 jugadores · P1+P3 vs P2+P4', players: 4, gameMode: 'teams' },
   { key: 'br', icon: '👑', label: 'BATTLE ROYALE', desc: 'Todos contra todos · 3-4 jugadores', players: 4, gameMode: 'ffa' },
-  { key: 'arena', icon: '🏟️', label: 'ARENA', desc: 'Mapa gigante · spawns aleatorios · siempre viva', players: 4, gameMode: 'arena' },
 ];
 
 /**
@@ -48,12 +47,13 @@ export class MultiplayerMenuView {
         `<div class="flex flex-col gap-4" style="width:560px; max-width:100%;">
           ${menuButton({ id: 'btn-local', label: 'PARTIDA LOCAL', icon: '🎮', sublabel: 'Misma pantalla · varios jugadores por turnos', color: 'red' })}
           ${menuButton({ id: 'btn-online', label: 'EN LÍNEA', icon: '📡', sublabel: 'Otro navegador · crear o buscar sala', color: 'blue' })}
+          ${menuButton({ id: 'btn-arena', label: 'ARENA', icon: '🏟️', sublabel: 'Mundo vivo · entra directo (aunque estés solo) · máx 4', color: 'green' })}
         </div>`,
         'flex flex-col items-center'
       )}
       ${backButton()}
       `,
-      { minHeight: 560 }
+      { minHeight: 620 }
     );
 
     document.getElementById('btn-local')?.addEventListener('click', () => {
@@ -66,6 +66,7 @@ export class MultiplayerMenuView {
       this.step = 'mode';
       this.render();
     });
+    document.getElementById('btn-arena')?.addEventListener('click', () => startArena());
     document.getElementById('btn-back')?.addEventListener('click', () => showPlayMenu());
   }
 

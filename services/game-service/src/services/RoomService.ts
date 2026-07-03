@@ -7,7 +7,7 @@ import {
   TEAMS_MODE_PLAYERS,
 } from '@transcendence/shared';
 import { MatchModel, parseRoomPlayers, RoomRow, StoredRoomPlayer } from '../models/MatchModel.js';
-import { matchManager, ROSTER_NAMES } from './MatchManager.js';
+import { matchManager, ROSTER_NAMES, ARENA_ID } from './MatchManager.js';
 import { hub } from '../realtime/hub.js';
 
 /** Minutos sin actividad tras los que una sala `waiting` se barre del lobby. */
@@ -231,5 +231,81 @@ export const RoomService = {
     const row = await MatchModel.findRoom(matchId);
     if (!row) return null;
     return parseRoomPlayers(row).find((p) => p.userId === userId)?.slot ?? null;
+  },
+
+  // --------------------------------------------------------------- ARENA (mundo vivo)
+
+  /** Garantiza la fila + el mundo de la ARENA (persistente, estado `active`). */
+  async ensureArena(): Promise<RoomRow> {
+    let row = await MatchModel.findRoom(ARENA_ID);
+    if (!row) {
+      await MatchModel.createRoom(ARENA_ID, 'ARENA', 'arena', MAX_PLAYERS, '', []);
+      await MatchModel.updateRoomStatus(ARENA_ID, 'active');
+      await matchManager.getOrCreateArena();
+      row = await MatchModel.findRoom(ARENA_ID);
+    }
+    return row!;
+  },
+
+  /** Estado de la ARENA (reserved = Pokémon en uso por los presentes). */
+  async getArena(userId: string | null): Promise<RoomInfo> {
+    const row = await this.ensureArena();
+    return toRoomInfo(row, userId);
+  },
+
+  /**
+   * Entrada DIRECTA a la ARENA (sin sala/host/espera): asigna un slot libre,
+   * coloca el equipo en un spawn aleatorio y devuelve la sala. Máx 4 a la vez.
+   */
+  async joinArena(userId: string, username: string, team: string[]): Promise<RoomInfo> {
+    const row = await this.ensureArena();
+    const players = parseRoomPlayers(row);
+
+    // Reingreso: ya estás dentro (evita duplicar piezas).
+    if (players.some((p) => p.userId === userId)) {
+      return toRoomInfo(row, userId);
+    }
+    if (players.length >= row.capacity) {
+      throw new RoomError(409, 'La ARENA está llena (máx 4). Prueba en un momento.');
+    }
+    const valid =
+      Array.isArray(team) &&
+      team.length === DRAFT_TEAM_SIZE &&
+      team.every((n) => typeof n === 'string' && ROSTER_NAMES.includes(n)) &&
+      new Set(team).size === team.length;
+    if (!valid) throw new RoomError(400, `Elige ${DRAFT_TEAM_SIZE} Pokémon distintos del roster`);
+
+    const reservedByOthers = new Set(players.flatMap((p) => p.team ?? []));
+    const clash = team.find((n) => reservedByOthers.has(n));
+    if (clash) throw new RoomError(409, `Otro entrenador ya usa a ${clash.toUpperCase()} en la ARENA`);
+
+    const slot = nextFreeSlot(players, row.capacity);
+    if (!slot) throw new RoomError(409, 'La ARENA está llena');
+
+    players.push({ userId, username, slot, team: [...team] });
+    await MatchModel.updateRoomPlayers(ARENA_ID, players);
+    await matchManager.addToArena(slot, team);
+
+    const updated = await loadRoom(ARENA_ID);
+    const game = await matchManager.getMatch(ARENA_ID);
+    hub.broadcast(ARENA_ID, { type: 'room', room: toRoomInfo(updated, null) });
+    if (game) hub.broadcast(ARENA_ID, { type: 'state', state: game.getStateDTO() });
+    return toRoomInfo(updated, userId);
+  },
+
+  /** Salida de la ARENA (retira tus piezas; el mundo sigue vivo). */
+  async leaveArena(userId: string): Promise<void> {
+    const row = await MatchModel.findRoom(ARENA_ID);
+    if (!row) return;
+    const players = parseRoomPlayers(row);
+    const me = players.find((p) => p.userId === userId);
+    if (!me) return;
+    await MatchModel.updateRoomPlayers(ARENA_ID, players.filter((p) => p.userId !== userId));
+    await matchManager.removeFromArena(me.slot);
+
+    const updated = await MatchModel.findRoom(ARENA_ID);
+    const game = await matchManager.getMatch(ARENA_ID);
+    if (updated) hub.broadcast(ARENA_ID, { type: 'room', room: toRoomInfo(updated, null) });
+    if (game) hub.broadcast(ARENA_ID, { type: 'state', state: game.getStateDTO() });
   },
 };

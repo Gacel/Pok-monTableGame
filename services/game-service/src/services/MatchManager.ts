@@ -13,6 +13,8 @@ import { PokemonTemplate } from '../models/PokemonModel.js';
 import { MatchModel } from '../models/MatchModel.js';
 
 const DEFAULT_MATCH_ID = 'default';
+/** Mundo ARENA persistente: un único matchId global, siempre vivo, sin sala/host. */
+export const ARENA_ID = 'arena';
 /** Solo se usa si se define GAME_MAP_PATH (mapa Tiled manual, opt-in). */
 const MAP_PATH = process.env.GAME_MAP_PATH;
 /** Seed estable ⇒ mismo ecosistema en cada partida nueva; las guardadas no regeneran. */
@@ -240,6 +242,53 @@ export class MatchManager {
     const game = this.onlineMatches.get(id);
     if (!game) return;
     await MatchModel.upsert(game.matchRow, game.serialize());
+  }
+
+  // ----------------------------------------------------------- ARENA (mundo vivo)
+
+  private buildPokemon(tpl: PokemonTemplate, playerId: string, i: number): Pokemon {
+    return { ...tpl, id: `${playerId}-${i}`, playerId, level: 1 };
+  }
+
+  /** Devuelve la ARENA global (la crea vacía y persistente si no existía). */
+  async getOrCreateArena(): Promise<GameService> {
+    const existing = await this.getMatch(ARENA_ID);
+    if (existing) return existing;
+    const board = this.loadBoard('arena');
+    const game = GameService.createArena(ARENA_ID, board);
+    this.onlineMatches.set(ARENA_ID, game);
+    await this.persistMatch(ARENA_ID);
+    return game;
+  }
+
+  /** Añade un jugador a la ARENA en un spawn ALEATORIO (entrada en caliente). */
+  async addToArena(slot: string, teamNames: string[]): Promise<void> {
+    const game = await this.getOrCreateArena();
+    const roster = await this.getRoster();
+    const byName = new Map(roster.map((p) => [p.name, p]));
+    const templates = teamNames.map((n) => {
+      const t = byName.get(n);
+      if (!t) throw new Error(`Pokémon fuera del roster: ${n}`);
+      return t;
+    });
+    const board = game.getBoard();
+    const component = largestLandComponent(board);
+    const cluster =
+      pickRandomSpawns(board, component, TEAM_SIZE, 1, makeRng(this.freshSeed()))[0] ?? [];
+    const placements = templates
+      .map((tpl, i) => ({ hex: cluster[i]!, pokemon: this.buildPokemon(tpl, slot, i) }))
+      .filter((p) => p.hex);
+    await this.withMoves(placements);
+    game.addPlayer(slot, placements);
+    await this.persistMatch(ARENA_ID);
+  }
+
+  /** Saca a un jugador de la ARENA (retira sus piezas; el mundo sigue vivo). */
+  async removeFromArena(slot: string): Promise<void> {
+    const game = await this.getMatch(ARENA_ID);
+    if (!game) return;
+    game.removePlayer(slot);
+    await this.persistMatch(ARENA_ID);
   }
 
   /** Saca una partida terminada de la caché en memoria. */

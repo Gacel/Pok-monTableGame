@@ -130,6 +130,80 @@ export class GameService {
     );
   }
 
+  /**
+   * ARENA: crea un mundo persistente VACÍO (0 jugadores). Nunca termina; los
+   * jugadores entran/salen en caliente (addPlayer/removePlayer).
+   */
+  static createArena(id: string, board: Board): GameService {
+    return new GameService(
+      id,
+      board,
+      [],
+      '',
+      1,
+      'active',
+      null,
+      {},
+      ['🏟️ La ARENA está viva. Entra cuando quieras.'],
+      null,
+      null,
+      [],
+      true
+    );
+  }
+
+  /** Tablero vivo (para calcular spawns al entrar en caliente en la ARENA). */
+  getBoard(): Board {
+    return this.board;
+  }
+
+  /** ¿Está este slot dentro de la partida? */
+  hasPlayer(playerId: string): boolean {
+    return this.players.includes(playerId);
+  }
+
+  /**
+   * ARENA: añade un jugador EN CALIENTE con sus piezas ya colocadas (placements
+   * calculados en un spawn aleatorio). Si el mundo estaba vacío, pasa a ser su turno.
+   */
+  addPlayer(playerId: string, placements: { hex: Hex; pokemon: Pokemon }[]): void {
+    for (const { hex, pokemon } of placements) this.board.setOccupant(hex, pokemon);
+    if (!this.players.includes(playerId)) {
+      this.players.push(playerId);
+      this.resources[playerId] = emptyResources();
+    }
+    this.eliminated = this.eliminated.filter((p) => p !== playerId);
+    if (!this.currentPlayer) {
+      this.currentPlayer = playerId;
+      this.turn = 1;
+    }
+    this.log.push(`➕ ${playerId} ha entrado en la ARENA.`);
+  }
+
+  /**
+   * ARENA: saca a un jugador EN CALIENTE (retira sus piezas). El mundo sigue vivo
+   * aunque no quede nadie. Cancela con seguridad un combate en el que participara.
+   */
+  removePlayer(playerId: string): void {
+    if (this.combat && (this.combat.attackerPlayer === playerId || this.combat.defenderPlayer === playerId)) {
+      const c = this.combat;
+      this.board.setOccupant(c.attackerHex, c.attacker.hp > 0 ? { ...c.attacker, hasActed: true } : null);
+      c.defenders.forEach((d, i) => {
+        this.board.setOccupant(c.defenderHexes[i]!, d.hp > 0 ? { ...d } : null);
+      });
+      this.combat = null;
+      if (this.status === 'combat') this.status = 'active';
+    }
+    for (const tile of this.board.tiles.values()) {
+      if (tile.occupant?.playerId === playerId) this.board.setOccupant(tile.hex, null);
+    }
+    this.players = this.players.filter((p) => p !== playerId);
+    this.eliminated = this.eliminated.filter((p) => p !== playerId);
+    delete this.resources[playerId];
+    if (this.currentPlayer === playerId) this.currentPlayer = this.players[0] ?? '';
+    this.log.push(`➖ ${playerId} ha salido de la ARENA.`);
+  }
+
   /** Aliados en 2v2 (incluye a uno mismo); en FFA cada jugador va solo. */
   private sameTeam = (a: string, b: string): boolean => {
     if (a === b) return true;
