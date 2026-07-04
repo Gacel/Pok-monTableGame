@@ -7,9 +7,12 @@
 /** Cómo se juega la partida: en un solo navegador o entre navegadores. */
 export type MatchMode = 'local' | 'online';
 
-/** Modo de juego: todos contra todos (2-4), por parejas (4), o ARENA (mapa
- *  gigante, spawns aleatorios, partida persistente que no termina). */
-export type GameMode = 'ffa' | 'teams' | 'arena';
+/** Modo de juego: todos contra todos (2-4), por parejas (4), BATTLE ROYALE
+ *  (FFA con Pokémon propios del jugador), o ARENA (mundo persistente con propios). */
+export type GameMode = 'ffa' | 'teams' | 'br' | 'arena';
+
+/** Modos que usan los Pokémon PROPIOS del jugador (inventario) en vez del draft. */
+export const OWNED_TEAM_MODES: readonly GameMode[] = ['br', 'arena'];
 
 /**
  * Ciclo de vida de una sala/partida.

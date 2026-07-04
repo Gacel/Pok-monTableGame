@@ -1,5 +1,6 @@
 import './style.css';
 import type { RoomInfo, GameMode } from '@transcendence/shared';
+import { OWNED_TEAM_MODES } from '@transcendence/shared';
 import { GameController } from './controllers/GameController';
 import { authState } from './auth/AuthState';
 import { apiFetch } from './net/api';
@@ -287,34 +288,54 @@ export function startArena() {
   void picker.render();
 }
 
+function submitOnlineTeam(room: RoomInfo, names: string[]) {
+  void (async () => {
+    try {
+      const res = await apiFetch(`/api/lobby/matches/${room.id}/team`, {
+        method: 'POST',
+        body: JSON.stringify({ team: names }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        currentLobby?.setRoom(data.room as RoomInfo);
+      } else {
+        alert(data.error ?? 'No se pudo guardar el equipo');
+      }
+    } catch {
+      alert('Error de red al guardar el equipo');
+    }
+  })();
+}
+
 function showOnlineDraft(room: RoomInfo) {
   hideSidebar();
   const draftLayer = document.getElementById('draft-layer') as HTMLElement;
   draftLayer.classList.remove('hidden');
+
+  // BR usa los Pokémon PROPIOS (selector de inventario); 1v1/2v2 usan draft de roster.
+  if (OWNED_TEAM_MODES.includes(room.gameMode)) {
+    const picker = new OwnedTeamPickerView(draftLayer, {
+      title: 'BATTLE ROYALE · TU EQUIPO',
+      pick: 3,
+      onBack: () => draftLayer.classList.add('hidden'),
+      onConfirm: (names) => {
+        draftLayer.classList.add('hidden');
+        submitOnlineTeam(room, names);
+      },
+    });
+    void picker.render();
+    return;
+  }
+
   const label = authState.user?.username ?? 'TU EQUIPO';
   const view = new DraftView(
     draftLayer,
     { mode: 'online', playerLabel: label, reserved: room.reserved ?? [] },
     (teams) => {
-    void (async () => {
-      try {
-        const res = await apiFetch(`/api/lobby/matches/${room.id}/team`, {
-          method: 'POST',
-          body: JSON.stringify({ team: teams[0] }),
-        });
-        const data = await res.json();
-        draftLayer.classList.add('hidden');
-        if (res.ok && data.success) {
-          currentLobby?.setRoom(data.room as RoomInfo);
-        } else {
-          alert(data.error ?? 'No se pudo guardar el equipo');
-        }
-      } catch {
-        draftLayer.classList.add('hidden');
-        alert('Error de red al guardar el equipo');
-      }
-    })();
-  });
+      draftLayer.classList.add('hidden');
+      submitOnlineTeam(room, teams[0] ?? []);
+    }
+  );
   void view.render();
 }
 
