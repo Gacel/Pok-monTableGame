@@ -8,6 +8,7 @@ import type { OnlineSession } from './state/MatchSession';
 import { LoginView } from './views/hub/LoginView';
 import { AvatarCreationView } from './views/hub/AvatarCreationView';
 import { StarterSelectionView } from './views/hub/StarterSelectionView';
+import { InventoryView } from './views/hub/InventoryView';
 import { MainMenuView } from './views/hub/MainMenuView';
 import { PlayMenuView } from './views/hub/PlayMenuView';
 import { SinglePlayerMenuView } from './views/hub/SinglePlayerMenuView';
@@ -24,6 +25,7 @@ import { WelcomeView } from './views/hub/WelcomeView';
 import { playClickSound } from './utils/audio';
 
 const hubLayer = document.getElementById('hub-layer') as HTMLElement;
+const inventoryLayer = document.getElementById('inventory-layer') as HTMLElement;
 const gameLayer = document.getElementById('game-layer') as HTMLElement;
 const canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
 
@@ -108,6 +110,16 @@ function showAvatarCreation() {
 function showStarterSelection() {
   resetHubLayer();
   void new StarterSelectionView(hubLayer).render();
+}
+
+/** Inventario a pantalla completa (capa propia sobre el hub, sin resetear el hub). */
+export function showInventory() {
+  inventoryLayer.classList.remove('hidden');
+  const view = new InventoryView(inventoryLayer, () => {
+    inventoryLayer.classList.add('hidden');
+    inventoryLayer.innerHTML = '';
+  });
+  void view.render();
 }
 
 /** ¿Usuario logueado con nombre pero sin Pokémon (primer login)? → elegir starters. */
