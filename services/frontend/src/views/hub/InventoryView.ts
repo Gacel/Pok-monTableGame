@@ -96,30 +96,30 @@ export class InventoryView {
     const color = TYPE_COLOR[p.type] ?? '#888';
     const tag = p.isStarter ? '⭐' : p.acquiredVia === 'capture' ? '🎯' : '';
     return `
-      <div class="flex flex-col items-center rounded border-2 border-gray-700 bg-gray-800" style="padding:8px;">
-        <img src="${this.sprites[p.name] ?? ''}" alt="${p.name}" class="w-16 h-16 object-contain" style="image-rendering:pixelated;" />
-        <span class="uppercase text-white" style="${FONT} font-size:7px;">${tag}${p.name}</span>
-        <span style="${FONT} font-size:6px; color:${color};">${p.type} · Lv.${p.level}</span>
+      <div class="flex flex-col items-center rounded border-2 border-gray-700 bg-gray-800" style="padding:4px;">
+        <img src="${this.sprites[p.name] ?? ''}" alt="${p.name}" class="w-11 h-11 object-contain" style="image-rendering:pixelated;" />
+        <span class="uppercase text-white truncate" style="${FONT} font-size:6px; max-width:100%;">${tag}${p.name}</span>
+        <span style="${FONT} font-size:5px; color:${color};">Lv.${p.level}</span>
       </div>`;
   }
 
   private itemCell(it: InvItem): string {
     const isBall = it.kind === 'pokeball';
     const img = isBall
-      ? `<img src="${BALL_SPRITE}/${it.itemKey}.png" alt="${it.itemKey}" class="w-14 h-14 object-contain" style="image-rendering:pixelated;" />`
-      : `<div class="w-14 h-14 flex items-center justify-center" style="font-size:32px;">${it.kind === 'cosmetic' ? '🎨' : '📦'}</div>`;
+      ? `<img src="${BALL_SPRITE}/${it.itemKey}.png" alt="${it.itemKey}" class="w-11 h-11 object-contain" style="image-rendering:pixelated;" />`
+      : `<div class="w-11 h-11 flex items-center justify-center" style="font-size:24px;">${it.kind === 'cosmetic' ? '🎨' : '📦'}</div>`;
     return `
-      <div class="flex flex-col items-center rounded border-2 border-gray-700 bg-gray-800" style="padding:8px;">
+      <div class="flex flex-col items-center rounded border-2 border-gray-700 bg-gray-800" style="padding:4px;">
         ${img}
-        <span class="uppercase text-white" style="${FONT} font-size:7px;">${it.itemKey}</span>
-        <span class="text-yellow-300" style="${FONT} font-size:7px;">x${it.qty}</span>
+        <span class="uppercase text-white truncate" style="${FONT} font-size:6px; max-width:100%;">${it.itemKey}</span>
+        <span class="text-yellow-300" style="${FONT} font-size:6px;">x${it.qty}</span>
       </div>`;
   }
 
   private draw(pokemon: InvPokemon[], items: InvItem[]): void {
     const u = authState.user;
-    const grid = 'grid gap-3 overflow-y-auto pr-2';
-    const gridStyle = 'grid-template-columns:repeat(auto-fill,minmax(92px,1fr));';
+    const grid = 'grid gap-2 overflow-y-auto pr-2';
+    const gridStyle = 'grid-template-columns:repeat(auto-fill,minmax(60px,1fr));';
 
     const pokeGrid = pokemon.length
       ? pokemon.map((p) => this.pokemonCell(p)).join('')

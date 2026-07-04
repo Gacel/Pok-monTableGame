@@ -6,10 +6,10 @@ import { FONT, hubPanel, panelTitle, panelCard, menuButton, backButton } from '.
 /** Sprites reales de pokéballs (bitmap PokeAPI). */
 const BALL_SPRITE = 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items';
 const BALLS = [
-  { key: 'normal', name: 'NORMAL', sprite: 'poke-ball.png', price: 500, good: 8 },
-  { key: 'super', name: 'SUPERBALL', sprite: 'great-ball.png', price: 1000, good: 22 },
-  { key: 'ultra', name: 'ULTRABALL', sprite: 'ultra-ball.png', price: 2000, good: 45 },
-  { key: 'master', name: 'MASTERBALL', sprite: 'master-ball.png', price: 10000, good: 75 },
+  { key: 'normal', name: 'NORMAL', sprite: 'poke-ball.png', price: 500 },
+  { key: 'super', name: 'SUPERBALL', sprite: 'great-ball.png', price: 1000 },
+  { key: 'ultra', name: 'ULTRABALL', sprite: 'ultra-ball.png', price: 2000 },
+  { key: 'master', name: 'MASTERBALL', sprite: 'master-ball.png', price: 10000 },
 ];
 
 const TIER_LABEL: Record<number, string> = { 1: 'COMÚN', 2: 'RARO', 3: 'ÉPICO', 4: 'LEGENDARIO' };
@@ -77,7 +77,6 @@ export class ShopMenuView {
         <img src="${BALL_SPRITE}/${b.sprite}" alt="${b.name}" class="w-16 h-16 object-contain" style="image-rendering: pixelated;" />
         <span class="text-black" style="${FONT} font-size:10px;">${b.name}</span>
         <span class="text-gray-700" style="${FONT} font-size:10px;">${b.price} 🪙</span>
-        <span style="${FONT} font-size:7px; color:#a16207;">🌟 ${b.good}% bueno</span>
       </button>`;
     };
 

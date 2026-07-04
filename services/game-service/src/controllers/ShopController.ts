@@ -1,8 +1,8 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { UserModel } from '../models/UserModel.js';
 import { OwnedPokemonModel } from '../models/OwnedPokemonModel.js';
-import { matchManager } from '../services/MatchManager.js';
-import { BALLS, buildTiers, rollTier, pickFromTier } from '../services/loot.js';
+import { BALLS, rollTier, pickFromTier } from '../services/loot.js';
+import { LOOT_POOL_TIERS } from '../services/lootPool.js';
 
 interface BuyBody {
   ball?: string;
@@ -41,10 +41,9 @@ export const ShopController = {
       return reply.code(402).send({ success: false, error: 'Monedas insuficientes', coins: user.coins });
     }
 
-    const roster = await matchManager.getRoster();
-    const tiers = buildTiers(roster);
+    // Pool de loot v1.0.0: ~200 Pokémon (distintos al draft) tierizados por poder.
     const tier = rollTier(ball.dist, Math.random);
-    const name = pickFromTier(tiers, tier, Math.random);
+    const name = pickFromTier(LOOT_POOL_TIERS, tier, Math.random);
 
     // Cobro + concesión (el usuario ya no puede tener saldo negativo: se validó arriba).
     await UserModel.addCoins(uid, -ball.price);

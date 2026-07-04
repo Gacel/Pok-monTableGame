@@ -188,18 +188,14 @@ export class MatchManager {
    * jugador usa sus PROPIOS Pokémon, así que varios pueden llevar el mismo.
    */
   private async resolveOwnedTeams(teams: Record<string, string[]>): Promise<PokemonTemplate[][]> {
-    const roster = await this.getRoster();
-    const byName = new Map(roster.map((p) => [p.name, p]));
-    const resolve = (names: string[]): PokemonTemplate[] =>
-      names.map((n) => {
-        const tpl = byName.get(n);
-        if (!tpl) throw new Error(`Pokémon fuera del roster: ${n}`);
-        return tpl;
-      });
+    // Los Pokémon propios pueden estar FUERA del roster de draft (looteados en la
+    // tienda, pool de ~200): se resuelven por PokeAPI (cache-first) en vez de por roster.
     const teamArrays: PokemonTemplate[][] = [];
     for (let i = 1; i <= 4; i++) {
       const names = teams[`player${i}`];
-      if (names && names.length > 0) teamArrays.push(resolve(names));
+      if (names && names.length > 0) {
+        teamArrays.push(await Promise.all(names.map((n) => PokemonService.getTemplate(n))));
+      }
     }
     if (teamArrays.length < 2) {
       throw new Error('Se necesitan al menos 2 equipos para iniciar la partida');
@@ -302,13 +298,8 @@ export class MatchManager {
   /** Añade un jugador a la ARENA en un spawn ALEATORIO (entrada en caliente). */
   async addToArena(slot: string, teamNames: string[]): Promise<void> {
     const game = await this.getOrCreateArena();
-    const roster = await this.getRoster();
-    const byName = new Map(roster.map((p) => [p.name, p]));
-    const templates = teamNames.map((n) => {
-      const t = byName.get(n);
-      if (!t) throw new Error(`Pokémon fuera del roster: ${n}`);
-      return t;
-    });
+    // Equipo desde el inventario propio (puede estar fuera del roster): PokeAPI cache-first.
+    const templates = await Promise.all(teamNames.map((n) => PokemonService.getTemplate(n)));
     const board = game.getBoard();
     const component = largestLandComponent(board);
     const cluster =
