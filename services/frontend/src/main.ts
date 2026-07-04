@@ -9,6 +9,7 @@ import { LoginView } from './views/hub/LoginView';
 import { AvatarCreationView } from './views/hub/AvatarCreationView';
 import { StarterSelectionView } from './views/hub/StarterSelectionView';
 import { InventoryView } from './views/hub/InventoryView';
+import { OwnedTeamPickerView } from './views/hub/OwnedTeamPickerView';
 import { MainMenuView } from './views/hub/MainMenuView';
 import { PlayMenuView } from './views/hub/PlayMenuView';
 import { SinglePlayerMenuView } from './views/hub/SinglePlayerMenuView';
@@ -258,47 +259,32 @@ export function showLobby(preset?: { capacity: number; gameMode: GameMode }) {
 // Mundo vivo persistente: eliges equipo y entras directo (aunque estés solo).
 
 export function startArena() {
-  hideSidebar();
-  const draftLayer = document.getElementById('draft-layer') as HTMLElement;
-  draftLayer.classList.remove('hidden');
-  const label = authState.user?.username ?? 'TU EQUIPO';
-  void (async () => {
-    let reserved: string[] = [];
-    try {
-      const res = await apiFetch('/api/arena');
-      const data = await res.json();
-      reserved = (data.room?.reserved ?? []) as string[];
-    } catch {
-      /* sin datos: el servidor validará colisiones */
-    }
-    const view = new DraftView(
-      draftLayer,
-      { mode: 'online', playerLabel: label, reserved },
-      (teams) => {
-        void (async () => {
-          try {
-            const res = await apiFetch('/api/arena/join', {
-              method: 'POST',
-              body: JSON.stringify({ team: teams[0] }),
-            });
-            const data = await res.json();
-            draftLayer.classList.add('hidden');
-            if (res.ok && data.room) {
-              enterOnlineGame(data.room as RoomInfo);
-            } else {
-              alert(data.error ?? 'No se pudo entrar en la ARENA');
-              showMainMenu();
-            }
-          } catch {
-            draftLayer.classList.add('hidden');
-            alert('Error de red al entrar en la ARENA');
-            showMainMenu();
+  resetHubLayer();
+  // La ARENA usa los Pokémon PROPIOS del jugador (no draft): elige 3 del inventario.
+  const picker = new OwnedTeamPickerView(hubLayer, {
+    title: 'ARENA · TU EQUIPO',
+    pick: 3,
+    onBack: () => showMultiplayerMenu(),
+    onConfirm: (names) => {
+      void (async () => {
+        try {
+          const res = await apiFetch('/api/arena/join', {
+            method: 'POST',
+            body: JSON.stringify({ team: names }),
+          });
+          const data = await res.json();
+          if (res.ok && data.room) {
+            enterOnlineGame(data.room as RoomInfo);
+          } else {
+            alert(data.error ?? 'No se pudo entrar en la ARENA');
           }
-        })();
-      }
-    );
-    void view.render();
-  })();
+        } catch {
+          alert('Error de red al entrar en la ARENA');
+        }
+      })();
+    },
+  });
+  void picker.render();
 }
 
 function showOnlineDraft(room: RoomInfo) {
