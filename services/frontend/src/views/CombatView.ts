@@ -11,6 +11,8 @@ export class CombatView {
   private onAction: (action: CombatAction, moveName?: string, targetId?: string) => void;
   private onContinue: () => void;
   private overlay: HTMLElement | null;
+  /** HP del render anterior (por id de Pokémon) para detectar impactos y animarlos. */
+  private prevHp: Record<string, number> = {};
 
   /** Color de cada jugador (mismos que el HUD, el banner y el minimapa). */
   private static readonly PLAYER_COLORS: Record<string, string> = {
@@ -55,8 +57,31 @@ export class CombatView {
 
     const lastLog = combat.log[combat.log.length - 1] ?? '';
 
+    // Impacto: comparo HP con el render anterior. Quien pierde vida "recibe golpe"
+    // (vibra + destello + número flotante); el otro hace un lunge hacia él.
+    const atkPrev = this.prevHp[combat.attacker.id];
+    const defPrev = this.prevHp[combat.defender.id];
+    const atkDmg = atkPrev !== undefined && combat.attacker.hp < atkPrev ? atkPrev - combat.attacker.hp : 0;
+    const defDmg = defPrev !== undefined && combat.defender.hp < defPrev ? defPrev - combat.defender.hp : 0;
+    const atkHit = atkDmg > 0;
+    const defHit = defDmg > 0;
+
+    const defWrapAnim = defHit ? 'animation:cvShake .45s ease;' : atkHit ? 'animation:cvLungeRight .45s ease;' : '';
+    const atkWrapAnim = atkHit ? 'animation:cvShake .45s ease;' : defHit ? 'animation:cvLungeLeft .45s ease;' : '';
+    const defFlash = defHit ? 'animation:cvHitFlash .45s ease;' : '';
+    const atkFlash = atkHit ? 'animation:cvHitFlash .45s ease;' : '';
+    const floatDmg = (n: number) =>
+      `<div class="absolute" style="top:-6px;left:50%;transform:translateX(-50%);color:#f87171;font-family:'Press Start 2P',monospace;font-size:15px;text-shadow:2px 2px 0 #000;animation:cvFloat 1s ease forwards;">-${n}</div>`;
+
     this.overlay.classList.remove('hidden');
     this.overlay.innerHTML = `
+      <style>
+        @keyframes cvShake {0%,100%{transform:translateX(0)}15%{transform:translateX(-8px)}30%{transform:translateX(8px)}45%{transform:translateX(-5px)}60%{transform:translateX(5px)}75%{transform:translateX(-3px)}}
+        @keyframes cvLungeLeft {0%{transform:translateX(0)}45%{transform:translateX(-48px)}100%{transform:translateX(0)}}
+        @keyframes cvLungeRight {0%{transform:translateX(0)}45%{transform:translateX(48px)}100%{transform:translateX(0)}}
+        @keyframes cvHitFlash {0%,100%{filter:brightness(1)}25%,55%{filter:brightness(1.9) drop-shadow(0 0 10px #f87171)}}
+        @keyframes cvFloat {0%{opacity:1;top:-6px}100%{opacity:0;top:-52px}}
+      </style>
       <div class="absolute inset-0 flex flex-col" style="background:linear-gradient(180deg,#1e3a8a 0%,#0f172a 55%,#334155 100%);">
 
         <!-- Turno (arriba, centrado, grande) -->
@@ -82,8 +107,14 @@ export class CombatView {
 
           <div class="absolute bottom-0 left-0 w-full h-24" style="background:linear-gradient(180deg,#4b5563,#1f2937);"></div>
 
-          <img src="${this.sprite(combat.defender)}" alt="def" class="absolute" style="left:15%;bottom:78px;width:150px;height:150px;image-rendering:pixelated;transform:scaleX(-1);filter:drop-shadow(0 8px 6px rgba(0,0,0,.6)) ${!actorIsAttacker && !finished ? 'brightness(1.15)' : ''};" />
-          <img src="${this.sprite(combat.attacker)}" alt="atk" class="absolute" style="right:15%;bottom:96px;width:150px;height:150px;image-rendering:pixelated;filter:drop-shadow(0 8px 6px rgba(0,0,0,.6)) ${actorIsAttacker && !finished ? 'brightness(1.15)' : ''};" />
+          <div class="absolute" style="left:15%;bottom:78px;width:150px;height:150px;${defWrapAnim}">
+            <img src="${this.sprite(combat.defender)}" alt="def" style="width:150px;height:150px;image-rendering:pixelated;transform:scaleX(-1);filter:drop-shadow(0 8px 6px rgba(0,0,0,.6)) ${!actorIsAttacker && !finished ? 'brightness(1.15)' : ''};${defFlash}" />
+            ${defHit ? floatDmg(defDmg) : ''}
+          </div>
+          <div class="absolute" style="right:15%;bottom:96px;width:150px;height:150px;${atkWrapAnim}">
+            <img src="${this.sprite(combat.attacker)}" alt="atk" style="width:150px;height:150px;image-rendering:pixelated;filter:drop-shadow(0 8px 6px rgba(0,0,0,.6)) ${actorIsAttacker && !finished ? 'brightness(1.15)' : ''};${atkFlash}" />
+            ${atkHit ? floatDmg(atkDmg) : ''}
+          </div>
 
           <!-- Última acción (prominente) -->
           <div class="absolute bottom-2 left-1/2 -translate-x-1/2 bg-black bg-opacity-70 px-4 py-2 rounded text-[9px] text-yellow-200 text-center max-w-lg" style="font-family:'Press Start 2P',monospace;">
@@ -114,6 +145,11 @@ export class CombatView {
         });
       });
     }
+
+    // Snapshot de HP (atacante + todos los defensores) para el próximo render.
+    this.prevHp = { [combat.attacker.id]: combat.attacker.hp };
+    for (const d of combat.defenders ?? [combat.defender]) this.prevHp[d.id] = d.hp;
+    this.prevHp[combat.defender.id] = combat.defender.hp;
   }
 
   /**
