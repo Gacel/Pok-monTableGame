@@ -99,7 +99,28 @@ devuelve a Welcome si el token ya no corresponde a un usuario.
 
 ---
 
-## 6. Commits (rama `feat/inventory-economy-chat`)
+## 6. Loot de pokéballs (tienda) ✅
+
+- 4 **tiers** por poder (`hp+atk+def`, cuartiles auto-balanceados; `loot.ts:buildTiers`):
+  T1 Común · T2 Raro · T3 Épico · T4 Legendario.
+- Cada bola tiene una distribución de tiers (a más cara, más Pokémon buenos):
+
+  | Bola (precio) | T1 | T2 | T3 | T4 | bueno (T3+T4) |
+  |---|---|---|---|---|---|
+  | Normal (500) | 70 | 22 | 7 | 1 | 8% |
+  | Super (1000) | 45 | 33 | 17 | 5 | 22% |
+  | Ultra (2000) | 22 | 33 | 30 | 15 | 45% |
+  | Master (10000) | 5 | 20 | 35 | 40 | 75% |
+
+- Compra autoritativa: `POST /api/shop/ball {ball}` valida saldo (402 si no llega),
+  resta monedas, tira el tier (`rollTier`) y concede un Pokémon aleatorio del tier
+  al inventario (`acquired_via='shop'`). `GET /api/shop/balls` expone precios/odds.
+- Frontend: `ShopMenuView` → botones de bola activos según saldo, revelado del
+  Pokémon obtenido (sprite + tier) y saldo actualizado.
+- Rama: `feat/shop-loot`. Verificado e2e (config, compra, 402 sin saldo, distribución
+  10×Normal → 7 T1 / 2 T2 / 1 T3 / 0 T4).
+
+## 7. Commits (rama `feat/inventory-economy-chat`)
 
 Cada cambio va en su propio commit + push:
 `5000 monedas` · `owned_pokemon/owned_items + modelos` · `chat DM persistente` ·
