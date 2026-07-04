@@ -57,6 +57,8 @@ export interface MatchStateDTO {
   eliminated: string[];
   /** ARENA: partida persistente que nunca termina (no mostrar "victoria"). */
   persistent: boolean;
+  /** Bajas por KO de la última acción (para economía). Efímero, no persistido. */
+  defeats: { killerSlot: string; victimSlot: string }[];
 }
 
 export interface PlayResult {
@@ -204,6 +206,13 @@ export class GameService {
     this.log.push(`➖ ${playerId} ha salido de la ARENA.`);
   }
 
+  /**
+   * Bajas (KO causado por un atacante) de la ÚLTIMA acción. El controlador las
+   * consume para dar 500 monedas al killer. Efímero: se resetea al inicio de cada
+   * acción y NO se serializa.
+   */
+  private defeats: { killerSlot: string; victimSlot: string }[] = [];
+
   /** Aliados en 2v2 (incluye a uno mismo); en FFA cada jugador va solo. */
   private sameTeam = (a: string, b: string): boolean => {
     if (a === b) return true;
@@ -226,6 +235,7 @@ export class GameService {
       alliances: this.alliances,
       eliminated: this.eliminated,
       persistent: this.persistent,
+      defeats: this.defeats,
     };
   }
 
@@ -238,6 +248,7 @@ export class GameService {
 
   // ---------------------------------------------------------------- movimiento
   play(playerId: string, from: Hex, to: Hex): PlayResult {
+    this.defeats = [];
     if (this.status === 'finished') {
       return { ok: false, error: 'La partida ha terminado', state: this.getStateDTO() };
     }
@@ -372,6 +383,7 @@ export class GameService {
 
   /** Aplica una acción de combate para el Pokémon cuyo turno es. */
   combatAction(action: CombatAction, moveName?: string, targetId?: string): PlayResult {
+    this.defeats = [];
     if (this.status !== 'combat' || !this.combat) {
       return { ok: false, error: 'No hay combate en curso', state: this.getStateDTO() };
     }
@@ -460,6 +472,8 @@ export class GameService {
           c.outcome = 'ko';
           c.winnerId = target.id;
           c.loserId = actor.id;
+          // Economía: al huir, el que se queda (target) derrota al que huye (actor).
+          this.defeats.push({ killerSlot: target.playerId, victimSlot: actor.playerId });
         } else {
           c.outcome = 'fled';
           c.winnerId = null;
@@ -473,6 +487,8 @@ export class GameService {
     // KO por daño (OBJETO cura, no puede tumbar a nadie).
     if (action !== 'OBJETO' && target.hp <= 0) {
       c.log.push(`¡${nameOf(target)} se ha debilitado!`);
+      // Economía: el que actúa (actor) derrota al objetivo (target).
+      this.defeats.push({ killerSlot: actor.playerId, victimSlot: target.playerId });
       if (!actorIsAttacker) {
         // Un defensor tumbó al atacante → gana el bando defensor.
         c.outcome = 'ko';
@@ -520,6 +536,7 @@ export class GameService {
 
   /** Cierra un combate ya resuelto (fase de resultado): aplica el tablero y sigue. */
   continueCombat(): PlayResult {
+    this.defeats = [];
     if (this.status !== 'combat' || !this.combat || this.combat.status !== 'finished') {
       return { ok: false, error: 'No hay combate por resolver', state: this.getStateDTO() };
     }
@@ -575,6 +592,7 @@ export class GameService {
 
   // --------------------------------------------------------------------- turnos
   public endTurn(playerId?: string): PlayResult {
+    this.defeats = [];
     if (this.status === 'finished') {
       return { ok: false, error: 'La partida ha terminado', state: this.getStateDTO() };
     }
@@ -598,6 +616,7 @@ export class GameService {
   }
 
   public abandon(playerId?: string): PlayResult {
+    this.defeats = [];
     if (this.status === 'finished') {
       return { ok: false, error: 'La partida ya ha terminado', state: this.getStateDTO() };
     }

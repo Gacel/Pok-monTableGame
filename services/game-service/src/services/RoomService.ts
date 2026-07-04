@@ -233,6 +233,13 @@ export const RoomService = {
     return parseRoomPlayers(row).find((p) => p.userId === userId)?.slot ?? null;
   },
 
+  /** Mapa slot(player1..4) → userId (para acreditar monedas por KO/victoria). */
+  async slotUserMap(matchId: string): Promise<Map<PlayerSlot, string>> {
+    const row = await MatchModel.findRoom(matchId);
+    if (!row) return new Map();
+    return new Map(parseRoomPlayers(row).map((p) => [p.slot, p.userId]));
+  },
+
   // --------------------------------------------------------------- ARENA (mundo vivo)
 
   /** Garantiza la fila + el mundo de la ARENA (persistente, estado `active`). */
