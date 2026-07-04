@@ -4,7 +4,7 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-COPY package.json package-lock.json* ./
+COPY package.json package-lock.json* tsconfig.base.json ./
 COPY packages/shared ./packages/shared
 COPY services/frontend/package.json ./services/frontend/
 RUN npm install
