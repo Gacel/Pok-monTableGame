@@ -7,13 +7,24 @@ import { authState } from '../auth/AuthState';
  * automáticamente a la MISMA sala. No envía movimientos por aquí (van vía
  * REST, que también difunde por WSS).
  */
+export interface DmHistoryMessage {
+  from_id: string;
+  text: string;
+  created_at: string;
+}
+
 export interface WsMessage {
-  type: 'state' | 'room' | 'room_closed' | 'chat' | 'error';
+  type: 'state' | 'room' | 'room_closed' | 'chat' | 'chat_history' | 'error';
   state?: unknown;
   room?: RoomInfo;
   matchId?: string;
   combat?: unknown;
   text?: string;
+  /** Chat DM: id del emisor y timestamp (mensajes en vivo). */
+  from?: string;
+  at?: string;
+  /** Historial persistente enviado al abrir un chat DM. */
+  messages?: DmHistoryMessage[];
   error?: string;
 }
 

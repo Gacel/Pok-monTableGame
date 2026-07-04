@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import crypto from 'node:crypto';
 import type { GameMode } from '@transcendence/shared';
-import { TEAMS_MODE_ALLIANCES, TEAMS_MODE_PLAYERS } from '@transcendence/shared';
+import { TEAMS_MODE_ALLIANCES, TEAMS_MODE_PLAYERS, OWNED_TEAM_MODES } from '@transcendence/shared';
 import { Board, Pokemon, Tile } from '../engine/board.js';
 import { MapLoader, TiledMapData } from '../engine/mapLoader.js';
 import { generateEcosystem } from '../engine/mapGenerator.js';
@@ -42,6 +42,17 @@ export const ROSTER_NAMES = [
   'lapras', 'articuno', // ICE
   'clefairy', 'jigglypuff', // FAIRY
 ];
+
+/**
+ * Pool de STARTERS (12 opciones balanceadas por poder ~157-233, con cobertura de
+ * tipos). El jugador elige 3 en su primer inicio de sesión. Se evitan los outliers
+ * (mewtwo/snorlax/lapras/articuno/aerodactyl arriba, abra abajo).
+ */
+export const STARTER_POOL = [
+  'charmander', 'squirtle', 'bulbasaur', 'pikachu', 'eevee', 'growlithe',
+  'psyduck', 'oddish', 'clefairy', 'ekans', 'poliwag', 'vulpix',
+];
+export const STARTER_PICK = 3;
 
 /**
  * Gestiona el ciclo de vida de la partida (MVP hot-seat con una partida por defecto):
@@ -172,6 +183,30 @@ export class MatchManager {
     return teamArrays;
   }
 
+  /**
+   * Como resolveTeams pero SIN la regla de unicidad cruzada: en BR/ARENA cada
+   * jugador usa sus PROPIOS Pokémon, así que varios pueden llevar el mismo.
+   */
+  private async resolveOwnedTeams(teams: Record<string, string[]>): Promise<PokemonTemplate[][]> {
+    const roster = await this.getRoster();
+    const byName = new Map(roster.map((p) => [p.name, p]));
+    const resolve = (names: string[]): PokemonTemplate[] =>
+      names.map((n) => {
+        const tpl = byName.get(n);
+        if (!tpl) throw new Error(`Pokémon fuera del roster: ${n}`);
+        return tpl;
+      });
+    const teamArrays: PokemonTemplate[][] = [];
+    for (let i = 1; i <= 4; i++) {
+      const names = teams[`player${i}`];
+      if (names && names.length > 0) teamArrays.push(resolve(names));
+    }
+    if (teamArrays.length < 2) {
+      throw new Error('Se necesitan al menos 2 equipos para iniciar la partida');
+    }
+    return teamArrays;
+  }
+
   /** Alianzas del modo 2v2 (P1+P3 vs P2+P4); null en todos contra todos. */
   private alliancesFor(gameMode: GameMode, teamCount: number): string[][] | null {
     if (gameMode !== 'teams') return null;
@@ -223,7 +258,10 @@ export class MatchManager {
     teams: Record<string, string[]>,
     gameMode: GameMode
   ): Promise<GameService> {
-    const teamArrays = await this.resolveTeams(teams);
+    // BR/ARENA usan Pokémon propios (sin unicidad cruzada); el resto, draft.
+    const teamArrays = OWNED_TEAM_MODES.includes(gameMode)
+      ? await this.resolveOwnedTeams(teams)
+      : await this.resolveTeams(teams);
     const board = this.loadBoard(gameMode);
     const placements = await this.withMoves(this.placements(board, teamArrays, gameMode));
     const game = GameService.create(

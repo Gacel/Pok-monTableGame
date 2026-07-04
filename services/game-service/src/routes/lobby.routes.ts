@@ -27,7 +27,7 @@ export async function lobbyRoutes(app: FastifyInstance): Promise<void> {
           properties: {
             name: { type: 'string', minLength: 1, maxLength: 32 },
             capacity: { type: 'integer', minimum: 2, maximum: 4 },
-            gameMode: { type: 'string', enum: ['ffa', 'teams', 'arena'] },
+            gameMode: { type: 'string', enum: ['ffa', 'teams', 'br', 'arena'] },
           },
         },
       },

@@ -43,7 +43,7 @@ export const LobbyController = {
     const name = String(request.body?.name ?? '');
     const capacity = Number(request.body?.capacity ?? 2);
     const gm = request.body?.gameMode;
-    const gameMode = (gm === 'teams' || gm === 'arena' ? gm : 'ffa') as GameMode;
+    const gameMode = (gm === 'teams' || gm === 'arena' || gm === 'br' ? gm : 'ffa') as GameMode;
     try {
       const room = await RoomService.create(
         user.id,

@@ -5,6 +5,7 @@ import {
   showShopMenu,
   showAuctionHouse,
   showSettings,
+  showInventory,
 } from '../../main';
 import { FONT, hubPanel, panelCard, panelTitle, menuButton } from './panel';
 
@@ -37,7 +38,7 @@ export class MainMenuView {
         `
         <div class="flex justify-between items-center gap-6">
           <div class="flex items-center gap-4">
-            <img src="https://play.pokemonshowdown.com/sprites/trainers/${spriteName}.png" class="w-16 h-16 object-contain pixelated bg-gray-200 border-4 border-gray-400 rounded-full" />
+            <img id="btn-inventory" title="Abrir inventario" src="https://play.pokemonshowdown.com/sprites/trainers/${spriteName}.png" class="w-16 h-16 object-contain pixelated bg-gray-200 border-4 border-gray-400 rounded-full cursor-pointer hover:border-yellow-400 transition-colors" />
             <div class="flex flex-col gap-2">
               <span class="text-black" style="${FONT} font-size:16px;">${user.username}</span>
               <span class="text-gray-600" style="${FONT} font-size:11px;">Lv. ${user.level}</span>
@@ -71,6 +72,7 @@ export class MainMenuView {
       { minHeight: 820 }
     );
 
+    document.getElementById('btn-inventory')?.addEventListener('click', () => showInventory());
     document.getElementById('btn-play')?.addEventListener('click', () => showPlayMenu());
     document.getElementById('btn-community')?.addEventListener('click', () => showCommunityMenu());
     document.getElementById('btn-shop')?.addEventListener('click', () => showShopMenu());

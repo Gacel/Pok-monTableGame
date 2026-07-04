@@ -17,7 +17,7 @@ interface ModePreset {
 const MODES: ModePreset[] = [
   { key: '1v1', icon: '⚔️', label: '1 VS 1', desc: 'Duelo · 2 jugadores · FFA', players: 2, gameMode: 'ffa' },
   { key: '2v2', icon: '🤝', label: '2 VS 2', desc: 'Parejas · 4 jugadores · P1+P3 vs P2+P4', players: 4, gameMode: 'teams' },
-  { key: 'br', icon: '👑', label: 'BATTLE ROYALE', desc: 'Todos contra todos · 3-4 jugadores', players: 4, gameMode: 'ffa' },
+  { key: 'br', icon: '👑', label: 'BATTLE ROYALE', desc: 'Todos contra todos · tus propios Pokémon', players: 4, gameMode: 'br' },
 ];
 
 /**

@@ -1,6 +1,7 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { UserModel } from '../models/UserModel.js';
 import { toPublicUser } from './FriendController.js';
+import { OwnedPokemonModel } from '../models/OwnedPokemonModel.js';
 
 interface SearchQuery {
   q?: string;
@@ -16,7 +17,9 @@ export const UserController = {
     const user = await UserModel.findById(userId);
     if (!user) return reply.code(404).send({ success: false, error: 'Usuario no encontrado' });
 
-    return { success: true, user };
+    // Conteo de Pokémon propios: sirve para el gating de "elegir starters" en el primer login.
+    const pokemonCount = await OwnedPokemonModel.countByUser(userId);
+    return { success: true, user: { ...user, pokemonCount } };
   },
 
   /** Busca usuarios por nombre para "añadir amigo" (devuelve vista pública). */

@@ -1,5 +1,6 @@
 import './style.css';
 import type { RoomInfo, GameMode } from '@transcendence/shared';
+import { OWNED_TEAM_MODES } from '@transcendence/shared';
 import { GameController } from './controllers/GameController';
 import { authState } from './auth/AuthState';
 import { apiFetch } from './net/api';
@@ -7,6 +8,9 @@ import { MatchSession } from './state/MatchSession';
 import type { OnlineSession } from './state/MatchSession';
 import { LoginView } from './views/hub/LoginView';
 import { AvatarCreationView } from './views/hub/AvatarCreationView';
+import { StarterSelectionView } from './views/hub/StarterSelectionView';
+import { InventoryView } from './views/hub/InventoryView';
+import { OwnedTeamPickerView } from './views/hub/OwnedTeamPickerView';
 import { MainMenuView } from './views/hub/MainMenuView';
 import { PlayMenuView } from './views/hub/PlayMenuView';
 import { SinglePlayerMenuView } from './views/hub/SinglePlayerMenuView';
@@ -23,6 +27,7 @@ import { WelcomeView } from './views/hub/WelcomeView';
 import { playClickSound } from './utils/audio';
 
 const hubLayer = document.getElementById('hub-layer') as HTMLElement;
+const inventoryLayer = document.getElementById('inventory-layer') as HTMLElement;
 const gameLayer = document.getElementById('game-layer') as HTMLElement;
 const canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
 
@@ -46,6 +51,8 @@ async function bootstrap() {
   } else {
     if (!authState.user || !authState.user.username) {
       showAvatarCreation();
+    } else if (needsStarters()) {
+      showStarterSelection();
     } else {
       // Si hay una partida online en curso (F5), reconecta directamente.
       if (await tryRejoinOnline()) return;
@@ -100,6 +107,27 @@ function showAvatarCreation() {
   resetHubLayer();
   const avatarView = new AvatarCreationView(hubLayer);
   avatarView.render();
+}
+
+function showStarterSelection() {
+  resetHubLayer();
+  void new StarterSelectionView(hubLayer).render();
+}
+
+/** Inventario a pantalla completa (capa propia sobre el hub, sin resetear el hub). */
+export function showInventory() {
+  inventoryLayer.classList.remove('hidden');
+  const view = new InventoryView(inventoryLayer, () => {
+    inventoryLayer.classList.add('hidden');
+    inventoryLayer.innerHTML = '';
+  });
+  void view.render();
+}
+
+/** ¿Usuario logueado con nombre pero sin Pokémon (primer login)? → elegir starters. */
+function needsStarters(): boolean {
+  const u = authState.user;
+  return !!u && !!u.username && !u.pokemonCount;
 }
 
 export function showMainMenu() {
@@ -232,46 +260,50 @@ export function showLobby(preset?: { capacity: number; gameMode: GameMode }) {
 // Mundo vivo persistente: eliges equipo y entras directo (aunque estés solo).
 
 export function startArena() {
-  hideSidebar();
-  const draftLayer = document.getElementById('draft-layer') as HTMLElement;
-  draftLayer.classList.remove('hidden');
-  const label = authState.user?.username ?? 'TU EQUIPO';
-  void (async () => {
-    let reserved: string[] = [];
-    try {
-      const res = await apiFetch('/api/arena');
-      const data = await res.json();
-      reserved = (data.room?.reserved ?? []) as string[];
-    } catch {
-      /* sin datos: el servidor validará colisiones */
-    }
-    const view = new DraftView(
-      draftLayer,
-      { mode: 'online', playerLabel: label, reserved },
-      (teams) => {
-        void (async () => {
-          try {
-            const res = await apiFetch('/api/arena/join', {
-              method: 'POST',
-              body: JSON.stringify({ team: teams[0] }),
-            });
-            const data = await res.json();
-            draftLayer.classList.add('hidden');
-            if (res.ok && data.room) {
-              enterOnlineGame(data.room as RoomInfo);
-            } else {
-              alert(data.error ?? 'No se pudo entrar en la ARENA');
-              showMainMenu();
-            }
-          } catch {
-            draftLayer.classList.add('hidden');
-            alert('Error de red al entrar en la ARENA');
-            showMainMenu();
+  resetHubLayer();
+  // La ARENA usa los Pokémon PROPIOS del jugador (no draft): elige 3 del inventario.
+  const picker = new OwnedTeamPickerView(hubLayer, {
+    title: 'ARENA · TU EQUIPO',
+    pick: 3,
+    onBack: () => showMultiplayerMenu(),
+    onConfirm: (names) => {
+      void (async () => {
+        try {
+          const res = await apiFetch('/api/arena/join', {
+            method: 'POST',
+            body: JSON.stringify({ team: names }),
+          });
+          const data = await res.json();
+          if (res.ok && data.room) {
+            enterOnlineGame(data.room as RoomInfo);
+          } else {
+            alert(data.error ?? 'No se pudo entrar en la ARENA');
           }
-        })();
+        } catch {
+          alert('Error de red al entrar en la ARENA');
+        }
+      })();
+    },
+  });
+  void picker.render();
+}
+
+function submitOnlineTeam(room: RoomInfo, names: string[]) {
+  void (async () => {
+    try {
+      const res = await apiFetch(`/api/lobby/matches/${room.id}/team`, {
+        method: 'POST',
+        body: JSON.stringify({ team: names }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        currentLobby?.setRoom(data.room as RoomInfo);
+      } else {
+        alert(data.error ?? 'No se pudo guardar el equipo');
       }
-    );
-    void view.render();
+    } catch {
+      alert('Error de red al guardar el equipo');
+    }
   })();
 }
 
@@ -279,30 +311,31 @@ function showOnlineDraft(room: RoomInfo) {
   hideSidebar();
   const draftLayer = document.getElementById('draft-layer') as HTMLElement;
   draftLayer.classList.remove('hidden');
+
+  // BR usa los Pokémon PROPIOS (selector de inventario); 1v1/2v2 usan draft de roster.
+  if (OWNED_TEAM_MODES.includes(room.gameMode)) {
+    const picker = new OwnedTeamPickerView(draftLayer, {
+      title: 'BATTLE ROYALE · TU EQUIPO',
+      pick: 3,
+      onBack: () => draftLayer.classList.add('hidden'),
+      onConfirm: (names) => {
+        draftLayer.classList.add('hidden');
+        submitOnlineTeam(room, names);
+      },
+    });
+    void picker.render();
+    return;
+  }
+
   const label = authState.user?.username ?? 'TU EQUIPO';
   const view = new DraftView(
     draftLayer,
     { mode: 'online', playerLabel: label, reserved: room.reserved ?? [] },
     (teams) => {
-    void (async () => {
-      try {
-        const res = await apiFetch(`/api/lobby/matches/${room.id}/team`, {
-          method: 'POST',
-          body: JSON.stringify({ team: teams[0] }),
-        });
-        const data = await res.json();
-        draftLayer.classList.add('hidden');
-        if (res.ok && data.success) {
-          currentLobby?.setRoom(data.room as RoomInfo);
-        } else {
-          alert(data.error ?? 'No se pudo guardar el equipo');
-        }
-      } catch {
-        draftLayer.classList.add('hidden');
-        alert('Error de red al guardar el equipo');
-      }
-    })();
-  });
+      draftLayer.classList.add('hidden');
+      submitOnlineTeam(room, teams[0] ?? []);
+    }
+  );
   void view.render();
 }
 
@@ -379,6 +412,8 @@ authState.subscribe(() => {
     showWelcome();
   } else if (!authState.user || !authState.user.username) {
     showAvatarCreation();
+  } else if (needsStarters()) {
+    showStarterSelection();
   } else {
     showMainMenu();
   }

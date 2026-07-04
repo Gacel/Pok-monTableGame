@@ -5,10 +5,12 @@ import {
   MIN_PLAYERS,
   PLAYER_SLOTS,
   TEAMS_MODE_PLAYERS,
+  OWNED_TEAM_MODES,
 } from '@transcendence/shared';
 import { MatchModel, parseRoomPlayers, RoomRow, StoredRoomPlayer } from '../models/MatchModel.js';
 import { matchManager, ROSTER_NAMES, ARENA_ID } from './MatchManager.js';
 import { hub } from '../realtime/hub.js';
+import { OwnedPokemonModel } from '../models/OwnedPokemonModel.js';
 
 /** Minutos sin actividad tras los que una sala `waiting` se barre del lobby. */
 const STALE_ROOM_MINUTES = 30;
@@ -147,23 +149,29 @@ export const RoomService = {
     const me = players.find((p) => p.userId === userId);
     if (!me) throw new RoomError(403, 'No estás en esta sala');
 
-    const valid =
+    const shapeOk =
       Array.isArray(team) &&
       team.length === DRAFT_TEAM_SIZE &&
-      team.every((n) => typeof n === 'string' && ROSTER_NAMES.includes(n)) &&
+      team.every((n) => typeof n === 'string') &&
       new Set(team).size === team.length;
-    if (!valid) {
-      throw new RoomError(400, `Elige ${DRAFT_TEAM_SIZE} Pokémon distintos del roster`);
-    }
+    if (!shapeOk) throw new RoomError(400, `Elige ${DRAFT_TEAM_SIZE} Pokémon distintos`);
 
-    // No dos entrenadores con el mismo Pokémon: se rechaza si otro jugador de la
-    // sala ya lo reservó (fuente de verdad autoritativa, evita "transferencias").
-    const reservedByOthers = new Set(
-      players.filter((p) => p.userId !== userId).flatMap((p) => p.team ?? [])
-    );
-    const clash = team.find((n) => reservedByOthers.has(n));
-    if (clash) {
-      throw new RoomError(409, `Otro jugador ya eligió a ${clash.toUpperCase()}`);
+    if (OWNED_TEAM_MODES.includes(row.game_mode)) {
+      // BR: cada jugador usa sus PROPIOS Pokémon (sin unicidad cruzada).
+      const owned = new Set((await OwnedPokemonModel.listByUser(userId)).map((p) => p.name));
+      if (!team.every((n) => owned.has(n))) {
+        throw new RoomError(400, 'Solo puedes usar Pokémon de tu inventario');
+      }
+    } else {
+      // Draft (1v1/2v2): del roster y sin repetir entre jugadores.
+      if (!team.every((n) => ROSTER_NAMES.includes(n))) {
+        throw new RoomError(400, `Elige ${DRAFT_TEAM_SIZE} Pokémon del roster`);
+      }
+      const reservedByOthers = new Set(
+        players.filter((p) => p.userId !== userId).flatMap((p) => p.team ?? [])
+      );
+      const clash = team.find((n) => reservedByOthers.has(n));
+      if (clash) throw new RoomError(409, `Otro jugador ya eligió a ${clash.toUpperCase()}`);
     }
 
     me.team = [...team];
@@ -233,6 +241,13 @@ export const RoomService = {
     return parseRoomPlayers(row).find((p) => p.userId === userId)?.slot ?? null;
   },
 
+  /** Mapa slot(player1..4) → userId (para acreditar monedas por KO/victoria). */
+  async slotUserMap(matchId: string): Promise<Map<PlayerSlot, string>> {
+    const row = await MatchModel.findRoom(matchId);
+    if (!row) return new Map();
+    return new Map(parseRoomPlayers(row).map((p) => [p.slot, p.userId]));
+  },
+
   // --------------------------------------------------------------- ARENA (mundo vivo)
 
   /** Garantiza la fila + el mundo de la ARENA (persistente, estado `active`). */
@@ -268,16 +283,20 @@ export const RoomService = {
     if (players.length >= row.capacity) {
       throw new RoomError(409, 'La ARENA está llena (máx 4). Prueba en un momento.');
     }
-    const valid =
+    // ARENA usa los Pokémon PROPIOS del jugador (no el draft): el equipo debe
+    // ser un subconjunto de su inventario. Varios jugadores pueden llevar el
+    // mismo Pokémon (sin regla de unicidad cruzada como en el draft).
+    const shape =
       Array.isArray(team) &&
       team.length === DRAFT_TEAM_SIZE &&
-      team.every((n) => typeof n === 'string' && ROSTER_NAMES.includes(n)) &&
+      team.every((n) => typeof n === 'string') &&
       new Set(team).size === team.length;
-    if (!valid) throw new RoomError(400, `Elige ${DRAFT_TEAM_SIZE} Pokémon distintos del roster`);
+    if (!shape) throw new RoomError(400, `Elige ${DRAFT_TEAM_SIZE} Pokémon distintos`);
 
-    const reservedByOthers = new Set(players.flatMap((p) => p.team ?? []));
-    const clash = team.find((n) => reservedByOthers.has(n));
-    if (clash) throw new RoomError(409, `Otro entrenador ya usa a ${clash.toUpperCase()} en la ARENA`);
+    const owned = new Set((await OwnedPokemonModel.listByUser(userId)).map((p) => p.name));
+    if (!team.every((n) => owned.has(n))) {
+      throw new RoomError(400, 'Solo puedes usar Pokémon de tu inventario');
+    }
 
     const slot = nextFreeSlot(players, row.capacity);
     if (!slot) throw new RoomError(409, 'La ARENA está llena');
