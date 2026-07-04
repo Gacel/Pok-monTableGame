@@ -66,19 +66,31 @@
 
 ---
 
-## 5. ARENA con Pokémon propios 🟧
+## 5. ARENA y BATTLE ROYALE con Pokémon propios ✅
 
-- **ARENA** usa el **inventario** del jugador, no el draft: `joinArena` valida que el
-  equipo sea subconjunto de `owned_pokemon` del usuario (sin unicidad cruzada — varios
-  jugadores pueden llevar el mismo Pokémon). Frontend: `OwnedTeamPickerView` (elige 3
-  del inventario) reemplaza al `DraftView` de roster en `startArena`.
+- Modos que usan el inventario del jugador: `OWNED_TEAM_MODES = ['br','arena']`
+  (nuevo `GameMode 'br'`). En estos modos **no hay draft**: el jugador elige entre
+  **sus propios Pokémon** (`OwnedTeamPickerView`); los demás no aparecen.
+- **ARENA**: `joinArena` valida que el equipo ⊂ `owned_pokemon` del usuario (sin
+  unicidad cruzada). Entrada directa vía `startArena` → picker de inventario.
+- **BATTLE ROYALE**: `gameMode 'br'` (FFA con propios). El lobby usa el picker de
+  inventario (`showOnlineDraft` → `OwnedTeamPickerView` para modos propios);
+  `submitTeam` valida el equipo contra el inventario (sin reserva cruzada);
+  `createGame` usa `resolveOwnedTeams`. **1v1/2v2 mantienen el draft de roster.**
+- Verificado e2e: BR crea sala `br`, acepta equipo propio (200) y rechaza no-propio
+  (400); ARENA acepta propios (200).
+
+### Reseteo de jugadores
+
+Se **borraron todos los registros de jugadores** (users/owned_pokemon/owned_items/
+friendships/friend_requests/messages/matches) para partir de cero: cada jugador
+nuevo empieza con **5000 monedas** y pasa por Welcome → Login/Register. `checkSession`
+devuelve a Welcome si el token ya no corresponde a un usuario.
 
 ### Pendiente (⬜) — siguiente iteración
 
-- **Battle Royale con Pokémon propios:** hoy BR sigue por el lobby con `DraftView` +
-  `submitTeam` (valida contra `ROSTER_NAMES` + `reservedByOthers`). Falta que BR use el
-  inventario (nueva `resolveOwnedTeams` sin unicidad cruzada y selector de inventario
-  en el lobby, análogo a ARENA).
+- **BR local (hot-seat)**: sigue con draft de roster (el inventario propio es por
+  usuario; en local no hay dueño para los asientos 2-4). BR online sí usa propios.
 - **Captura en Survival:** transferir al ganador el Pokémon derrotado
   (`OwnedPokemonModel.transfer`) requiere: modo/flag `survival`, inyectar el mapa
   `slot→userId` y el `ownedId` de cada Pokémon en el motor (`board.ts:Pokemon`,
