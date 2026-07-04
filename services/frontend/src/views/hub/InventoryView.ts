@@ -139,13 +139,13 @@ export class InventoryView {
           <!-- IZQUIERDA: entrenador (>=50% alto) -->
           <div class="w-1/3 flex">
             ${panelCard(
-              `<div class="flex flex-col items-center justify-center gap-4 h-full" style="min-height:50vh;">
-                 <img src="${this.trainerSprite()}" class="pixelated" style="width:220px;height:220px;object-fit:contain;image-rendering:pixelated;" />
+              `<div class="w-full h-full flex flex-col items-center justify-center text-center gap-4" style="min-height:50vh;">
+                 <img src="${this.trainerSprite()}" alt="entrenador" class="pixelated block mx-auto" style="width:220px;height:220px;object-fit:contain;image-rendering:pixelated;" />
                  <span class="text-black" style="${FONT} font-size:16px;">${u?.username ?? ''}</span>
                  <span class="text-gray-600" style="${FONT} font-size:11px;">Lv. ${u?.level ?? 1} · 🪙 ${u?.coins ?? 0}</span>
                  <span class="text-gray-500" style="${FONT} font-size:9px;">${pokemon.length} Pokémon · ${items.length} objetos</span>
                </div>`,
-              'flex-1 flex'
+              'flex-1 flex w-full'
             )}
           </div>
 

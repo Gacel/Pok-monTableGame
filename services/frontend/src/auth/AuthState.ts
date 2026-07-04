@@ -27,7 +27,9 @@ export class AuthState {
   public async checkSession() {
     if (this.sessionToken) {
       await this.fetchUserProfile();
-      return true;
+      // Si el token es inválido o el usuario ya no existe, fetchUserProfile limpia
+      // la sesión: no hay sesión válida → volver a Welcome.
+      return !!this.user;
     }
     return false;
   }
