@@ -142,6 +142,8 @@ al microservicio `pokeapi-proxy` + Redis, C3.1.)*
 
 ## 6. Comunicación
 
+> **Referencia completa de endpoints:** `docs/API.md`.
+
 - **REST** síncrono para acciones puntuales (login, crear partida, mover en MVP).
 - **WSS** para sincronización de tablero y chat en tiempo real (C2.8).
 - **RabbitMQ** para eventos asíncronos entre servicios (`PokemonEvolved`,
