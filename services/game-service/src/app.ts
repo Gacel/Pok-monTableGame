@@ -9,6 +9,7 @@ import { friendRoutes } from './routes/friend.routes.js';
 import { arenaRoutes } from './routes/arena.routes.js';
 import { starterRoutes } from './routes/starter.routes.js';
 import { inventoryRoutes } from './routes/inventory.routes.js';
+import { shopRoutes } from './routes/shop.routes.js';
 import { wsRoutes } from './routes/ws.routes.js';
 import { bearerToken } from './auth/identity.js';
 import { verifyToken } from './auth/jwt.js';
@@ -79,6 +80,7 @@ export function buildApp(): FastifyInstance {
   app.register(arenaRoutes);
   app.register(starterRoutes);
   app.register(inventoryRoutes);
+  app.register(shopRoutes);
   app.register(wsRoutes);
 
   return app;
