@@ -111,6 +111,30 @@ async function openAndMigrate(): Promise<Database> {
       PRIMARY KEY (from_id, to_id)
     );
     CREATE INDEX IF NOT EXISTS idx_friend_requests_to ON friend_requests(to_id);
+
+    -- Pokémon PROPIOS del jugador (inventario). Instancia por fila (permite
+    -- duplicados y transferencias en survival). name = referencia lógica a pokemons.name.
+    CREATE TABLE IF NOT EXISTS owned_pokemon (
+      id           TEXT PRIMARY KEY,
+      user_id      TEXT NOT NULL,
+      name         TEXT NOT NULL,
+      level        INTEGER NOT NULL DEFAULT 1,
+      is_starter   INTEGER NOT NULL DEFAULT 0,
+      acquired_via TEXT NOT NULL DEFAULT 'starter',
+      created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_owned_pokemon_user ON owned_pokemon(user_id);
+
+    -- Objetos del jugador (cosméticos, pokéballs...). qty por (user, kind, item_key).
+    CREATE TABLE IF NOT EXISTS owned_items (
+      user_id    TEXT NOT NULL,
+      kind       TEXT NOT NULL,
+      item_key   TEXT NOT NULL,
+      qty        INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (user_id, kind, item_key)
+    );
+    CREATE INDEX IF NOT EXISTS idx_owned_items_user ON owned_items(user_id);
   `);
 
   // Migración defensiva: columna `email` en users (si la tabla ya existía).
