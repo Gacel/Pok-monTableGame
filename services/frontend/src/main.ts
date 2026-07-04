@@ -7,6 +7,7 @@ import { MatchSession } from './state/MatchSession';
 import type { OnlineSession } from './state/MatchSession';
 import { LoginView } from './views/hub/LoginView';
 import { AvatarCreationView } from './views/hub/AvatarCreationView';
+import { StarterSelectionView } from './views/hub/StarterSelectionView';
 import { MainMenuView } from './views/hub/MainMenuView';
 import { PlayMenuView } from './views/hub/PlayMenuView';
 import { SinglePlayerMenuView } from './views/hub/SinglePlayerMenuView';
@@ -46,6 +47,8 @@ async function bootstrap() {
   } else {
     if (!authState.user || !authState.user.username) {
       showAvatarCreation();
+    } else if (needsStarters()) {
+      showStarterSelection();
     } else {
       // Si hay una partida online en curso (F5), reconecta directamente.
       if (await tryRejoinOnline()) return;
@@ -100,6 +103,17 @@ function showAvatarCreation() {
   resetHubLayer();
   const avatarView = new AvatarCreationView(hubLayer);
   avatarView.render();
+}
+
+function showStarterSelection() {
+  resetHubLayer();
+  void new StarterSelectionView(hubLayer).render();
+}
+
+/** ¿Usuario logueado con nombre pero sin Pokémon (primer login)? → elegir starters. */
+function needsStarters(): boolean {
+  const u = authState.user;
+  return !!u && !!u.username && !u.pokemonCount;
 }
 
 export function showMainMenu() {
@@ -379,6 +393,8 @@ authState.subscribe(() => {
     showWelcome();
   } else if (!authState.user || !authState.user.username) {
     showAvatarCreation();
+  } else if (needsStarters()) {
+    showStarterSelection();
   } else {
     showMainMenu();
   }

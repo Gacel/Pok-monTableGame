@@ -44,6 +44,17 @@ export const ROSTER_NAMES = [
 ];
 
 /**
+ * Pool de STARTERS (12 opciones balanceadas por poder ~157-233, con cobertura de
+ * tipos). El jugador elige 3 en su primer inicio de sesión. Se evitan los outliers
+ * (mewtwo/snorlax/lapras/articuno/aerodactyl arriba, abra abajo).
+ */
+export const STARTER_POOL = [
+  'charmander', 'squirtle', 'bulbasaur', 'pikachu', 'eevee', 'growlithe',
+  'psyduck', 'oddish', 'clefairy', 'ekans', 'poliwag', 'vulpix',
+];
+export const STARTER_PICK = 3;
+
+/**
  * Gestiona el ciclo de vida de la partida (MVP hot-seat con una partida por defecto):
  * roster de draft, creación 3v3 desde el mapa, persistencia y reanudación (C4.2).
  */
