@@ -51,7 +51,7 @@ async function openAndMigrate(): Promise<Database> {
       username   TEXT,
       avatarUrl  TEXT,
       level      INTEGER NOT NULL DEFAULT 1,
-      coins      INTEGER NOT NULL DEFAULT 0,
+      coins      INTEGER NOT NULL DEFAULT 5000,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 

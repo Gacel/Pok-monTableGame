@@ -36,7 +36,7 @@ export const UserModel = {
 
   async create(id: string): Promise<UserRecord> {
     const db = await getDb();
-    await db.run('INSERT OR IGNORE INTO users (id, level, coins) VALUES (?, 1, 0)', id);
+    await db.run('INSERT OR IGNORE INTO users (id, level, coins) VALUES (?, 1, 5000)', id);
     const user = await this.findById(id);
     if (!user) throw new Error('No se pudo crear el usuario');
     return user;
@@ -46,7 +46,7 @@ export const UserModel = {
   async createWithEmail(id: string, email: string): Promise<UserRecord> {
     const db = await getDb();
     await db.run(
-      'INSERT OR IGNORE INTO users (id, email, level, coins) VALUES (?, ?, 1, 0)',
+      'INSERT OR IGNORE INTO users (id, email, level, coins) VALUES (?, ?, 1, 5000)',
       id,
       email
     );
