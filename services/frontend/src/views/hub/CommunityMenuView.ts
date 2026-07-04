@@ -415,10 +415,18 @@ export class CommunityMenuView {
       messagesEl.scrollTop = messagesEl.scrollHeight;
     };
 
-    // (Re)conecta el canal DM.
+    // (Re)conecta el canal DM. El servidor envía primero el historial persistente.
     this.dmWs?.close();
     this.dmWs = new WsClient((msg) => {
-      if (msg.type === 'chat' && typeof msg.text === 'string') append(msg.text);
+      if (msg.type === 'chat_history' && Array.isArray(msg.messages)) {
+        if (messagesEl) messagesEl.innerHTML = '';
+        for (const m of msg.messages) {
+          const who = m.from_id === myId ? 'Tú' : this.escape(friend.username ?? '');
+          append(`${who}: ${m.text}`);
+        }
+      } else if (msg.type === 'chat' && typeof msg.text === 'string') {
+        append(msg.text);
+      }
     });
     this.dmWs.connect(dmRoom(myId, friend.id));
 

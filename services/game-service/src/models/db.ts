@@ -135,6 +135,16 @@ async function openAndMigrate(): Promise<Database> {
       PRIMARY KEY (user_id, kind, item_key)
     );
     CREATE INDEX IF NOT EXISTS idx_owned_items_user ON owned_items(user_id);
+
+    -- Mensajes de chat directo (DM) PERSISTENTES. dm_room = 'dm:idA:idB' (ordenado).
+    CREATE TABLE IF NOT EXISTS messages (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      dm_room    TEXT NOT NULL,
+      from_id    TEXT NOT NULL,
+      text       TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_messages_room ON messages(dm_room, id);
   `);
 
   // Migración defensiva: columna `email` en users (si la tabla ya existía).

@@ -4,6 +4,7 @@ import type { WebSocket } from 'ws';
 import type { PlayerSlot } from '@transcendence/shared';
 import { matchManager, ARENA_ID } from '../services/MatchManager.js';
 import { RoomService } from '../services/RoomService.js';
+import { MessageModel } from '../models/MessageModel.js';
 import { resolveUser } from '../auth/identity.js';
 import { hub, LOCAL_ROOM } from '../realtime/hub.js';
 import { GameService } from '../services/GameService.js';
@@ -71,7 +72,9 @@ export async function wsRoutes(app: FastifyInstance): Promise<void> {
         return;
       }
       hub.join(matchId, socket, { userId: user.id, username: user.username, slot: null });
-      // El chat se difunde a la sala en el handler de 'chat' (abajo).
+      // Historial persistente: al abrir el chat se envían los últimos mensajes.
+      const history = await MessageModel.history(matchId, 50);
+      hub.send(socket, { type: 'chat_history', messages: history });
     } else if (!matchId) {
       // ---- Sala LOCAL (hot-seat en un solo navegador) -----------------
       // El actor sigue siendo currentPlayer (turno compartido), pero el socket
@@ -114,8 +117,19 @@ export async function wsRoutes(app: FastifyInstance): Promise<void> {
       if (msg.type === 'chat') {
         const text = (msg.text ?? '').toString().slice(0, 200);
         if (!text.trim()) return;
-        const label = ctx.username ? `${ctx.username}: ${text}` : text;
-        hub.broadcast(ctx.matchId, { type: 'chat', text: label });
+        // DM: se PERSISTE en BD; el resto de salas (juego) sigue efímero.
+        if (ctx.matchId.startsWith('dm:') && ctx.userId) {
+          const saved = await MessageModel.add(ctx.matchId, ctx.userId, text);
+          hub.broadcast(ctx.matchId, {
+            type: 'chat',
+            text: ctx.username ? `${ctx.username}: ${text}` : text,
+            from: ctx.userId,
+            at: saved.created_at,
+          });
+        } else {
+          const label = ctx.username ? `${ctx.username}: ${text}` : text;
+          hub.broadcast(ctx.matchId, { type: 'chat', text: label });
+        }
         return;
       }
 
