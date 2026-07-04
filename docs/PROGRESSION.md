@@ -101,8 +101,14 @@ devuelve a Welcome si el token ya no corresponde a un usuario.
 
 ## 6. Loot de pokéballs (tienda) ✅
 
-- 4 **tiers** por poder (`hp+atk+def`, cuartiles auto-balanceados; `loot.ts:buildTiers`):
-  T1 Común · T2 Raro · T3 Épico · T4 Legendario.
+- **Pool v1.0.0 de ~200 Pokémon** (`lootPool.ts`, PokeAPI #1-200) — DISTINTOS al draft
+  de 23: las bolas son la vía para conseguir Pokémon fuera del roster. Repartidos en
+  4 **tiers** por poder (suma de stats base, cuartiles, 50/50/50/50): T1 Común · T2
+  Raro · T3 Épico · T4 Legendario. Regenerable con `scratchpad/genpool.mjs`.
+- Los Pokémon looteados (fuera del roster) se usan en arena/BR: `resolveOwnedTeams` y
+  `addToArena` resuelven cualquier nombre vía `PokemonService.getTemplate` (cache-first).
+- La tienda **no muestra** el ratio de "bueno" por bola. El inventario usa casillas
+  pequeñas (grid 60px) para caber más columnas con menos scroll.
 - Cada bola tiene una distribución de tiers (a más cara, más Pokémon buenos):
 
   | Bola (precio) | T1 | T2 | T3 | T4 | bueno (T3+T4) |
