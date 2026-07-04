@@ -99,7 +99,18 @@ moves(          name TEXT PK, type TEXT, power INT, accuracy INT, pp INT,
 
 pokemon_moves(  pokemon_name TEXT, move_name TEXT, learn_method TEXT,
                 level INT, PK(pokemon_name, move_name) )  -- learnset por Pokémon
+
+friendships(    user_id TEXT, friend_id TEXT, PK(user_id,friend_id) )  -- amigos (bidireccional)
+friend_requests(from_id TEXT, to_id TEXT, PK(from_id,to_id) )          -- solicitudes pendientes
+messages(       id PK, dm_room TEXT, from_id TEXT, text TEXT, created_at )  -- chat DM persistente
+owned_pokemon(  id PK, user_id TEXT, name TEXT, level INT,
+                is_starter INT, acquired_via TEXT )   -- inventario Pokémon (instancia por fila)
+owned_items(    user_id TEXT, kind TEXT, item_key TEXT, qty INT,
+                PK(user_id,kind,item_key) )           -- inventario objetos (cosméticos/pokéballs)
 ```
+
+> `users.coins` arranca en **5000**. Economía, inventario, starters y chat
+> persistente: ver `docs/PROGRESSION.md`.
 
 Persistencia: el estado del tablero se serializa a JSON y se guarda al final de
 cada turno y ante `SIGTERM` (graceful shutdown, C4.2).
