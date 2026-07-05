@@ -21,12 +21,9 @@ export const KNIGHT_JUMPS = [
   { q: -1, r: 3 }, { q: 1, r: 2 }, { q: 2, r: 1 }
 ];
 
-export interface MoveOptions {
-  /** Casillas vacías a las que se puede desplazar (respetando el terreno). */
-  moves: Hex[];
-  /** Casillas ocupadas por un enemigo a las que se puede atacar. */
-  attacks: Hex[];
-}
+// `MoveOptions` vive en @transcendence/shared. Se re-exporta aquí.
+export type { MoveOptions } from '@transcendence/shared';
+import type { MoveOptions } from '@transcendence/shared';
 
 /**
  * Calcula movimientos y ataques legales según el patrón del Pokémon.
