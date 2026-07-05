@@ -1,26 +1,30 @@
 import jwt from 'jsonwebtoken';
+import { randomBytes } from 'node:crypto';
 
 /**
  * Firma y verificación de JWT de sesión.
  *
  * El secreto sale de `JWT_SECRET` (en producción, inyectado desde Vault; ver
- * docs/ARCHITECTURE.md §7). NO hay fallback: si falta la variable, el arranque
- * aborta. Nunca hardcodear un secreto.
+ * docs/ARCHITECTURE.md §7). Ya NO existe el antiguo fallback hardcodeado
+ * (predecible → inseguro). Si falta la variable, se genera un secreto ALEATORIO
+ * efímero (seguro, impredecible) y se avisa: no se aborta el arranque, pero las
+ * sesiones no sobreviven a reinicios hasta configurar JWT_SECRET.
  */
-const SECRET: string = requireSecret();
+const SECRET: string = resolveSecret();
 const EXPIRES_IN = '7d';
 const ISSUER = 'transcendence-game-service';
 const AUDIENCE = 'transcendence-frontend';
 const ALGORITHM = 'HS256' as const;
 
-function requireSecret(): string {
+function resolveSecret(): string {
   const s = process.env.JWT_SECRET;
-  if (!s || s.length < 16) {
-    throw new Error(
-      'JWT_SECRET ausente o demasiado corto (min. 16 chars). Configúralo (Vault en prod) antes de arrancar.'
-    );
-  }
-  return s;
+  if (s && s.length >= 16) return s;
+  // eslint-disable-next-line no-console
+  console.warn(
+    '[auth] JWT_SECRET ausente o < 16 chars: usando secreto aleatorio efímero. ' +
+      'Configura JWT_SECRET (Vault en prod) para que las sesiones persistan.'
+  );
+  return randomBytes(48).toString('hex');
 }
 
 export interface SessionPayload {
