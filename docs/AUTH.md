@@ -31,6 +31,18 @@
 | POST | `/api/auth/2fa/enable` | code | Verifica y activa 2FA |
 | GET | `/api/auth/google/callback` | — | OAuth: set-cookie + redirect `/` |
 
+## Login de pruebas (⚠️ puerta trasera)
+
+Para testeo hay un acceso sin registro, **gateado por `ALLOW_TEST_LOGIN=true`**:
+
+- Email: `admin@42transcendence.com` · Contraseña: `42transcendence`
+- La cuenta (`Admin`, edad 42, Estudiante42) se crea al primer login y se reutiliza.
+- Con `ALLOW_TEST_LOGIN` ausente o `false`, estas credenciales no tienen ningún
+  trato especial (login normal → fallan si la cuenta no existe con esa contraseña).
+
+**DESACTÍVALO en producción real** (`ALLOW_TEST_LOGIN=false` o quita la variable):
+es una puerta trasera con credencial conocida, especialmente en un dominio público.
+
 ## Cambios de producto / migración
 
 - **El login ahora exige contraseña.** Las cuentas antiguas creadas sin

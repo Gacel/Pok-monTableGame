@@ -35,6 +35,14 @@ const USERNAME_RE = /^[\w\sáéíóúñÁÉÍÓÚÑ-]+$/u;
 /** avatarUrl es un id de sprite de entrenador (ej. 'red'); charset seguro anti-XSS. */
 const AVATAR_RE = /^[a-zA-Z0-9_-]{1,64}$/;
 
+/**
+ * Login de PRUEBAS (sin registro). ⚠️ PUERTA TRASERA: solo activo si
+ * `ALLOW_TEST_LOGIN=true`. Debe estar DESACTIVADO en producción real.
+ */
+const TEST_EMAIL = 'admin@42transcendence.com';
+const TEST_PASSWORD = '42transcendence';
+const testLoginEnabled = (): boolean => process.env.ALLOW_TEST_LOGIN === 'true';
+
 function userId(request: FastifyRequest): string | undefined {
   return (request as FastifyRequest & { userId?: string }).userId;
 }
@@ -93,6 +101,24 @@ export const AuthController = {
     const email = normalizeEmail(request.body?.email);
     const password = request.body?.password ?? '';
     const code = request.body?.code;
+
+    // Login de PRUEBAS sin registro (solo con ALLOW_TEST_LOGIN=true). La cuenta
+    // se crea la primera vez y luego se reutiliza.
+    if (testLoginEnabled() && email === TEST_EMAIL && password === TEST_PASSWORD) {
+      const existing = await UserModel.findByEmail(TEST_EMAIL);
+      const admin =
+        existing ??
+        (await UserModel.createAccount({
+          id: newUserId(),
+          email: TEST_EMAIL,
+          passwordHash: hashPassword(TEST_PASSWORD),
+          username: 'Admin',
+          age: 42,
+          isStudent42: true,
+        }));
+      setSessionCookie(reply, signToken(admin.id));
+      return { success: true, user: UserModel.toSafe(admin) };
+    }
 
     const user = await UserModel.findByEmail(email);
     // Error genérico e indistinguible (anti-enumeración): no revelar si el email existe.
