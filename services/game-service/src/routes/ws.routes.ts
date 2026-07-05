@@ -1,7 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import type { SocketStream } from '@fastify/websocket';
 import type { WebSocket } from 'ws';
-import type { PlayerSlot } from '@transcendence/shared';
 import { matchManager, ARENA_ID } from '../services/MatchManager.js';
 import { RoomService } from '../services/RoomService.js';
 import { MessageModel } from '../models/MessageModel.js';
@@ -10,7 +9,9 @@ import { resolveUser } from '../auth/identity.js';
 import { readSessionToken } from '../auth/cookie.js';
 import { hub, LOCAL_ROOM } from '../realtime/hub.js';
 import { GameService } from '../services/GameService.js';
+import { GameActionService, GameAction } from '../services/GameActionService.js';
 import { Hex } from '../engine/hex.js';
+import { isHex } from '../utils/hex.js';
 
 interface WsMessage {
   type: 'move' | 'chat' | 'combat_action' | 'combat_continue' | 'end_turn' | 'abandon';
@@ -26,25 +27,6 @@ interface WsQuery {
   token?: string;
 }
 
-const COMBAT_ACTIONS = ['ATACAR', 'HABILIDAD', 'OBJETO', 'HUIR'] as const;
-
-function isHex(h: unknown): h is Hex {
-  return (
-    typeof h === 'object' &&
-    h !== null &&
-    Number.isInteger((h as Hex).q) &&
-    Number.isInteger((h as Hex).r)
-  );
-}
-
-/** ¿Controla `slot` al Pokémon que debe actuar en el combate en curso? */
-function controlsCombatTurn(game: GameService, slot: PlayerSlot): boolean {
-  const combat = game.getStateDTO().combat;
-  if (!combat) return false;
-  const actorPlayer =
-    combat.turnActorId === combat.attackerId ? combat.attackerPlayer : combat.defenderPlayer;
-  return actorPlayer === slot;
-}
 
 /**
  * Sincronización de tablero + chat por WSS, agrupada por sala.
@@ -161,65 +143,30 @@ export async function wsRoutes(app: FastifyInstance): Promise<void> {
         }
       }
 
-      const persist = async () => {
-        if (isLocal) await matchManager.persist();
-        else await matchManager.persistMatch(ctx.matchId);
-      };
-
+      // Traduce el sobre WS a una acción del pipeline ÚNICO (mismo que HTTP).
+      let action: GameAction | null = null;
       if (msg.type === 'move') {
         if (!isHex(msg.from) || !isHex(msg.to)) {
           hub.send(socket, { type: 'error', error: 'Coordenadas inválidas' });
           return;
         }
-        const result = game.play(actor!, msg.from, msg.to);
-        if (!result.ok) {
-          hub.send(socket, { type: 'error', error: result.error });
-          return;
-        }
-        await persist();
-        hub.broadcast(ctx.matchId, { type: 'state', state: result.state });
+        action = { type: 'move', from: msg.from, to: msg.to };
       } else if (msg.type === 'combat_action') {
-        const action = String(msg.action ?? '').toUpperCase();
-        if (!(COMBAT_ACTIONS as readonly string[]).includes(action)) {
-          hub.send(socket, { type: 'error', error: 'Acción de combate inválida' });
-          return;
-        }
-        if (!isLocal && !controlsCombatTurn(game, ctx.slot!)) {
-          hub.send(socket, { type: 'error', error: 'No es el turno de tu Pokémon' });
-          return;
-        }
-        const result = game.combatAction(action as (typeof COMBAT_ACTIONS)[number]);
-        if (!result.ok) {
-          hub.send(socket, { type: 'error', error: result.error });
-          return;
-        }
-        await persist();
-        hub.broadcast(ctx.matchId, { type: 'state', state: result.state });
+        action = { type: 'combat_action', action: String(msg.action ?? ''), moveName: msg.moveName };
       } else if (msg.type === 'combat_continue') {
-        const result = game.continueCombat();
-        if (!result.ok) {
-          hub.send(socket, { type: 'error', error: result.error });
-          return;
-        }
-        await persist();
-        hub.broadcast(ctx.matchId, { type: 'state', state: result.state });
+        action = { type: 'combat_continue' };
       } else if (msg.type === 'end_turn') {
-        const result = isLocal ? game.endTurn() : game.endTurn(actor!);
-        if (!result.ok) {
-          hub.send(socket, { type: 'error', error: result.error });
-          return;
-        }
-        await persist();
-        hub.broadcast(ctx.matchId, { type: 'state', state: result.state });
+        action = { type: 'end_turn' };
       } else if (msg.type === 'abandon') {
-        const result = isLocal ? game.abandon() : game.abandon(actor!);
-        if (!result.ok) {
-          hub.send(socket, { type: 'error', error: result.error });
-          return;
-        }
-        await persist();
-        hub.broadcast(ctx.matchId, { type: 'state', state: result.state });
+        action = { type: 'abandon' };
       }
+      if (!action) return;
+
+      const result = await GameActionService.apply(
+        { game, actor: actor!, isLocal, room: ctx.matchId, matchId: isLocal ? undefined : ctx.matchId },
+        action
+      );
+      if (!result.ok) hub.send(socket, { type: 'error', error: result.error });
     });
 
     const onGone = () => {
