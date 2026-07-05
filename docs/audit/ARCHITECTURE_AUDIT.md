@@ -35,8 +35,8 @@ packages/shared: SOLO lobby + enums (en minúsculas)  ✗ DRIFT vs frontend/mode
 | 1 | ALTA | Drift real de tipos de dominio back↔front; `shared` no tiene los contratos y usa enums en minúsculas | `GameService.ts`, `engine/board.ts`, `frontend/models/Types.ts`, `shared/index.ts` | Corregido |
 | 2 | ALTA | Pipeline de acción **triplicado** (GameController, OnlineGameController, ws.routes) con drift funcional en combate | `controllers/*`, `routes/ws.routes.ts` | Corregido |
 | 3 | ALTA | Lógica de economía dentro de un controlador; local no reparte monedas | `OnlineGameController.ts:11-39` | Corregido |
-| 4 | ALTA | Servicio de dominio llama al transporte WSS | `RoomService.ts` (`hub.broadcast`) | Corregido (inyección/eventos) |
-| 5 | ALTA | `MatchManager` es un God object (373 líneas, 7 responsabilidades) | `services/MatchManager.ts` | Parcial |
+| 4 | ALTA | Servicio de dominio llama al transporte WSS | `RoomService.ts` (`hub.broadcast`) | Diferido |
+| 5 | ALTA | `MatchManager` es un God object (373 líneas, 7 responsabilidades) | `services/MatchManager.ts` | Diferido |
 | 6 | MEDIA | Dos mecanismos de identidad conviviendo (hook vs `resolveUser`) | `app.ts`, `identity.ts` | Corregido |
 | 7 | MEDIA | Migraciones no versionadas dentro de `db.ts` | `models/db.ts:27-178` | Documentado |
 | 8 | MEDIA | `loot.ts` puro y sin tests | `services/loot.ts` | Corregido (tests) |
@@ -61,13 +61,13 @@ MUNDO "HUB" (MVC difuso): main.ts (router imperativo, estado en módulo + window
 ### Hallazgos
 | # | Sev. | Hallazgo | Archivos | Estado |
 |---|------|----------|----------|--------|
-| 1 | ALTA | `GameController` God object (648 líneas: red, WSS, cámara, input, DOM) | `controllers/GameController.ts` | Parcial |
-| 2 | ALTA | Vistas del hub con lógica de negocio y red directa | `views/hub/*` | Parcial |
+| 1 | ALTA | `GameController` God object (648 líneas: red, WSS, cámara, input, DOM) | `controllers/GameController.ts` | Diferido |
+| 2 | ALTA | Vistas del hub con lógica de negocio y red directa | `views/hub/*` | Parcial (PokeSprites ✅; `*Api` diferido) |
 | 3 | ALTA | Carga de sprites PokeAPI duplicada en 6 sitios (salta `pokeapi-proxy`) | 6 archivos | Corregido |
-| 4 | MEDIA | Paleta de colores y utilidades (`escape`, `spriteOf`) duplicadas | varios | Corregido |
-| 5 | MEDIA-ALTA | Estado inconsistente: store en tablero, DOM en hub; getters con efectos | `models/GameState.ts`, hub | Parcial |
-| 6 | MEDIA | `main.ts` router imperativo con acoplamiento circular y estado en `window` | `main.ts` + 10 vistas | Parcial |
-| 7 | MEDIA | Lógica atada al DOM/red, poco testeable | varios | Parcial |
+| 4 | MEDIA | Paleta de colores y utilidades (`escape`, `spriteOf`) duplicadas | varios | Corregido (`escape`/`spriteOf` ✅; colores: util creado, wiring parcial) |
+| 5 | MEDIA-ALTA | Estado inconsistente: store en tablero, DOM en hub; getters con efectos | `models/GameState.ts`, hub | Diferido |
+| 6 | MEDIA | `main.ts` router imperativo con acoplamiento circular y estado en `window` | `main.ts` + 10 vistas | Diferido |
+| 7 | MEDIA | Lógica atada al DOM/red, poco testeable | varios | Diferido |
 | 8 | BAJA-MEDIA | Dos patrones de vista conviviendo; `View.destroy()` inconsistente | varios | Documentado |
 
 ## Fortalezas a preservar
