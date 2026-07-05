@@ -4,7 +4,7 @@ const FONT = "font-family: 'Press Start 2P', monospace;";
 const inputCls =
   'w-full p-3 bg-gray-200 text-black border-4 border-gray-400 focus:border-yellow-400 outline-none text-xs';
 const btnBase =
-  'w-full py-3 text-white border-b-4 active:border-b-0 active:mt-1 transition-all text-xs';
+  'w-full py-3 border-b-4 active:border-b-0 active:mt-1 transition-all text-xs';
 
 /**
  * Pantalla de acceso: LOGIN (email + contraseña) y REGISTRO completo
@@ -48,7 +48,7 @@ export class LoginView {
         <input type="email" id="login-email" placeholder="Correo" class="${inputCls}" style="${FONT}" autocomplete="username" />
         <input type="password" id="login-password" placeholder="Contraseña" class="${inputCls}" style="${FONT}" autocomplete="current-password" />
         <input type="text" id="login-2fa" placeholder="Código 2FA (si lo tienes)" class="${inputCls} hidden" style="${FONT}" inputmode="numeric" maxlength="6" />
-        <button id="btn-login" class="${btnBase} bg-red-600 hover:bg-red-500 border-red-800" style="${FONT} box-shadow: 0 4px 0 #000;">ENTRAR</button>
+        <button id="btn-login" class="${btnBase} bg-red-600 hover:bg-red-500 border-red-800 text-white" style="${FONT} box-shadow: 0 4px 0 #000;">ENTRAR</button>
         <p id="auth-error" class="text-red-300 text-[10px] text-center min-h-[14px]" style="${FONT}"></p>
         <button id="to-register" class="text-yellow-300 hover:text-yellow-100 text-[10px] underline" style="${FONT}">¿No tienes cuenta? Regístrate</button>
         <div class="border-t-2 border-dashed border-gray-500 my-1"></div>
@@ -71,7 +71,7 @@ export class LoginView {
           <input type="checkbox" id="reg-student42" class="w-5 h-5 accent-yellow-400" />
           ¿Estudiante42?
         </label>
-        <button id="btn-register" class="${btnBase} bg-green-600 hover:bg-green-500 border-green-800" style="${FONT} box-shadow: 0 4px 0 #000;">REGISTRARSE</button>
+        <button id="btn-register" class="${btnBase} bg-green-600 hover:bg-green-500 border-green-800 text-white" style="${FONT} box-shadow: 0 4px 0 #000;">REGISTRARSE</button>
         <p id="auth-error" class="text-red-300 text-[10px] text-center min-h-[14px]" style="${FONT}"></p>
         <button id="to-login" class="text-yellow-300 hover:text-yellow-100 text-[10px] underline" style="${FONT}">¿Ya tienes cuenta? Inicia sesión</button>
       </div>`;
