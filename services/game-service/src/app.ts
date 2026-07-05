@@ -11,8 +11,8 @@ import { starterRoutes } from './routes/starter.routes.js';
 import { inventoryRoutes } from './routes/inventory.routes.js';
 import { shopRoutes } from './routes/shop.routes.js';
 import { wsRoutes } from './routes/ws.routes.js';
-import { bearerToken } from './auth/identity.js';
 import { verifyToken } from './auth/jwt.js';
+import { readSessionToken } from './auth/cookie.js';
 
 const SERVICE = 'game-service';
 
@@ -25,6 +25,7 @@ const PUBLIC_PATHS = new Set<string>([
   '/health',
   '/api/auth/signup',
   '/api/auth/login',
+  '/api/auth/logout',
   '/api/auth/google/login',
   '/api/auth/google/callback',
 ]);
@@ -46,7 +47,7 @@ export function buildApp(): FastifyInstance {
     const path = request.url.split('?')[0] ?? request.url;
     if (PUBLIC_PATHS.has(path) || path === '/ws') return;
 
-    const payload = verifyToken(bearerToken(request) ?? '');
+    const payload = verifyToken(readSessionToken(request) ?? '');
     if (!payload) {
       return reply.code(401).send({ success: false, error: 'No autenticado' });
     }

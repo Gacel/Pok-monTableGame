@@ -19,7 +19,7 @@ export const UserController = {
 
     // Conteo de Pokémon propios: sirve para el gating de "elegir starters" en el primer login.
     const pokemonCount = await OwnedPokemonModel.countByUser(userId);
-    return { success: true, user: { ...user, pokemonCount } };
+    return { success: true, user: { ...UserModel.toSafe(user), pokemonCount } };
   },
 
   /** Busca usuarios por nombre para "añadir amigo" (devuelve vista pública). */

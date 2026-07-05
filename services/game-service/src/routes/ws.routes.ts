@@ -5,7 +5,9 @@ import type { PlayerSlot } from '@transcendence/shared';
 import { matchManager, ARENA_ID } from '../services/MatchManager.js';
 import { RoomService } from '../services/RoomService.js';
 import { MessageModel } from '../models/MessageModel.js';
+import { FriendModel } from '../models/FriendModel.js';
 import { resolveUser } from '../auth/identity.js';
+import { readSessionToken } from '../auth/cookie.js';
 import { hub, LOCAL_ROOM } from '../realtime/hub.js';
 import { GameService } from '../services/GameService.js';
 import { Hex } from '../engine/hex.js';
@@ -56,8 +58,9 @@ export async function wsRoutes(app: FastifyInstance): Promise<void> {
     const query = request.query as WsQuery;
     const matchId = (query.matchId ?? '').trim();
 
-    // Exigir JWT válido para abrir el socket (token por query string).
-    const user = await resolveUser(query.token);
+    // Exigir sesión válida para abrir el socket. La cookie HttpOnly viaja en el
+    // handshake (mismo origen); se acepta `token` por query como respaldo.
+    const user = await resolveUser(readSessionToken(request) ?? query.token);
     if (!user) {
       socket.close(4401, 'No autenticado');
       return;
@@ -69,6 +72,12 @@ export async function wsRoutes(app: FastifyInstance): Promise<void> {
       const ids = matchId.slice(3).split(':');
       if (ids.length !== 2 || !ids.includes(user.id)) {
         socket.close(4403, 'Canal no autorizado');
+        return;
+      }
+      // Solo se permite DM entre amigos aceptados (evita spam/acoso dirigido).
+      const other = ids[0] === user.id ? ids[1]! : ids[0]!;
+      if (!(await FriendModel.areFriends(user.id, other))) {
+        socket.close(4403, 'Solo puedes chatear con amigos');
         return;
       }
       hub.join(matchId, socket, { userId: user.id, username: user.username, slot: null });
