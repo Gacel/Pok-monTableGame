@@ -15,9 +15,27 @@ export interface OwnedPokemonRecord {
 export const OwnedPokemonModel = {
   async listByUser(userId: string): Promise<OwnedPokemonRecord[]> {
     const db = await getDb();
+    // Excluye las instancias en subasta (escrow): no aparecen en inventario ni
+    // pueden usarse en equipos mientras están a la venta.
     return db.all<OwnedPokemonRecord[]>(
-      'SELECT * FROM owned_pokemon WHERE user_id = ? ORDER BY created_at',
+      'SELECT * FROM owned_pokemon WHERE user_id = ? AND auction_id IS NULL ORDER BY created_at',
       userId
+    );
+  },
+
+  /** Marca (o libera) una instancia como escrow de una subasta. */
+  async setAuction(id: string, auctionId: string | null): Promise<void> {
+    const db = await getDb();
+    await db.run('UPDATE owned_pokemon SET auction_id = ? WHERE id = ?', auctionId, id);
+  },
+
+  /** Vende la instancia al comprador: cambia dueño y libera el escrow. */
+  async transferSold(id: string, toUserId: string): Promise<void> {
+    const db = await getDb();
+    await db.run(
+      "UPDATE owned_pokemon SET user_id = ?, auction_id = NULL, acquired_via = 'auction', is_starter = 0 WHERE id = ?",
+      toUserId,
+      id
     );
   },
 

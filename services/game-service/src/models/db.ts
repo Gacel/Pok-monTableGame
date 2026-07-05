@@ -145,7 +145,35 @@ async function openAndMigrate(): Promise<Database> {
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_messages_room ON messages(dm_room, id);
+
+    -- Casa de subastas: cada fila es un lote a la venta (pokémon u objeto).
+    CREATE TABLE IF NOT EXISTS auctions (
+      id             TEXT PRIMARY KEY,
+      seller_id      TEXT NOT NULL,
+      kind           TEXT NOT NULL,            -- 'pokemon' | 'item'
+      pokemon_id     TEXT,                     -- owned_pokemon.id (kind=pokemon)
+      item_kind      TEXT,                     -- owned_items.kind (kind=item)
+      item_key       TEXT,                     -- owned_items.item_key (kind=item)
+      display_name   TEXT NOT NULL,
+      display_level  INTEGER,
+      starting_price INTEGER,                  -- puja mínima (nullable)
+      buy_now_price  INTEGER,                  -- precio fijo (nullable)
+      current_bid    INTEGER,
+      current_bidder TEXT,
+      duration_hours INTEGER NOT NULL,         -- 12|24|48
+      created_at     TEXT NOT NULL DEFAULT (datetime('now')),
+      expires_at     TEXT NOT NULL,
+      status         TEXT NOT NULL DEFAULT 'active',  -- active|sold|expired|cancelled
+      winner_id      TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_auctions_status ON auctions(status, expires_at);
   `);
+
+  // Escrow de Pokémon en subasta: bloquea la instancia sin perder metadatos.
+  const opCols = await db.all(`PRAGMA table_info(owned_pokemon)`);
+  if (!opCols.some((c: { name: string }) => c.name === 'auction_id')) {
+    await db.exec(`ALTER TABLE owned_pokemon ADD COLUMN auction_id TEXT`);
+  }
 
   // Migración defensiva: columna `email` en users (si la tabla ya existía).
   const userCols = await db.all(`PRAGMA table_info(users)`);

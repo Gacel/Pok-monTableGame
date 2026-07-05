@@ -155,7 +155,7 @@ export function showShopMenu() {
 
 export function showAuctionHouse() {
   resetHubLayer();
-  new AuctionHouseView(hubLayer).render();
+  void new AuctionHouseView(hubLayer).render();
 }
 
 export function showLocalSetup() {

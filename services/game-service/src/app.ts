@@ -10,6 +10,7 @@ import { arenaRoutes } from './routes/arena.routes.js';
 import { starterRoutes } from './routes/starter.routes.js';
 import { inventoryRoutes } from './routes/inventory.routes.js';
 import { shopRoutes } from './routes/shop.routes.js';
+import { auctionRoutes } from './routes/auction.routes.js';
 import { wsRoutes } from './routes/ws.routes.js';
 import { verifyToken } from './auth/jwt.js';
 import { readSessionToken } from './auth/cookie.js';
@@ -82,6 +83,7 @@ export function buildApp(): FastifyInstance {
   app.register(starterRoutes);
   app.register(inventoryRoutes);
   app.register(shopRoutes);
+  app.register(auctionRoutes);
   app.register(wsRoutes);
 
   return app;
