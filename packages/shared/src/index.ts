@@ -17,19 +17,10 @@ export const SHARED_VERSION = '0.1.0';
 export * from './lobby.js';
 export * from './ws.js';
 
-/** Biomas del tablero (lógica Catan). */
-export const BIOMES = ['fire', 'water', 'forest', 'sand', 'ice'] as const;
-export type Biome = (typeof BIOMES)[number];
-
-/** Tipos de Pokémon disponibles. */
-export const POKEMON_TYPES = [
-  'fire', 'water', 'grass', 'poison', 'flying', 'dragon', 'psychic', 'normal', 'electric', 'ice', 'fairy'
-] as const;
-export type PokemonType = (typeof POKEMON_TYPES)[number];
-
-/** Patrones de movimiento (lógica Ajedrez). */
-export const MOVEMENT_PATTERNS = ['flyer', 'tank', 'speedster'] as const;
-export type MovementPattern = (typeof MOVEMENT_PATTERNS)[number];
+// Contratos de dominio (tablero, pokémon) y de estado de partida.
+// ÚNICA fuente de verdad; backend y frontend re-exportan desde aquí.
+export * from './domain.js';
+export * from './match.js';
 
 /** Estado de presencia de un usuario (status-service). */
 export type PresenceStatus = 'online' | 'offline' | 'in-game';

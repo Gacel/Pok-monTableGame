@@ -3,7 +3,8 @@ import type { GameMode } from '@transcendence/shared';
 import { matchManager } from '../services/MatchManager.js';
 import { hub, LOCAL_ROOM } from '../realtime/hub.js';
 import { Hex } from '../engine/hex.js';
-import { CombatAction } from '../services/GameService.js';
+import { GameActionService, GameAction } from '../services/GameActionService.js';
+import { isHex } from '../utils/hex.js';
 
 interface MoveBody {
   from?: Hex;
@@ -26,15 +27,17 @@ interface StartBody {
   gameMode?: unknown;
 }
 
-const COMBAT_ACTIONS: CombatAction[] = ['ATACAR', 'HABILIDAD', 'OBJETO', 'HUIR', 'MOVE', 'TARGET'];
-
-function isHex(h: unknown): h is Hex {
-  return (
-    typeof h === 'object' &&
-    h !== null &&
-    Number.isInteger((h as Hex).q) &&
-    Number.isInteger((h as Hex).r)
+/** Ejecuta una acción LOCAL (hot-seat) por el pipeline único. El actor es el jugador de turno. */
+async function applyLocal(action: GameAction) {
+  const game = matchManager.get();
+  const actor = game.getStateDTO().currentPlayer;
+  const result = await GameActionService.apply(
+    { game, actor, isLocal: true, room: LOCAL_ROOM },
+    action
   );
+  return result.ok
+    ? { success: true, state: result.state }
+    : { success: false, error: result.error, state: result.state };
 }
 
 function asNameArray(v: unknown): string[] | null {
@@ -112,45 +115,22 @@ export const GameController = {
     if (!isHex(from) || !isHex(to)) {
       return reply.code(400).send({ success: false, error: 'Coordenadas from/to inválidas' });
     }
-    const game = matchManager.get();
-    const actor = game.getStateDTO().currentPlayer;
-    const result = game.play(actor, from, to);
-    if (!result.ok) {
-      return reply.code(400).send({ success: false, error: result.error, state: result.state });
-    }
-    await matchManager.persist();
-    hub.broadcast(LOCAL_ROOM, { type: 'state', state: result.state });
-    return { success: true, state: result.state };
+    return applyLocal({ type: 'move', from, to });
   },
 
   /** Acción dentro del combate interactivo (ATACAR/HABILIDAD/OBJETO/HUIR). */
-  async combatAction(request: FastifyRequest<{ Body: CombatBody }>, reply: FastifyReply) {
-    const action = String(request.body?.action ?? '').toUpperCase() as CombatAction;
-    if (!COMBAT_ACTIONS.includes(action)) {
-      return reply.code(400).send({ success: false, error: 'Acción de combate inválida' });
-    }
+  async combatAction(request: FastifyRequest<{ Body: CombatBody }>) {
+    const action = String(request.body?.action ?? '');
     const moveName =
       typeof request.body?.moveName === 'string' ? request.body.moveName.slice(0, 40) : undefined;
     const targetId =
       typeof request.body?.targetId === 'string' ? request.body.targetId.slice(0, 40) : undefined;
-    const result = matchManager.get().combatAction(action, moveName, targetId);
-    if (!result.ok) {
-      return reply.code(400).send({ success: false, error: result.error, state: result.state });
-    }
-    await matchManager.persist();
-    hub.broadcast(LOCAL_ROOM, { type: 'state', state: result.state });
-    return { success: true, state: result.state };
+    return applyLocal({ type: 'combat_action', action, moveName, targetId });
   },
 
   /** Cierra la fase de resultado del combate y devuelve al tablero. */
   async combatContinue() {
-    const result = matchManager.get().continueCombat();
-    if (!result.ok) {
-      return { success: false, error: result.error, state: result.state };
-    }
-    await matchManager.persist();
-    hub.broadcast(LOCAL_ROOM, { type: 'state', state: result.state });
-    return { success: true, state: result.state };
+    return applyLocal({ type: 'combat_continue' });
   },
 
   async reset() {
@@ -160,24 +140,10 @@ export const GameController = {
   },
 
   async endTurn() {
-    const game = matchManager.get();
-    const result = game.endTurn();
-    if (!result.ok) {
-      return { success: false, error: result.error, state: result.state };
-    }
-    await matchManager.persist();
-    hub.broadcast(LOCAL_ROOM, { type: 'state', state: result.state });
-    return { success: true, state: result.state };
+    return applyLocal({ type: 'end_turn' });
   },
 
   async abandon() {
-    const game = matchManager.get();
-    const result = game.abandon();
-    if (!result.ok) {
-      return { success: false, error: result.error, state: result.state };
-    }
-    await matchManager.persist();
-    hub.broadcast(LOCAL_ROOM, { type: 'state', state: result.state });
-    return { success: true, state: result.state };
+    return applyLocal({ type: 'abandon' });
   },
 };

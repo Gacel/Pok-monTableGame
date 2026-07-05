@@ -1,5 +1,6 @@
 import { authState } from '../../auth/AuthState';
 import { apiFetch } from '../../net/api';
+import { getSprite } from '../../net/PokeSprites';
 import { FONT, panelTitle, panelCard, backButton } from './panel';
 
 interface InvPokemon {
@@ -60,16 +61,7 @@ export class InventoryView {
     await Promise.all(
       pokemon.map(async (p) => {
         if (this.sprites[p.name]) return;
-        try {
-          const r = await fetch(`https://pokeapi.co/api/v2/pokemon/${p.name.toLowerCase()}`);
-          const d = await r.json();
-          this.sprites[p.name] =
-            d.sprites?.versions?.['generation-v']?.['black-white']?.animated?.front_default ||
-            d.sprites?.front_default ||
-            '';
-        } catch {
-          this.sprites[p.name] = '';
-        }
+        this.sprites[p.name] = await getSprite(p.name);
       })
     );
   }

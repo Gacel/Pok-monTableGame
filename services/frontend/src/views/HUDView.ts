@@ -1,6 +1,7 @@
 import { GameState } from '../models/GameState';
 import type { Tile, PlayerResources } from '../models/Types';
 import { authState } from '../auth/AuthState';
+import { escapeHtml } from '../utils/html';
 
 /** Capa VISTA (frontend): pinta el HUD a partir del estado del servidor. */
 export class HUDView {
@@ -196,6 +197,6 @@ export class HUDView {
   }
 
   private escape(s: string): string {
-    return s.replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' })[c] ?? c);
+    return escapeHtml(s);
   }
 }

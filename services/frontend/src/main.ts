@@ -35,15 +35,7 @@ let gameController: GameController | null = null;
 let currentLobby: LobbyView | null = null;
 
 async function bootstrap() {
-  // Catch token from OAuth callback
-  const urlParams = new URLSearchParams(window.location.search);
-  const tokenFromUrl = urlParams.get('token');
-  if (tokenFromUrl) {
-    localStorage.setItem('token', tokenFromUrl);
-    window.history.replaceState({}, document.title, window.location.pathname);
-    authState.sessionToken = tokenFromUrl;
-  }
-
+  // La sesión (incluida la de OAuth) viaja en cookie HttpOnly; no hay token en la URL.
   const hasSession = await authState.checkSession();
 
   if (!hasSession) {
@@ -408,9 +400,9 @@ resizeGameArea();
 
 // Suscripción al estado de autenticación
 authState.subscribe(() => {
-  if (!authState.sessionToken) {
+  if (!authState.user) {
     showWelcome();
-  } else if (!authState.user || !authState.user.username) {
+  } else if (!authState.user.username) {
     showAvatarCreation();
   } else if (needsStarters()) {
     showStarterSelection();

@@ -1,69 +1,17 @@
-import { Hex } from './hex.js';
+import type { Hex } from './hex.js';
 
-export type Biome = 'FIRE' | 'WATER' | 'GRASS' | 'SAND' | 'ICE';
-
-export type PokemonType =
-  | 'FIRE'
-  | 'WATER'
-  | 'GRASS'
-  | 'POISON'
-  | 'FLYING'
-  | 'DRAGON'
-  | 'PSYCHIC'
-  | 'NORMAL'
-  | 'ELECTRIC'
-  | 'ICE'
-  | 'FAIRY';
-
-export type MovementPattern = 'FLYING' | 'TANK' | 'SPEEDSTER';
-
-export type MoveDamageClass = 'physical' | 'special' | 'status';
-
-/** Un ataque concreto de un Pokémon (importado de PokeAPI y curado para combate). */
-export interface PokemonMove {
-  /** Identificador/nombre del movimiento (ej. 'ember'); se muestra y se valida por él. */
-  name: string;
-  /** Tipo del movimiento, ya normalizado al dominio (afecta a la ventaja de tipo). */
-  type: PokemonType;
-  /** Potencia base (0 si no inflige daño directo). */
-  power: number;
-  /** Categoría PokeAPI: física (gratis) / especial (cuesta 1 candy) / estado. */
-  damageClass: MoveDamageClass;
-  /** Precisión 0-100 (informativo). */
-  accuracy?: number;
-  /** Puntos de poder (informativo). */
-  pp?: number;
-}
-
-export interface Pokemon {
-  id: string;
-  playerId: string;
-  name?: string;
-  type: PokemonType;
-  movementPattern: MovementPattern;
-  hp: number;
-  maxHp: number;
-  /** Ataque base (por defecto 50 si no se especifica). */
-  atk?: number;
-  /** Defensa base (por defecto 40 si no se especifica). */
-  def?: number;
-  /** Nivel de combate; usado como umbral para evolución. */
-  level?: number;
-  /** Orientación horizontal del Pokémon en el tablero ('left' | 'right'). */
-  facing?: 'left' | 'right';
-  /** Turnos consecutivos permaneciendo en terreno de lava (FIRE). */
-  lavaTurns?: number;
-  /** Si ya realizó su acción de movimiento o ataque en el turno actual. */
-  hasActed?: boolean;
-  /** Ataques curados (≤4) disponibles en la fase de combate. */
-  moves?: PokemonMove[];
-}
-
-export interface Tile {
-  hex: Hex;
-  biome: Biome;
-  occupant: Pokemon | null;
-}
+// Tipos de dominio en @transcendence/shared (única fuente de verdad). Se
+// re-exportan aquí para no romper los imports `from '../engine/board.js'`.
+export type {
+  Biome,
+  PokemonType,
+  MovementPattern,
+  MoveDamageClass,
+  PokemonMove,
+  Pokemon,
+  Tile,
+} from '@transcendence/shared';
+import type { Pokemon, Tile } from '@transcendence/shared';
 
 export class Board {
   public tiles: Map<string, Tile> = new Map();

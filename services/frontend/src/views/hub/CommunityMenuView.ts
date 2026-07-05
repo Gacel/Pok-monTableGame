@@ -4,12 +4,10 @@ import { apiFetch } from '../../net/api';
 import { authState } from '../../auth/AuthState';
 import { WsClient } from '../../net/WsClient';
 import { FONT, hubPanel, panelTitle, panelCard, menuButton, backButton } from './panel';
+import { spriteOf } from '../../utils/trainer';
+import { escapeHtml } from '../../utils/html';
 
 type Step = 'root' | 'friends' | 'add' | 'search' | 'recommended' | 'requests' | 'dm' | 'gift';
-
-function spriteOf(avatarUrl: string | null): string {
-  return avatarUrl === 'boy' ? 'red' : avatarUrl === 'girl' ? 'may' : avatarUrl || 'red';
-}
 
 /** Sala WS del chat directo entre dos usuarios (ids ordenados = misma sala). */
 function dmRoom(a: string, b: string): string {
@@ -466,6 +464,6 @@ export class CommunityMenuView {
   }
 
   private escape(s: string): string {
-    return s.replace(/[<>&"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' })[c] ?? c);
+    return escapeHtml(s);
   }
 }

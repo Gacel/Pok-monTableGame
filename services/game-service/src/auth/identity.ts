@@ -1,6 +1,7 @@
 import type { FastifyRequest } from 'fastify';
 import { UserModel, UserRecord } from '../models/UserModel.js';
 import { verifyToken } from './jwt.js';
+import { readSessionToken } from './cookie.js';
 
 /**
  * Resolución de identidad a partir del token de sesión.
@@ -17,9 +18,11 @@ export async function resolveUser(token: string | undefined | null): Promise<Use
   return user ?? null;
 }
 
-/** Extrae el token del header `Authorization: Bearer <token>`. */
+/**
+ * Extrae el token de sesión de la cookie `HttpOnly` (o, como respaldo, del header
+ * `Authorization: Bearer`). Se mantiene el nombre por compatibilidad con los
+ * call-sites existentes.
+ */
 export function bearerToken(request: FastifyRequest): string | null {
-  const header = request.headers.authorization;
-  if (!header || !header.startsWith('Bearer ')) return null;
-  return header.slice('Bearer '.length).trim() || null;
+  return readSessionToken(request);
 }

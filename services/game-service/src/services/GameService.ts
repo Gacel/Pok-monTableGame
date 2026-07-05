@@ -1,65 +1,14 @@
-import { Board, Biome, Pokemon, Tile } from '../engine/board.js';
+import { Board, Biome, Pokemon } from '../engine/board.js';
 import { Hex, hexEqual, hexNeighbors } from '../engine/hex.js';
 import { getMoveOptions, MoveOptions } from '../engine/movement.js';
 import { computeDamage, computeMoveDamage } from '../engine/combat.js';
 import { terrainDamage } from '../engine/environment.js';
 import { collectResources, PlayerResources } from '../engine/resources.js';
 
-export type MatchStatus = 'active' | 'combat' | 'finished';
-export type CombatAction = 'ATACAR' | 'HABILIDAD' | 'OBJETO' | 'HUIR' | 'MOVE' | 'TARGET';
-
-/**
- * Estado de un combate interactivo por turnos. Modela "varios contra uno": un
- * atacante solitario contra uno o VARIOS defensores del mismo jugador que están
- * a rango del punto de combate. El atacante elige a qué defensor dirige cada
- * acción (`targetId`). Los campos `defender*` reflejan el objetivo actual del
- * atacante (compatibilidad con render de 1 contra 1).
- */
-export interface CombatState {
-  attackerId: string;
-  defenderId: string; // objetivo actual del atacante (espejo de targetId)
-  attackerHex: Hex;
-  defenderHex: Hex; // hex del objetivo actual
-  attacker: Pokemon; // copia viva (hp actual)
-  defender: Pokemon; // objetivo actual (misma referencia que defenders[i])
-  attackerPlayer: string;
-  defenderPlayer: string;
-  /** Todos los defensores que participan (varios contra uno). */
-  defenders: Pokemon[];
-  /** Hexes paralelos a `defenders`. */
-  defenderHexes: Hex[];
-  /** Id del defensor al que el atacante dirige sus acciones. */
-  targetId: string;
-  /** Id del Pokémon que debe elegir acción ahora. */
-  turnActorId: string;
-  round: number;
-  log: string[];
-  status: 'active' | 'finished';
-  winnerId: string | null;
-  loserId: string | null;
-  outcome: 'ko' | 'fled' | null;
-}
-
-export interface MatchStateDTO {
-  id: string;
-  tiles: Tile[];
-  players: string[];
-  currentPlayer: string;
-  turn: number;
-  status: MatchStatus;
-  winner: string | null;
-  resources: Record<string, PlayerResources>;
-  log: string[];
-  combat: CombatState | null;
-  /** Alianzas 2v2 ([[p1,p3],[p2,p4]]); null en todos contra todos. */
-  alliances: string[][] | null;
-  /** Jugadores ya eliminados (sin Pokémon o que abandonaron). */
-  eliminated: string[];
-  /** ARENA: partida persistente que nunca termina (no mostrar "victoria"). */
-  persistent: boolean;
-  /** Bajas por KO de la última acción (para economía). Efímero, no persistido. */
-  defeats: { killerSlot: string; victimSlot: string }[];
-}
+// Contratos de estado en @transcendence/shared (única fuente de verdad).
+// Se re-exportan para no romper los imports existentes `from '../services/GameService.js'`.
+export type { MatchStatus, CombatAction, CombatState, MatchStateDTO } from '@transcendence/shared';
+import type { MatchStatus, CombatAction, CombatState, MatchStateDTO } from '@transcendence/shared';
 
 export interface PlayResult {
   ok: boolean;

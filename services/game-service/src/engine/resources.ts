@@ -1,10 +1,8 @@
 import { Board } from './board.js';
 
-export interface PlayerResources {
-  FIRE_CANDY: number;
-  WATER_CANDY: number;
-  GRASS_CANDY: number;
-}
+// `PlayerResources` vive en @transcendence/shared. Se re-exporta aquí.
+export type { PlayerResources } from '@transcendence/shared';
+import type { PlayerResources } from '@transcendence/shared';
 
 // Simula la recolección de recursos al final de un turno
 export function collectResources(board: Board): Record<string, PlayerResources> {

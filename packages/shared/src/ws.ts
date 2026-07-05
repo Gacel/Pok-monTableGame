@@ -4,6 +4,7 @@
  * acciones que el servidor valida antes de difundir.
  */
 import type { RoomInfo } from './lobby.js';
+import type { MatchStateDTO } from './match.js';
 
 /** Coordenada axial de una casilla hexagonal. */
 export interface WsHex {
@@ -22,7 +23,7 @@ export type WsClientMessage =
 
 /** Mensajes que difunde el servidor. `state` es el MatchStateDTO autoritativo. */
 export type WsServerMessage =
-  | { type: 'state'; state: unknown }
+  | { type: 'state'; state: MatchStateDTO }
   | { type: 'room'; room: RoomInfo }
   | { type: 'room_closed'; matchId: string }
   | { type: 'chat'; text: string }

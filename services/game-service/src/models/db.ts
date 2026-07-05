@@ -151,6 +151,14 @@ async function openAndMigrate(): Promise<Database> {
   const userCols = await db.all(`PRAGMA table_info(users)`);
   const userNames = new Set(userCols.map((c: { name: string }) => c.name));
   if (!userNames.has('email')) await db.exec(`ALTER TABLE users ADD COLUMN email TEXT`);
+  // Registro real: contraseña (hash), datos de perfil y 2FA.
+  if (!userNames.has('password_hash')) await db.exec(`ALTER TABLE users ADD COLUMN password_hash TEXT`);
+  if (!userNames.has('age')) await db.exec(`ALTER TABLE users ADD COLUMN age INTEGER`);
+  if (!userNames.has('is_student42'))
+    await db.exec(`ALTER TABLE users ADD COLUMN is_student42 INTEGER NOT NULL DEFAULT 0`);
+  if (!userNames.has('totp_secret')) await db.exec(`ALTER TABLE users ADD COLUMN totp_secret TEXT`);
+  if (!userNames.has('two_factor_enabled'))
+    await db.exec(`ALTER TABLE users ADD COLUMN two_factor_enabled INTEGER NOT NULL DEFAULT 0`);
   // Índice único de email (múltiples NULL permitidos en SQLite).
   await db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email)`);
 

@@ -3,17 +3,43 @@ import { apiFetch } from '../net/api';
 export interface AuthResult {
   ok: boolean;
   error?: string;
+  /** El login requiere un código 2FA (el usuario tiene 2FA activado). */
+  twoFactorRequired?: boolean;
 }
 
+/** Datos del propio usuario (espejo de SafeUser del servidor, /api/users/me). */
+export interface AuthUser {
+  id: string;
+  email: string | null;
+  username: string | null;
+  avatarUrl: string | null;
+  age: number | null;
+  isStudent42: boolean;
+  twoFactorEnabled: boolean;
+  level: number;
+  coins: number;
+  pokemonCount?: number;
+}
+
+export interface SignupData {
+  name: string;
+  email: string;
+  password: string;
+  age: number;
+  student42: boolean;
+}
+
+/**
+ * Estado de autenticación del cliente.
+ *
+ * La sesión vive en una cookie `HttpOnly` gestionada por el servidor: el cliente
+ * NO guarda ni lee el JWT. La validez de la sesión se determina consultando
+ * /api/users/me (200 = sesión válida).
+ */
 export class AuthState {
-  public user: any = null;
-  public sessionToken: string | null = null;
+  public user: AuthUser | null = null;
 
   private listeners: Set<() => void> = new Set();
-
-  constructor() {
-    this.sessionToken = localStorage.getItem('token');
-  }
 
   public subscribe(listener: () => void) {
     this.listeners.add(listener);
@@ -24,69 +50,67 @@ export class AuthState {
     for (const l of this.listeners) l();
   }
 
-  public async checkSession() {
-    if (this.sessionToken) {
-      await this.fetchUserProfile();
-      // Si el token es inválido o el usuario ya no existe, fetchUserProfile limpia
-      // la sesión: no hay sesión válida → volver a Welcome.
-      return !!this.user;
-    }
-    return false;
+  /** ¿Hay sesión válida? (cookie presente y aceptada por el servidor). */
+  public async checkSession(): Promise<boolean> {
+    await this.fetchUserProfile();
+    return !!this.user;
   }
 
-  /** Login (cuenta existente) o signup (crear cuenta) según `path`. */
-  private async authWithEmail(path: string, email: string): Promise<AuthResult> {
+  public async signup(data: SignupData): Promise<AuthResult> {
     try {
-      const res = await fetch(path, {
+      const res = await apiFetch('/api/auth/signup', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify(data),
       });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok && data.token) {
-        this.sessionToken = data.token;
-        localStorage.setItem('token', data.token);
-        this.user = data.user;
+      const body = await res.json().catch(() => ({}));
+      if (res.ok && body.success) {
+        this.user = body.user;
         this.notify();
         return { ok: true };
       }
-      return { ok: false, error: data.error ?? 'No se pudo completar la operación' };
+      return { ok: false, error: body.error ?? 'No se pudo registrar' };
     } catch (e) {
-      console.error('Auth error', e);
+      console.error('Signup error', e);
       return { ok: false, error: 'Error de red' };
     }
   }
 
-  public loginWithEmail(email: string): Promise<AuthResult> {
-    return this.authWithEmail('/api/auth/login', email);
-  }
-
-  public signupWithEmail(email: string): Promise<AuthResult> {
-    return this.authWithEmail('/api/auth/signup', email);
-  }
-
-  public async fetchUserProfile() {
-    if (!this.sessionToken) return;
+  public async login(email: string, password: string, code?: string): Promise<AuthResult> {
     try {
-      const res = await fetch('/api/users/me', {
-        headers: { 'Authorization': `Bearer ${this.sessionToken}` }
+      const res = await apiFetch('/api/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email, password, ...(code ? { code } : {}) }),
       });
+      const body = await res.json().catch(() => ({}));
+      if (res.ok && body.success) {
+        this.user = body.user;
+        this.notify();
+        return { ok: true };
+      }
+      return { ok: false, error: body.error ?? 'No se pudo entrar', twoFactorRequired: !!body.twoFactorRequired };
+    } catch (e) {
+      console.error('Login error', e);
+      return { ok: false, error: 'Error de red' };
+    }
+  }
+
+  public async fetchUserProfile(): Promise<void> {
+    try {
+      const res = await apiFetch('/api/users/me');
       if (res.ok) {
         const data = await res.json();
         this.user = data.user;
       } else {
         this.user = null;
-        this.sessionToken = null;
-        localStorage.removeItem('token');
       }
       this.notify();
     } catch (e) {
-      console.error("Failed to fetch user profile", e);
+      console.error('Failed to fetch user profile', e);
+      this.user = null;
     }
   }
 
-  public async registerAvatar(username: string, avatarUrl: string) {
-    if (!this.sessionToken) return false;
+  public async registerAvatar(username: string, avatarUrl: string): Promise<boolean> {
     try {
       const res = await apiFetch('/api/auth/register', {
         method: 'POST',
@@ -104,10 +128,13 @@ export class AuthState {
     return false;
   }
 
-  public logout() {
-    this.sessionToken = null;
+  public async logout(): Promise<void> {
+    try {
+      await apiFetch('/api/auth/logout', { method: 'POST' });
+    } catch {
+      /* ignora: limpiamos el estado local igualmente */
+    }
     this.user = null;
-    localStorage.removeItem('token');
     this.notify();
   }
 }

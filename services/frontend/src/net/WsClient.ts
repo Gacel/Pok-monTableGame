@@ -1,5 +1,4 @@
-import type { RoomInfo } from '@transcendence/shared';
-import { authState } from '../auth/AuthState';
+import type { RoomInfo, MatchStateDTO } from '@transcendence/shared';
 
 /**
  * Cliente WSS del frontend. Recibe difusiones autoritativas del game-service
@@ -15,7 +14,7 @@ export interface DmHistoryMessage {
 
 export interface WsMessage {
   type: 'state' | 'room' | 'room_closed' | 'chat' | 'chat_history' | 'error';
-  state?: unknown;
+  state?: MatchStateDTO;
   room?: RoomInfo;
   matchId?: string;
   combat?: unknown;
@@ -38,21 +37,27 @@ export class WsClient {
     this.onMessage = onMessage;
   }
 
+  private retries = 0;
+
   /** Sin `matchId` conecta a la sala local (hot-seat); con él, a la sala online.
-   *  El token (JWT) se envía SIEMPRE por query string: el servidor exige auth
-   *  para abrir el socket en ambos modos. */
+   *  La sesión se autentica con la cookie HttpOnly (enviada en el handshake al
+   *  ser mismo origen); ya NO se pasa el token por query string. */
   connect(matchId?: string): void {
     this.matchId = matchId ?? null;
+    this.closedByUser = false;
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
     const params = new URLSearchParams();
     if (this.matchId) params.set('matchId', this.matchId);
-    params.set('token', authState.sessionToken ?? '');
-    const url = `${proto}://${location.host}/ws?${params.toString()}`;
+    const qs = params.toString();
+    const url = `${proto}://${location.host}/ws${qs ? `?${qs}` : ''}`;
     try {
       this.ws = new WebSocket(url);
     } catch {
       return;
     }
+    this.ws.onopen = () => {
+      this.retries = 0;
+    };
     this.ws.onmessage = (e) => {
       try {
         this.onMessage(JSON.parse(e.data) as WsMessage);
@@ -61,9 +66,11 @@ export class WsClient {
       }
     };
     this.ws.onclose = () => {
-      if (!this.closedByUser) {
-        window.setTimeout(() => this.connect(this.matchId ?? undefined), 2000);
-      }
+      if (this.closedByUser || this.retries >= 6) return;
+      // Backoff exponencial con tope (evita reconexión indefinida a 2s).
+      const delay = Math.min(1000 * 2 ** this.retries, 30000);
+      this.retries++;
+      window.setTimeout(() => this.connect(this.matchId ?? undefined), delay);
     };
     this.ws.onerror = () => this.ws?.close();
   }

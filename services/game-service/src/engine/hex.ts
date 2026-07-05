@@ -1,7 +1,7 @@
-export interface Hex {
-  q: number;
-  r: number;
-}
+// `Hex` vive en @transcendence/shared (única fuente de verdad). Se re-exporta
+// aquí para no romper los múltiples imports `from './hex.js'`.
+export type { Hex } from '@transcendence/shared';
+import type { Hex } from '@transcendence/shared';
 
 export function createHex(q: number, r: number): Hex {
   return { q, r };
