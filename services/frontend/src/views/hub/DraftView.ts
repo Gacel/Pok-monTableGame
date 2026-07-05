@@ -1,6 +1,7 @@
 import type { MovementPattern, PokemonType } from '../../models/Types';
 import type { GameMode } from '@transcendence/shared';
 import { apiFetch } from '../../net/api';
+import { getSprite } from '../../net/PokeSprites';
 
 interface RosterEntry {
   name: string;
@@ -85,17 +86,7 @@ export class DraftView {
   private async preloadSprites(): Promise<void> {
     await Promise.all(
       this.roster.map(async (p) => {
-        try {
-          const r = await fetch(`https://pokeapi.co/api/v2/pokemon/${p.name.toLowerCase()}`);
-          if (!r.ok) return;
-          const d = await r.json();
-          this.sprites[p.name] =
-            d.sprites?.versions?.['generation-v']?.['black-white']?.animated?.front_default ||
-            d.sprites?.front_default ||
-            '';
-        } catch {
-          /* sin sprite */
-        }
+        this.sprites[p.name] = await getSprite(p.name);
       })
     );
   }

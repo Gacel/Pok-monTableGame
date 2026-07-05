@@ -1,4 +1,5 @@
 import { GameState } from '../models/GameState';
+import { getSpritePair } from '../net/PokeSprites';
 import { BoardView } from '../views/BoardView';
 import { HUDView } from '../views/HUDView';
 import { EntityView } from '../views/EntityView';
@@ -239,22 +240,11 @@ export class GameController {
 
   private async loadPokeSprite(name: string): Promise<string | null> {
     if (this.state.pokeGifs[name]) return this.state.pokeGifs[name] ?? null;
-    try {
-      const res = await fetch(`https://pokeapi.co/api/v2/pokemon/${name.toLowerCase()}`);
-      if (!res.ok) return null;
-      const data = await res.json();
-      const gifUrl =
-        data.sprites?.versions?.['generation-v']?.['black-white']?.animated?.front_default ||
-        data.sprites?.front_default;
-      const staticUrl = data.sprites?.front_default || gifUrl;
-      if (!gifUrl) return null;
-      this.state.pokeGifs[name] = gifUrl;
-      this.state.pokeStatic[name] = staticUrl;
-      return gifUrl;
-    } catch (err) {
-      console.error(err);
-      return null;
-    }
+    const { gif, static: staticUrl } = await getSpritePair(name);
+    if (!gif) return null;
+    this.state.pokeGifs[name] = gif;
+    this.state.pokeStatic[name] = staticUrl;
+    return gif;
   }
 
   private renderAll(): void {

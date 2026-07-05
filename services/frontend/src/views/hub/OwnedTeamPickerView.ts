@@ -1,4 +1,5 @@
 import { apiFetch } from '../../net/api';
+import { getSprite } from '../../net/PokeSprites';
 import { FONT, hubPanel, panelTitle, panelCard, backButton } from './panel';
 
 interface OwnedPokemon {
@@ -60,16 +61,7 @@ export class OwnedTeamPickerView {
     await Promise.all(
       this.owned.map(async (p) => {
         if (this.sprites[p.name]) return;
-        try {
-          const r = await fetch(`https://pokeapi.co/api/v2/pokemon/${p.name.toLowerCase()}`);
-          const d = await r.json();
-          this.sprites[p.name] =
-            d.sprites?.versions?.['generation-v']?.['black-white']?.animated?.front_default ||
-            d.sprites?.front_default ||
-            '';
-        } catch {
-          this.sprites[p.name] = '';
-        }
+        this.sprites[p.name] = await getSprite(p.name);
       })
     );
   }

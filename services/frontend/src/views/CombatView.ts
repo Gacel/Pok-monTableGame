@@ -1,5 +1,6 @@
 import { GameState } from '../models/GameState';
 import type { CombatAction, CombatState, PlayerResources, Pokemon, PokemonMove } from '../models/Types';
+import { escapeHtml } from '../utils/html';
 
 /**
  * Capa VISTA: escena de combate estilo juego de lucha (bitmap frente a frente)
@@ -302,6 +303,6 @@ export class CombatView {
   }
 
   private escape(s: string): string {
-    return s.replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' })[c] ?? c);
+    return escapeHtml(s);
   }
 }

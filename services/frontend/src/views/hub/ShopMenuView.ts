@@ -1,5 +1,6 @@
 import { showMainMenu } from '../../main';
 import { apiFetch } from '../../net/api';
+import { getSprite } from '../../net/PokeSprites';
 import { authState } from '../../auth/AuthState';
 import { FONT, hubPanel, panelTitle, panelCard, menuButton, backButton } from './panel';
 
@@ -132,16 +133,7 @@ export class ShopMenuView {
 
   private async loadRevealSprite(): Promise<void> {
     if (!this.reveal) return;
-    try {
-      const r = await fetch(`https://pokeapi.co/api/v2/pokemon/${this.reveal.name.toLowerCase()}`);
-      const d = await r.json();
-      this.reveal.sprite =
-        d.sprites?.versions?.['generation-v']?.['black-white']?.animated?.front_default ||
-        d.sprites?.front_default ||
-        '';
-    } catch {
-      /* sin sprite */
-    }
+    this.reveal.sprite = await getSprite(this.reveal.name);
   }
 
   private renderReveal() {

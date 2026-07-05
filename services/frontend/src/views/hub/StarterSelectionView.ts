@@ -1,5 +1,6 @@
 import { showMainMenu } from '../../main';
 import { apiFetch } from '../../net/api';
+import { getSprite } from '../../net/PokeSprites';
 import { authState } from '../../auth/AuthState';
 import { FONT, hubPanel, panelTitle, panelCard } from './panel';
 
@@ -53,16 +54,7 @@ export class StarterSelectionView {
   private async preloadSprites(): Promise<void> {
     await Promise.all(
       this.options.map(async (o) => {
-        try {
-          const r = await fetch(`https://pokeapi.co/api/v2/pokemon/${o.name.toLowerCase()}`);
-          const d = await r.json();
-          this.sprites[o.name] =
-            d.sprites?.versions?.['generation-v']?.['black-white']?.animated?.front_default ||
-            d.sprites?.front_default ||
-            '';
-        } catch {
-          this.sprites[o.name] = '';
-        }
+        this.sprites[o.name] = await getSprite(o.name);
       })
     );
   }
