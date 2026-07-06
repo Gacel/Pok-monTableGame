@@ -137,3 +137,67 @@ describe('decideBotAction · sin acciones', () => {
     assert.equal(d.type, 'end');
   });
 });
+
+describe('decideBotAction · foco de fuego (rematar heridos)', () => {
+  it('prefiere el REMATE aunque sea desfavorable frente a un súper-efectivo no letal', () => {
+    const piece: BotPieceOptions = {
+      from: H(0, 0),
+      pokemon: mon('FIRE'),
+      moves: [],
+      attacks: [
+        { hex: H(0, 1), target: mon('GRASS', 100) }, // súper-efectivo (1.5) pero NO mata
+        { hex: H(1, 0), target: mon('WATER', 3) }, // desfavorable (0.5) pero REMATA
+      ],
+    };
+    const enemies: EnemyPiece[] = [
+      { hex: H(0, 1), pokemon: mon('GRASS', 100) },
+      { hex: H(1, 0), pokemon: mon('WATER', 3) },
+    ];
+    const d = decideBotAction([piece], enemies, 3, rng(0));
+    assert.equal(d.type, 'attack');
+    assert.deepEqual((d as { to: Hex }).to, H(1, 0)); // remata al herido
+  });
+});
+
+describe('decideBotAction · retirada táctica (DIFÍCIL)', () => {
+  const piece = (): BotPieceOptions => ({
+    from: H(0, 0),
+    pokemon: mon('FIRE'),
+    moves: [H(-1, 0)], // única opción: alejarse del rival en (2,0)
+    attacks: [],
+  });
+  const enemies: EnemyPiece[] = [{ hex: H(2, 0), pokemon: mon('WATER') }]; // WATER gana a FIRE
+
+  it('DIFÍCIL se aleja del rival fuerte en vez de pasar turno', () => {
+    const d = decideBotAction([piece()], enemies, 3, rng(0));
+    assert.equal(d.type, 'move');
+    assert.deepEqual((d as { to: Hex }).to, H(-1, 0));
+  });
+
+  it('NORMAL, en cambio, pasa turno (no se retira)', () => {
+    const d = decideBotAction([piece()], enemies, 2, rng(0));
+    assert.equal(d.type, 'end');
+  });
+});
+
+describe('decideBotAction · evitar terreno malo (DIFÍCIL)', () => {
+  const grassPiece: BotPieceOptions = {
+    from: H(0, 0),
+    pokemon: mon('GRASS'),
+    moves: [H(4, 0), H(3, 0)], // (4,0) acerca más pero es LAVA; (3,0) es hierba
+    attacks: [],
+  };
+  const enemies: EnemyPiece[] = [{ hex: H(6, 0), pokemon: mon('WATER') }];
+  const biomeOf = (h: Hex) => (h.q === 4 && h.r === 0 ? 'FIRE' : 'GRASS'); // (4,0)=lava
+
+  it('evita la lava aunque acerque más al rival', () => {
+    const d = decideBotAction([grassPiece], enemies, 3, rng(0), biomeOf);
+    assert.equal(d.type, 'move');
+    assert.deepEqual((d as { to: Hex }).to, H(3, 0)); // hierba, no lava
+  });
+
+  it('sin conocer el terreno (o en niveles bajos) tomaría el avance máximo', () => {
+    const d = decideBotAction([grassPiece], enemies, 3, rng(0)); // sin biomeOf
+    assert.deepEqual((d as { to: Hex }).to, H(4, 0)); // el que más acerca
+  });
+});

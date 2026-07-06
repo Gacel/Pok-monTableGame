@@ -190,7 +190,9 @@ export class GameController {
       return;
     }
 
-    const decision = decideBotAction(pieces, enemies, this.bots[slot] ?? 2, Math.random);
+    // Lookup de bioma por hex (para que DIFÍCIL evite terreno malo / se retire).
+    const biomeOf = (h: Hex) => m.tiles.find((t) => t.hex.q === h.q && t.hex.r === h.r)?.biome;
+    const decision = decideBotAction(pieces, enemies, this.bots[slot] ?? 2, Math.random, biomeOf);
     if (decision.type === 'end') {
       await this.endTurn();
     } else {

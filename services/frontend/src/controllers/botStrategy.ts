@@ -58,8 +58,29 @@ function scoreAttack(from: Hex, to: Hex, att: Pokemon, def: Pokemon): AttackCand
   const dmg = estDamage(att, def);
   const kill = dmg >= def.hp;
   const lowHp = 1 - def.hp / Math.max(1, def.maxHp);
-  const score = adv * 100 + (kill ? 300 : 0) + lowHp * 60 + dmg;
+  // Foco de fuego: rematar y golpear a rivales heridos pesa MÁS que la ventaja de
+  // tipo, para que la IA cierre combates en vez de repartir daño.
+  const score = adv * 100 + (kill ? 500 : 0) + lowHp * 140 + dmg;
   return { from, to, score, adv, kill };
+}
+
+/**
+ * Penalización por terreno para un tipo (heurística de la IA; refleja las reglas
+ * de services/game-service/src/engine/environment.ts). Mayor = peor sitio.
+ * - Agua: los FIRE no pueden entrar → prohibitivo.
+ * - Lava (FIRE): GRASS/ICE sufren mucho daño; otros algo; FIRE gana ATK (bonus).
+ */
+function terrainPenalty(type: string, biome: string | undefined): number {
+  if (!biome) return 0;
+  if (biome === 'WATER') return type === 'FIRE' ? 1000 : 0;
+  if (biome === 'FIRE') {
+    if (type === 'FIRE') return -10; // +20% ATK → terreno deseable
+    if (type === 'FLYING') return 0; // inmune al daño de lava
+    if (type === 'GRASS' || type === 'ICE') return 40;
+    if (type === 'WATER') return 10;
+    return 20;
+  }
+  return 0;
 }
 
 function pickTargetEnemy(mine: Pokemon, from: Hex, enemies: EnemyPiece[], level: BotLevel): EnemyPiece {
@@ -76,7 +97,14 @@ function pickTargetEnemy(mine: Pokemon, from: Hex, enemies: EnemyPiece[], level:
   return scored[0]!.e;
 }
 
-function bestMoveToward(pieces: BotPieceOptions[], enemies: EnemyPiece[], level: BotLevel): BotDecision | null {
+type BiomeOf = (hex: Hex) => string | undefined;
+
+function bestMoveToward(
+  pieces: BotPieceOptions[],
+  enemies: EnemyPiece[],
+  level: BotLevel,
+  biomeOf?: BiomeOf
+): BotDecision | null {
   if (!enemies.length) return null;
   let best: BotDecision | null = null;
   let bestGain = 0;
@@ -85,9 +113,39 @@ function bestMoveToward(pieces: BotPieceOptions[], enemies: EnemyPiece[], level:
     const target = pickTargetEnemy(p.pokemon, p.from, enemies, level);
     const cur = hexDistance(p.from, target.hex);
     for (const m of p.moves) {
-      const gain = cur - hexDistance(m, target.hex);
+      let gain = cur - hexDistance(m, target.hex);
+      // DIFÍCIL: descuenta el terreno desfavorable del destino (evita meterse en
+      // lava/agua). En hexes, así que dividimos la penalización para escalarla.
+      if (level === 3 && biomeOf) gain -= terrainPenalty(p.pokemon.type, biomeOf(m)) / 20;
       if (gain > bestGain) {
         bestGain = gain;
+        best = { type: 'move', from: p.from, to: m };
+      }
+    }
+  }
+  return best;
+}
+
+/**
+ * Retirada táctica (solo DIFÍCIL): cuando no hay buen ataque ni avance útil, en
+ * vez de pasar turno el bot se ALEJA del rival más peligroso (el que le gana por
+ * tipo y está más cerca), evitando terreno malo. Devuelve null si no gana distancia.
+ */
+function bestRetreat(pieces: BotPieceOptions[], enemies: EnemyPiece[], biomeOf?: BiomeOf): BotDecision | null {
+  if (!enemies.length) return null;
+  let best: BotDecision | null = null;
+  let bestScore = 0;
+  for (const p of pieces) {
+    if (!p.moves.length) continue;
+    const threats = enemies.filter((e) => typeAdvantage(e.pokemon.type, p.pokemon.type) > 1.0);
+    const pool = threats.length ? threats : enemies;
+    const ref = pool.slice().sort((a, b) => hexDistance(p.from, a.hex) - hexDistance(p.from, b.hex))[0]!;
+    const cur = hexDistance(p.from, ref.hex);
+    for (const m of p.moves) {
+      let score = hexDistance(m, ref.hex) - cur; // alejarse del rival = positivo
+      if (biomeOf) score -= terrainPenalty(p.pokemon.type, biomeOf(m)) / 20;
+      if (score > bestScore) {
+        bestScore = score;
         best = { type: 'move', from: p.from, to: m };
       }
     }
@@ -100,7 +158,8 @@ export function decideBotAction(
   pieces: BotPieceOptions[],
   enemies: EnemyPiece[],
   level: BotLevel,
-  rng: () => number
+  rng: () => number,
+  biomeOf?: BiomeOf
 ): BotDecision {
   const attacks: AttackCand[] = [];
   for (const p of pieces) {
@@ -134,10 +193,17 @@ export function decideBotAction(
     }
   }
 
-  const move = bestMoveToward(pieces, enemies, level);
+  const move = bestMoveToward(pieces, enemies, level, biomeOf);
   if (move) return move;
 
-  // Sin avance posible: NORMAL ataca aunque sea desfavorable; DIFÍCIL pasa turno.
+  // Sin avance posible:
+  //  - NORMAL: ataca aunque sea desfavorable (codicioso).
+  //  - DIFÍCIL: intenta RETIRADA táctica (alejarse del rival fuerte); si no gana
+  //    distancia, pasa turno.
   if (best && level === 2) return { type: 'attack', from: best.from, to: best.to };
+  if (level === 3) {
+    const retreat = bestRetreat(pieces, enemies, biomeOf);
+    if (retreat) return retreat;
+  }
   return { type: 'end' };
 }
