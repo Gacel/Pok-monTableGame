@@ -9,11 +9,13 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "tsx --test test/**/*.test.ts"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.0.0",
     "tailwindcss": "^4.0.0",
+    "tsx": "^4.7.1",
     "typescript": "~6.0.2",
     "vite": "^8.1.1"
   }

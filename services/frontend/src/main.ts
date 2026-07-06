@@ -20,6 +20,7 @@ import { ShopMenuView } from './views/hub/ShopMenuView';
 import { AuctionHouseView } from './views/hub/AuctionHouseView';
 import { LocalSetupView } from './views/hub/LocalSetupView';
 import type { LocalGameConfig } from './views/hub/LocalSetupView';
+import type { BotLevel } from './controllers/botStrategy';
 import { SettingsView } from './views/hub/SettingsView';
 import { LobbyView } from './views/hub/LobbyView';
 import { DraftView } from './views/hub/DraftView';
@@ -228,7 +229,7 @@ async function onLocalDraftConfirmed(
     return;
   }
   draftLayer.classList.add('hidden');
-  enterGame(null);
+  enterGame(null, config.bots);
 }
 
 // ----------------------------------------------------------- PARTIDA ONLINE
@@ -370,7 +371,7 @@ async function tryRejoinOnline(): Promise<boolean> {
 
 // ------------------------------------------------------------------- TABLERO
 
-function enterGame(session: OnlineSession | null) {
+function enterGame(session: OnlineSession | null, bots?: Record<string, BotLevel>) {
   gameLayer.classList.remove('hidden');
   const sidebar = document.getElementById('right-sidebar');
   if (sidebar) sidebar.classList.remove('hidden');
@@ -379,6 +380,8 @@ function enterGame(session: OnlineSession | null) {
     gameController = new GameController(canvas);
   }
   gameController.setSession(session);
+  // La IA solo aplica en local (sin sesión online).
+  gameController.setBots(session ? null : bots ?? null);
   gameController.start();
 }
 

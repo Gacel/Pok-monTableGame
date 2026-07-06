@@ -89,3 +89,26 @@ export interface MoveOptions {
   moves: Hex[];
   attacks: Hex[];
 }
+
+/**
+ * Multiplicador de ataque por ventaja de tipo (rueda clásica). ÚNICA fuente:
+ * la usan el motor de combate (servidor) y la IA del cliente. 1.5 super efectivo,
+ * 0.5 poco efectivo, 1.0 neutro.
+ */
+export function typeAdvantage(attacker: string, defender: string): number {
+  const beats: Record<string, string[]> = {
+    FIRE: ['GRASS', 'ICE'],
+    WATER: ['FIRE'],
+    GRASS: ['WATER'],
+    ELECTRIC: ['WATER', 'FLYING'],
+    ICE: ['GRASS', 'FLYING', 'DRAGON'],
+    POISON: ['GRASS', 'FAIRY'],
+    FLYING: ['GRASS'],
+    PSYCHIC: ['POISON'],
+    DRAGON: ['DRAGON'],
+    FAIRY: ['DRAGON'],
+  };
+  if (beats[attacker]?.includes(defender)) return 1.5;
+  if (beats[defender]?.includes(attacker)) return 0.5;
+  return 1.0;
+}

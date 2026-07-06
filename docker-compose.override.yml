@@ -29,5 +29,7 @@ services:
       - ./services/frontend/public:/app/services/frontend/public
       - ./services/frontend/index.html:/app/services/frontend/index.html
       - ./services/frontend/vite.config.ts:/app/services/frontend/vite.config.ts
+      - ./services/frontend/package.json:/app/services/frontend/package.json
+      - ./services/frontend/test:/app/services/frontend/test
       - ./packages/shared:/app/packages/shared
     command: ['npm', 'run', 'dev', '--', '--host', '0.0.0.0']

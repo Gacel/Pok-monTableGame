@@ -10,8 +10,10 @@ import type { WsMessage } from '../net/WsClient';
 import { apiFetch } from '../net/api';
 import { MatchSession } from '../state/MatchSession';
 import type { OnlineSession } from '../state/MatchSession';
-import type { Hex, MatchState, CombatAction } from '../models/Types';
+import type { Hex, MatchState, CombatAction, Pokemon } from '../models/Types';
 import { authState } from '../auth/AuthState';
+import { decideBotAction } from './botStrategy';
+import type { BotLevel, BotPieceOptions, EnemyPiece } from './botStrategy';
 
 /**
  * Capa CONTROLADOR (frontend): traduce input del usuario a peticiones al servidor
@@ -37,6 +39,11 @@ export class GameController {
   private cameraAnimId: number | null = null;
   /** Sesión de partida ONLINE (matchId + slot propio); null en local hot-seat. */
   private session: OnlineSession | null = null;
+  /** Slots controlados por la IA (solo local): slot → nivel (1/2/3). */
+  private bots: Record<string, BotLevel> = {};
+  private botTimer: number | null = null;
+  private botActionCount = 0;
+  private botTurnKey = '';
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -88,6 +95,118 @@ export class GameController {
     if (resetBtn) resetBtn.style.display = session ? 'none' : '';
     const rematchBtn = document.getElementById('btn-rematch');
     if (rematchBtn) rematchBtn.textContent = session ? 'VOLVER AL MENÚ' : 'REVANCHA';
+  }
+
+  /** Configura los slots controlados por la IA (solo local). */
+  public setBots(bots: Record<string, BotLevel> | null): void {
+    this.bots = bots ?? {};
+  }
+
+  private isBotSlot(slot: string): boolean {
+    return !this.session && !!this.bots[slot];
+  }
+
+  private isEnemySlot(a: string, b: string): boolean {
+    if (a === b) return false;
+    const alliances = this.state.match?.alliances;
+    if (alliances) return !alliances.some((team) => team.includes(a) && team.includes(b));
+    return true;
+  }
+
+  /**
+   * Si es el turno (o el turno de combate) de un bot, programa su acción con una
+   * pequeña pausa para que se vea el juego. Se re-invoca tras cada cambio de estado.
+   */
+  private maybeRunBot(): void {
+    if (this.session || this.botTimer !== null || this.busy) return;
+    const m = this.state.match;
+    if (!m) return;
+
+    if (m.status === 'combat' && m.combat) {
+      const c = m.combat;
+      if (c.status === 'finished') {
+        if (this.isBotSlot(c.attackerPlayer) || this.isBotSlot(c.defenderPlayer)) {
+          this.scheduleBot(() => this.sendCombatContinue());
+        }
+        return;
+      }
+      const actor = c.turnActorId === c.attackerId ? c.attackerPlayer : c.defenderPlayer;
+      if (this.isBotSlot(actor)) {
+        // El combate lo resuelve a golpes básicos; la "listeza" está en elegir el enfrentamiento.
+        this.scheduleBot(() => this.sendCombatAction('ATACAR' as CombatAction));
+      }
+      return;
+    }
+
+    if (m.status === 'active' && this.isBotSlot(m.currentPlayer)) {
+      this.scheduleBot(() => this.runBotTurn());
+    }
+  }
+
+  private scheduleBot(fn: () => void | Promise<void>): void {
+    if (this.botTimer !== null) return;
+    this.botTimer = window.setTimeout(() => {
+      this.botTimer = null;
+      void fn();
+    }, 650);
+  }
+
+  /** Ejecuta UNA acción de tablero del bot de turno (mover, atacar o pasar). */
+  private async runBotTurn(): Promise<void> {
+    const m = this.state.match;
+    if (!m || m.status !== 'active') return;
+    const slot = m.currentPlayer;
+    if (!this.isBotSlot(slot)) return;
+
+    // Tope de seguridad: evita bucles si una acción no consume la pieza.
+    const ownPieces = m.tiles.filter((t) => t.occupant && t.occupant.playerId === slot);
+    if (this.botActionCount > ownPieces.length + 2) {
+      await this.endTurn();
+      return;
+    }
+    this.botActionCount++;
+
+    const enemies: EnemyPiece[] = m.tiles
+      .filter((t) => t.occupant && this.isEnemySlot(slot, t.occupant.playerId))
+      .map((t) => ({ hex: t.hex, pokemon: t.occupant as Pokemon }));
+
+    // Opciones por pieza que aún puede actuar.
+    const pieces: BotPieceOptions[] = [];
+    for (const t of ownPieces) {
+      const occ = t.occupant as Pokemon;
+      if (occ.hasActed) continue;
+      const opts = await this.fetchOptions(t.hex);
+      const attacks = opts.attacks
+        .map((h) => {
+          const tile = m.tiles.find((x) => x.hex.q === h.q && x.hex.r === h.r);
+          return tile?.occupant ? { hex: h, target: tile.occupant as Pokemon } : null;
+        })
+        .filter((a): a is { hex: Hex; target: Pokemon } => a !== null);
+      pieces.push({ from: t.hex, pokemon: occ, moves: opts.moves, attacks });
+    }
+
+    if (!pieces.length) {
+      await this.endTurn();
+      return;
+    }
+
+    const decision = decideBotAction(pieces, enemies, this.bots[slot] ?? 2, Math.random);
+    if (decision.type === 'end') {
+      await this.endTurn();
+    } else {
+      await this.performMove(decision.from, decision.to);
+    }
+  }
+
+  /** Opciones de movimiento/ataque de una pieza SIN tocar el estado de la UI. */
+  private async fetchOptions(hex: Hex): Promise<{ moves: Hex[]; attacks: Hex[] }> {
+    try {
+      const res = await apiFetch(this.apiPath(`/moves?q=${hex.q}&r=${hex.r}`));
+      if (res.ok) return (await res.json()) as { moves: Hex[]; attacks: Hex[] };
+    } catch {
+      /* sin opciones */
+    }
+    return { moves: [], attacks: [] };
   }
 
   /** Prefijo REST según el modo: /api/game (local) o /api/game/<matchId>. */
@@ -230,6 +349,14 @@ export class GameController {
       const targetTile = this.state.getLastInteractedTile(newState.currentPlayer);
       this.centerOnTile(targetTile, animateCamera && !!oldPlayer);
     }
+
+    // Nuevo turno de partida → reinicia el tope de acciones del bot.
+    const turnKey = `${newState.turn}:${newState.currentPlayer}`;
+    if (turnKey !== this.botTurnKey) {
+      this.botTurnKey = turnKey;
+      this.botActionCount = 0;
+    }
+    this.maybeRunBot();
   }
 
   private async preloadSprites(state: MatchState): Promise<void> {

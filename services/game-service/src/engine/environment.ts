@@ -7,27 +7,11 @@ import { Biome, Pokemon } from './board.js';
  *  - Terreno FIRE:  +20% ATK a Pokémon de FIRE, −15% DEF a Pokémon de GRASS.
  *  - Terreno WATER (río): Pokémon WATER ignoran penalizaciones de movimiento;
  *                         Pokémon FIRE no pueden entrar (bloqueados).
- *  - Ventaja de tipo (rueda clásica): FIRE > GRASS > WATER > FIRE.
+ *  - Ventaja de tipo (rueda clásica): en @transcendence/shared (fuente única).
  */
 
-/** Multiplicador de ataque por ventaja de tipo del atacante frente al defensor. */
-export function typeAdvantage(attacker: string, defender: string): number {
-  const beats: Record<string, string[]> = {
-    FIRE: ['GRASS', 'ICE'],
-    WATER: ['FIRE'],
-    GRASS: ['WATER'],
-    ELECTRIC: ['WATER', 'FLYING'],
-    ICE: ['GRASS', 'FLYING', 'DRAGON'],
-    POISON: ['GRASS', 'FAIRY'],
-    FLYING: ['GRASS'],
-    PSYCHIC: ['POISON'],
-    DRAGON: ['DRAGON'],
-    FAIRY: ['DRAGON'],
-  };
-  if (beats[attacker]?.includes(defender)) return 1.5; // super efectivo
-  if (beats[defender]?.includes(attacker)) return 0.5; // poco efectivo
-  return 1.0; // neutro
-}
+// `typeAdvantage` vive en @transcendence/shared (la usa también la IA del cliente).
+export { typeAdvantage } from '@transcendence/shared';
 
 /** ATK efectivo de un Pokémon situado sobre un bioma dado. */
 export function effectiveAtk(pokemon: Pokemon, terrain: Biome): number {

@@ -1,19 +1,27 @@
 import type { GameMode } from '@transcendence/shared';
 import { showMultiplayerMenu, startLocalGame } from '../../main';
+import type { BotLevel } from '../../controllers/botStrategy';
 
 export interface LocalGameConfig {
   players: number; // 2..4
   gameMode: GameMode; // 'ffa' | 'teams' (2v2, solo con 4)
+  /** Slots controlados por la IA: slot → nivel. Vacío = todo humano (hot-seat). */
+  bots?: Record<string, BotLevel>;
 }
 
 /**
  * Capa VISTA: configuración de la partida LOCAL (misma pantalla).
  * Nº de jugadores (2-4) y modo: todos contra todos o 2 vs 2 (con 4).
  */
+const BOT_LABELS: Record<BotLevel, string> = { 1: 'FÁCIL', 2: 'NORMAL', 3: 'DIFÍCIL' };
+
 export class LocalSetupView {
   private container: HTMLElement;
   private players = 2;
   private gameMode: GameMode = 'ffa';
+  /** Rivales controlados por la IA (por defecto sí: "juega contra la máquina"). */
+  private cpu = true;
+  private botLevel: BotLevel = 2;
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -63,6 +71,37 @@ export class LocalSetupView {
               ${modeBtn('teams', '🤝 2 VS 2', this.players === 4 ? 'P1+P3 vs P2+P4' : 'requiere 4', this.players !== 4)}
             </div>
 
+            <p class="text-black text-[8px] mb-2" style="font-family: 'Press Start 2P', monospace;">RIVALES</p>
+            <div class="flex gap-2 mb-3">
+              <button data-cpu="1" class="cpu-opt flex-1 py-2 text-[8px] rounded border-2 ${
+                this.cpu
+                  ? 'bg-yellow-400 border-yellow-600 text-black font-bold shadow-[0_3px_0_#000]'
+                  : 'bg-gray-100 border-gray-400 text-gray-700 hover:bg-gray-200'
+              }" style="font-family: 'Press Start 2P', monospace;">🤖 CPU</button>
+              <button data-cpu="0" class="cpu-opt flex-1 py-2 text-[8px] rounded border-2 ${
+                !this.cpu
+                  ? 'bg-yellow-400 border-yellow-600 text-black font-bold shadow-[0_3px_0_#000]'
+                  : 'bg-gray-100 border-gray-400 text-gray-700 hover:bg-gray-200'
+              }" style="font-family: 'Press Start 2P', monospace;">👥 HUMANOS</button>
+            </div>
+            ${
+              this.cpu
+                ? `<p class="text-black text-[8px] mb-2" style="font-family: 'Press Start 2P', monospace;">DIFICULTAD IA</p>
+            <div class="flex gap-2 mb-4">
+              ${([1, 2, 3] as BotLevel[])
+                .map(
+                  (lvl) =>
+                    `<button data-level="${lvl}" class="level-opt flex-1 py-2 text-[7px] rounded border-2 ${
+                      this.botLevel === lvl
+                        ? 'bg-red-500 border-red-700 text-white font-bold shadow-[0_3px_0_#000]'
+                        : 'bg-gray-100 border-gray-400 text-gray-700 hover:bg-gray-200'
+                    }" style="font-family: 'Press Start 2P', monospace;">${BOT_LABELS[lvl]}</button>`
+                )
+                .join('')}
+            </div>`
+                : `<p class="text-gray-500 text-[7px] mb-4" style="font-family: 'Press Start 2P', monospace;">Hot-seat: todos los jugadores en esta pantalla.</p>`
+            }
+
             <button id="btn-start-draft" class="w-full py-3 bg-red-600 hover:bg-red-500 text-white border-b-4 border-red-800 active:border-b-0 active:mt-1 transition-all rounded flex flex-col items-center gap-1" style="font-family: 'Press Start 2P', monospace; box-shadow: 0 4px 0 #000;">
               <span class="text-[11px]">▶ EMPEZAR DRAFT</span>
               <span class="text-[7px] text-yellow-200">3 Pokémon por jugador</span>
@@ -89,8 +128,25 @@ export class LocalSetupView {
         this.render();
       });
     });
+    this.container.querySelectorAll<HTMLButtonElement>('.cpu-opt').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        this.cpu = btn.dataset.cpu === '1';
+        this.render();
+      });
+    });
+    this.container.querySelectorAll<HTMLButtonElement>('.level-opt').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        this.botLevel = Number(btn.dataset.level) as BotLevel;
+        this.render();
+      });
+    });
     document.getElementById('btn-start-draft')?.addEventListener('click', () => {
-      startLocalGame({ players: this.players, gameMode: this.gameMode });
+      // Con CPU, los jugadores 2..N son bots del nivel elegido (P1 = humano).
+      const bots: Record<string, BotLevel> = {};
+      if (this.cpu) {
+        for (let i = 2; i <= this.players; i++) bots[`player${i}`] = this.botLevel;
+      }
+      startLocalGame({ players: this.players, gameMode: this.gameMode, bots });
     });
     document.getElementById('btn-back')?.addEventListener('click', () => showMultiplayerMenu());
   }
