@@ -19,7 +19,7 @@ export class PlayMenuView {
       `
       ${panelTitle('JUGAR')}
       ${panelCard(
-        `<div class="flex flex-col gap-4" style="width:560px; max-width:100%;">
+        `<div class="flex flex-col gap-4 w-full max-w-xl">
           ${menuButton({ id: 'btn-single', label: 'UN JUGADOR', icon: '🧍', sublabel: 'IA (fácil/normal/difícil/hardcore) o Survival', color: 'green' })}
           ${menuButton({ id: 'btn-multi', label: 'MULTIJUGADOR', icon: '👥', sublabel: 'Local u online · 1v1 · 2v2 · battle royale', color: 'red' })}
         </div>`,

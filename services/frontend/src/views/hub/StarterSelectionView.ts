@@ -84,7 +84,7 @@ export class StarterSelectionView {
       ${panelTitle('ELIGE TUS 3 POKÉMON')}
       <p class="text-white text-center mb-4" style="${FONT} font-size:10px;">Equilibrados en poder · elegidos ${n}/${this.pick}</p>
       ${panelCard(
-        `<div class="grid grid-cols-4 gap-3" style="width:640px; max-width:100%;">${cards}</div>`,
+        `<div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 sm:gap-3 w-full max-w-xl">${cards}</div>`,
         'flex flex-col items-center'
       )}
       <button id="btn-confirm-starters" ${ready ? '' : 'disabled'} class="mt-6 px-8 py-3 rounded border-b-4 ${

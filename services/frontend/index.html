@@ -3,35 +3,45 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <title>Transcendence - Pokémon Edition</title>
   </head>
   <body class="bg-gray-950 text-white min-h-screen flex flex-col items-center justify-center overflow-hidden">
-    <div id="app" class="w-full h-screen overflow-hidden relative flex items-center justify-center bg-gray-950">
-      
+    <div id="app" class="w-full h-dvh overflow-hidden relative flex items-center justify-center bg-gray-950">
+
       <!-- Fullscreen layer for Welcome/Cinematics -->
       <div id="welcome-layer" class="absolute inset-0 z-[100] flex items-center justify-center bg-black empty:hidden pointer-events-none"></div>
 
       <!-- Fullscreen layer for Inventory (ocupa toda la pantalla, como el mapa) -->
       <div id="inventory-layer" class="absolute inset-0 z-[90] hidden bg-gray-950 overflow-hidden"></div>
 
+      <!-- CAPA DE MENÚS (HUB) — a tamaño REAL del dispositivo (fuera del lienzo
+           escalado) para que los breakpoints responsive de Tailwind respondan al
+           viewport real. Scroll propio en pantallas bajas. Ver docs/RESPONSIVE.md. -->
+      <div id="hub-layer" class="absolute inset-0 z-[80] flex items-center justify-center bg-gray-900 overflow-y-auto overscroll-contain transition-opacity duration-500"></div>
+
+      <!-- CAPA DE DRAFT (selección de equipos) — también a tamaño real. -->
+      <div id="draft-layer" class="absolute inset-0 z-[85] hidden overflow-y-auto overscroll-contain bg-gray-900"></div>
+
+      <!-- OVERLAY DE ROTACIÓN — se muestra sobre el TABLERO en móvil vertical
+           (el tablero 16:10 no es jugable en portrait). Controlado desde main.ts. -->
+      <div id="rotate-overlay" class="absolute inset-0 z-[95] hidden flex-col items-center justify-center gap-6 bg-black text-center px-8">
+        <div class="text-6xl animate-pulse">📱 ↻</div>
+        <p class="text-yellow-400 text-sm sm:text-base leading-relaxed" style="font-family:'Press Start 2P',monospace;">GIRA EL DISPOSITIVO</p>
+        <p class="text-gray-300 text-[10px] sm:text-xs leading-relaxed max-w-xs" style="font-family:'Press Start 2P',monospace;">El tablero se juega en horizontal</p>
+      </div>
+
       <!-- CONTENEDOR GENERAL ESCALABLE -->
       <div id="game-container" class="relative flex items-center justify-center gap-6" style="transform-origin: center; transition: transform 0.2s ease;">
         
         <!-- GAME WRAPPER (EL CANVA DEL JUEGO - 1600x1000) -->
         <div id="game-wrapper" class="relative flex items-center justify-center overflow-hidden border-[8px] border-[#0a0a0a] bg-gray-900 shadow-[0_0_30px_rgba(0,0,0,1)] rounded-lg" style="width: 1600px; height: 1000px; flex-shrink: 0;">
-            
-          <!-- Hub Layer (Menus) -->
-          <div id="hub-layer" class="absolute inset-0 z-50 flex items-center justify-center bg-gray-900 transition-opacity duration-500">
-            <!-- Se inyectan las vistas aquí -->
-          </div>
 
-          <!-- Draft Layer (selección de equipos) -->
-          <div id="draft-layer" class="absolute inset-0 z-[55] hidden overflow-auto bg-gray-900">
-            <!-- DraftView se inyecta aquí -->
-          </div>
-          
+          <!-- NOTA: #hub-layer y #draft-layer se movieron a nivel de #app (tamaño real
+               del dispositivo). Aquí solo queda el TABLERO, que sí usa el lienzo
+               1600×1000 escalado. Ver docs/RESPONSIVE.md. -->
+
           <!-- Game Layer -->
           <div id="game-layer" class="absolute inset-0 z-10 hidden bg-black flex overflow-hidden">
             

@@ -47,7 +47,7 @@ export class ShopMenuView {
       `
       ${panelTitle('TIENDA')}
       ${panelCard(
-        `<div class="flex flex-col gap-4" style="width:620px; max-width:100%;">
+        `<div class="flex flex-col gap-4 w-full max-w-xl">
           ${menuButton({ label: 'COSMÉTICOS', icon: '🎨', color: 'purple', disabled: true })}
           ${menuButton({ id: 'btn-balls', label: 'POKÉBALL SORPRESA', icon: '🎁', color: 'red' })}
           ${menuButton({ label: 'RECUPERA UN POKÉMON', icon: '💾', sublabel: 'Solo perdido en Survival (single) · 10000 🪙', color: 'blue', disabled: true })}
@@ -86,7 +86,7 @@ export class ShopMenuView {
       ${panelTitle('POKÉBALL SORPRESA')}
       <p class="text-white text-center mb-3" style="${FONT} font-size:11px;">Tu saldo: <span class="text-yellow-300">${coins} 🪙</span></p>
       ${panelCard(
-        `<div class="grid grid-cols-4 gap-4" style="width:720px; max-width:100%;">${BALLS.map(ballCard).join('')}</div>
+        `<div class="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4 w-full max-w-3xl">${BALLS.map(ballCard).join('')}</div>
          ${this.notice ? `<p class="text-red-500 text-center mt-4" style="${FONT} font-size:9px;">⚠ ${this.notice}</p>` : ''}
          <p class="text-gray-500 text-center mt-4" style="${FONT} font-size:7px;">A más cara la bola, más probabilidad de Pokémon buenos.</p>`,
         'flex flex-col items-center'
@@ -147,7 +147,7 @@ export class ShopMenuView {
       `
       ${panelTitle('¡HAS OBTENIDO!')}
       ${panelCard(
-        `<div class="flex flex-col items-center gap-4" style="width:420px; max-width:100%;">
+        `<div class="flex flex-col items-center gap-4 w-full max-w-md">
           <img src="${rv.sprite}" alt="${rv.name}" class="w-32 h-32 object-contain" style="image-rendering:pixelated;" />
           <span class="uppercase text-black" style="${FONT} font-size:16px;">${rv.name}</span>
           <span style="${FONT} font-size:11px; color:${color};">★ ${TIER_LABEL[rv.tier] ?? ''}</span>

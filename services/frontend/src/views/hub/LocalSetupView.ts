@@ -55,9 +55,9 @@ export class LocalSetupView {
     };
 
     this.container.innerHTML = `
-      <div class="transform scale-125 lg:scale-150 origin-center transition-transform">
+      <div class="w-full transform scale-100 md:scale-110 lg:scale-150 origin-center transition-transform">
         <div class="relative w-full max-w-2xl mx-auto p-1 bg-gray-900" style="border: 4px solid #fff; border-radius: 8px; box-shadow: 0 0 0 4px #000, 0 0 20px rgba(0,0,0,0.8);">
-          <div class="bg-blue-900 border-4 border-black p-4 flex flex-col items-center min-h-[400px] relative" style="border-radius: 4px; box-shadow: inset 0 0 20px rgba(0,0,0,0.5);">
+          <div class="bg-blue-900 border-4 border-black p-3 sm:p-4 flex flex-col items-center min-h-[400px] relative" style="border-radius: 4px; box-shadow: inset 0 0 20px rgba(0,0,0,0.5);">
 
           <div class="bg-white border-4 border-gray-800 p-4 shadow-[4px_4px_0_#000] rounded-lg w-full max-w-sm relative mt-6">
             <h3 class="text-black text-xs mb-4 text-center border-b-2 border-gray-300 pb-2" style="font-family: 'Press Start 2P', monospace;">PARTIDA LOCAL</h3>

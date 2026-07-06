@@ -19,29 +19,35 @@ export interface HubPanelOpts {
 
 /**
  * Marco "consola" grande y centrado. Envuelve el contenido interior.
- * Sustituye al viejo hack `transform scale-125 lg:scale-150` + `max-w-2xl`.
+ *
+ * RESPONSIVE (ver docs/RESPONSIVE.md): la capa #hub-layer se renderiza a tamaño
+ * REAL del dispositivo (fuera del lienzo 1600×1000 escalado), así que aquí usamos
+ * medidas fluidas en lugar de px fijos:
+ *   - ancho:  min(width px, 96vw)  → nunca desborda en móvil
+ *   - alto:   min-height acotado a 82vh → en pantallas bajas el hub-layer hace scroll
+ *   - padding: clamp() → se encoge en móvil, tamaño completo en escritorio
  */
 export function hubPanel(inner: string, opts: HubPanelOpts = {}): string {
   const width = opts.width ?? 1200;
   const minHeight = opts.minHeight ?? 760;
   return `
-    <div class="w-full h-full flex items-center justify-center p-4">
-      <div class="relative bg-gray-900" style="width:${width}px; max-width:96%; border:6px solid #fff; border-radius:12px; box-shadow:0 0 0 6px #000, 0 0 40px rgba(0,0,0,0.85);">
-        <div class="bg-blue-900 border-4 border-black flex flex-col items-center relative w-full" style="min-height:${minHeight}px; border-radius:6px; box-shadow: inset 0 0 30px rgba(0,0,0,0.6); padding:40px;">
+    <div class="w-full min-h-full flex items-center justify-center p-2 sm:p-4">
+      <div class="relative bg-gray-900 w-full" style="max-width:min(${width}px, 96vw); border:6px solid #fff; border-radius:12px; box-shadow:0 0 0 6px #000, 0 0 40px rgba(0,0,0,0.85);">
+        <div class="bg-blue-900 border-4 border-black flex flex-col items-center relative w-full" style="min-height:min(${minHeight}px, 82vh); border-radius:6px; box-shadow: inset 0 0 30px rgba(0,0,0,0.6); padding:clamp(16px, 4vw, 40px);">
           ${inner}
         </div>
       </div>
     </div>`;
 }
 
-/** Título grande de sección, estilo rótulo retro. */
+/** Título grande de sección, estilo rótulo retro. Fuente fluida. */
 export function panelTitle(text: string): string {
-  return `<h2 class="text-yellow-400 text-center mb-8" style="${FONT} font-size:34px; text-shadow: 3px 3px 0 #3b4cca, -3px -3px 0 #3b4cca, 3px -3px 0 #3b4cca, -3px 3px 0 #3b4cca;">${text}</h2>`;
+  return `<h2 class="text-yellow-400 text-center mb-6 sm:mb-8" style="${FONT} font-size:clamp(18px, 4.5vw, 34px); text-shadow: 3px 3px 0 #3b4cca, -3px -3px 0 #3b4cca, 3px -3px 0 #3b4cca, -3px 3px 0 #3b4cca;">${text}</h2>`;
 }
 
-/** Tarjeta blanca interior (contenedor de opciones). */
+/** Tarjeta blanca interior (contenedor de opciones). Padding fluido. */
 export function panelCard(inner: string, extraClass = ''): string {
-  return `<div class="bg-white border-4 border-gray-800 shadow-[6px_6px_0_#000] rounded-lg ${extraClass}" style="padding:28px;">${inner}</div>`;
+  return `<div class="bg-white border-4 border-gray-800 shadow-[6px_6px_0_#000] rounded-lg ${extraClass}" style="padding:clamp(14px, 2.5vw, 28px);">${inner}</div>`;
 }
 
 type BtnColor = 'red' | 'blue' | 'green' | 'yellow' | 'purple' | 'gray';
@@ -84,24 +90,24 @@ export function menuButton(o: MenuButtonOpts): string {
 
   if (disabled) {
     const lockLine = o.lock
-      ? `<span class="text-[10px] text-gray-300 mt-1">🔒 ${o.lock}</span>`
-      : `<span class="text-[10px] text-gray-300 mt-1">🔒 pronto</span>`;
+      ? `<span class="text-[9px] sm:text-[10px] text-gray-300 mt-1">🔒 ${o.lock}</span>`
+      : `<span class="text-[9px] sm:text-[10px] text-gray-300 mt-1">🔒 pronto</span>`;
     return `
-      <button ${idAttr} ${dataAttrs} disabled class="w-full flex flex-col items-center justify-center gap-1 rounded border-2 border-gray-600 bg-gray-700/70 text-gray-300 cursor-not-allowed ${o.extraClass ?? ''}" style="${FONT} padding:18px 16px;">
-        <span style="font-size:16px;">${o.icon ? `${o.icon} ` : ''}${o.label}</span>
-        ${o.sublabel ? `<span class="text-[10px] text-gray-400 mt-1">${o.sublabel}</span>` : ''}
+      <button ${idAttr} ${dataAttrs} disabled class="w-full flex flex-col items-center justify-center gap-1 rounded border-2 border-gray-600 bg-gray-700/70 text-gray-300 cursor-not-allowed ${o.extraClass ?? ''}" style="${FONT} padding:clamp(12px, 2vw, 18px) clamp(10px, 1.6vw, 16px);">
+        <span style="font-size:clamp(12px, 2.4vw, 16px);">${o.icon ? `${o.icon} ` : ''}${o.label}</span>
+        ${o.sublabel ? `<span class="text-[9px] sm:text-[10px] text-gray-400 mt-1">${o.sublabel}</span>` : ''}
         ${lockLine}
       </button>`;
   }
 
   return `
-    <button ${idAttr} ${dataAttrs} class="w-full flex flex-col items-center justify-center gap-1 rounded border-b-4 active:border-b-0 active:mt-1 transition-all ${BTN_BG[color]} ${o.extraClass ?? ''}" style="${FONT} padding:18px 16px; box-shadow:0 4px 0 #000;">
-      <span style="font-size:16px;">${o.icon ? `${o.icon} ` : ''}${o.label}</span>
-      ${o.sublabel ? `<span class="text-[10px] opacity-80 mt-1">${o.sublabel}</span>` : ''}
+    <button ${idAttr} ${dataAttrs} class="w-full flex flex-col items-center justify-center gap-1 rounded border-b-4 active:border-b-0 active:mt-1 transition-all ${BTN_BG[color]} ${o.extraClass ?? ''}" style="${FONT} padding:clamp(12px, 2vw, 18px) clamp(10px, 1.6vw, 16px); box-shadow:0 4px 0 #000;">
+      <span style="font-size:clamp(12px, 2.4vw, 16px);">${o.icon ? `${o.icon} ` : ''}${o.label}</span>
+      ${o.sublabel ? `<span class="text-[9px] sm:text-[10px] opacity-80 mt-1">${o.sublabel}</span>` : ''}
     </button>`;
 }
 
 /** Botón "◀ VOLVER" estándar (texto claro, subrayado). */
 export function backButton(id = 'btn-back'): string {
-  return `<button id="${id}" class="text-white hover:text-yellow-300 underline mt-6" style="${FONT} font-size:13px;">◀ VOLVER</button>`;
+  return `<button id="${id}" class="text-white hover:text-yellow-300 underline mt-5 sm:mt-6" style="${FONT} font-size:clamp(11px, 2vw, 13px);">◀ VOLVER</button>`;
 }

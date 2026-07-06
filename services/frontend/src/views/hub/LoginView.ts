@@ -22,10 +22,10 @@ export class LoginView {
   public render(): void {
     this.container.innerHTML = `
       <div class="w-full h-full flex items-center justify-center p-4">
-        <div class="relative w-full max-w-2xl mx-auto p-1 bg-gray-900" style="border: 6px solid #fff; border-radius: 12px; box-shadow: 0 0 0 6px #000, 0 0 40px rgba(0,0,0,0.85);">
-          <div class="bg-blue-900 border-4 border-black" style="border-radius: 6px; box-shadow: inset 0 0 30px rgba(0,0,0,0.6); padding: 40px 40px;">
-            <h2 class="font-bold mb-8 text-yellow-400 text-center drop-shadow-[0_4px_4px_rgba(0,0,0,0.8)]" style="${FONT} font-size: 40px; text-shadow: 3px 3px 0 #3b4cca, -3px -3px 0 #3b4cca;">
-              POKé<span class="block text-white mt-3" style="font-size: 22px;">TRANSCENDENCE</span>
+        <div class="relative w-full max-w-md mx-auto p-1 bg-gray-900" style="border: 6px solid #fff; border-radius: 12px; box-shadow: 0 0 0 6px #000, 0 0 40px rgba(0,0,0,0.85);">
+          <div class="bg-blue-900 border-4 border-black" style="border-radius: 6px; box-shadow: inset 0 0 30px rgba(0,0,0,0.6); padding: clamp(20px, 5vw, 40px);">
+            <h2 class="font-bold mb-6 sm:mb-8 text-yellow-400 text-center drop-shadow-[0_4px_4px_rgba(0,0,0,0.8)]" style="${FONT} font-size: clamp(24px, 7vw, 40px); text-shadow: 3px 3px 0 #3b4cca, -3px -3px 0 #3b4cca;">
+              POKé<span class="block text-white mt-3" style="font-size: clamp(14px, 4vw, 22px);">TRANSCENDENCE</span>
             </h2>
             <div id="auth-body"></div>
             <p class="mt-6 text-[9px] text-gray-400 text-center" style="${FONT}">© 2026 jvalle-d, sbenitez</p>

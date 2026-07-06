@@ -224,9 +224,9 @@ export class LobbyView {
 
   private frame(inner: string): string {
     return `
-      <div class="transform scale-110 lg:scale-125 origin-center transition-transform">
+      <div class="w-full flex justify-center transform scale-100 sm:scale-105 lg:scale-125 origin-center transition-transform">
         <div class="relative w-full max-w-2xl mx-auto p-1 bg-gray-900" style="border: 4px solid #fff; border-radius: 8px; box-shadow: 0 0 0 4px #000, 0 0 20px rgba(0,0,0,0.8);">
-          <div class="bg-blue-900 border-4 border-black p-4 flex flex-col items-center min-h-[420px] relative" style="border-radius: 4px; box-shadow: inset 0 0 20px rgba(0,0,0,0.5);">
+          <div class="bg-blue-900 border-4 border-black p-3 sm:p-4 flex flex-col items-center min-h-[420px] relative" style="border-radius: 4px; box-shadow: inset 0 0 20px rgba(0,0,0,0.5);">
             ${inner}
           </div>
         </div>
@@ -267,7 +267,7 @@ export class LobbyView {
             <span class="text-black text-[8px] w-24" style="${FONT}">JUGADORES</span>
             ${[2, 3, 4].map(capBtn).join('')}
           </div>
-          <div class="flex gap-2 items-center mb-3">
+          <div class="flex flex-wrap gap-2 items-center mb-3">
             <span class="text-black text-[8px] w-24" style="${FONT}">MODO</span>
             ${modeBtn('ffa', '⚔️ TODOS CONTRA TODOS', false)}
             ${modeBtn('teams', '🤝 2 VS 2', this.capacity !== 4)}

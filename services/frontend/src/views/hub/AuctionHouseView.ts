@@ -114,16 +114,16 @@ export class AuctionHouseView {
           ? `<span class="text-gray-400" style="${FONT} font-size:9px;">(tuya)</span>`
           : `${a.startingPrice !== null ? `<button data-bid="${a.id}" class="bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded" style="${FONT} font-size:9px;">PUJAR</button>` : ''}
              ${a.buyNowPrice !== null ? `<button data-buy="${a.id}" class="bg-green-600 hover:bg-green-500 text-white px-2 py-1 rounded" style="${FONT} font-size:9px;">COMPRAR YA</button>` : ''}`;
-        return `<div class="flex items-center justify-between gap-2 bg-gray-100 rounded px-3 py-2">
-          <div class="flex flex-col">
+        return `<div class="flex flex-wrap items-center justify-between gap-2 bg-gray-100 rounded px-3 py-2">
+          <div class="flex flex-col min-w-0">
             <span class="text-black" style="${FONT} font-size:11px;">${a.kind === 'pokemon' ? '🐾' : '🎁'} ${label}</span>
             <span class="text-gray-600" style="${FONT} font-size:9px;">${this.priceLine(a)} · ⏳ ${this.timeLeft(a.expiresAt)}</span>
           </div>
-          <div class="flex gap-1 items-center">${actions}</div>
+          <div class="flex flex-wrap gap-1 items-center">${actions}</div>
         </div>`;
       })
       .join('');
-    body.innerHTML = panelCard(`<div class="flex flex-col gap-2" style="width:640px; max-width:100%;">${rows}</div>`);
+    body.innerHTML = panelCard(`<div class="flex flex-col gap-2 w-full max-w-xl">${rows}</div>`);
 
     body.querySelectorAll<HTMLButtonElement>('button[data-buy]').forEach((b) =>
       b.addEventListener('click', () => this.doBuy(b.dataset.buy!))
@@ -172,7 +172,7 @@ export class AuctionHouseView {
     const input = 'w-full p-2 bg-gray-100 text-black border-2 border-gray-400 rounded';
 
     body.innerHTML = panelCard(
-      `<div class="flex flex-col gap-3" style="width:520px; max-width:100%;">
+      `<div class="flex flex-col gap-3 w-full max-w-lg">
         <label class="text-black" style="${FONT} font-size:10px;">Lote a subastar</label>
         <select id="ah-item" class="${input}" style="${FONT} font-size:10px;">
           <option value="">— elige —</option>
@@ -245,8 +245,8 @@ export class AuctionHouseView {
       .map((a) => {
         const label = a.kind === 'pokemon' ? `${escapeHtml(a.displayName)} (Nv ${a.displayLevel ?? 1})` : escapeHtml(a.displayName);
         const canCancel = a.status === 'active' && !a.hasBids;
-        return `<div class="flex items-center justify-between gap-2 bg-gray-100 rounded px-3 py-2">
-          <div class="flex flex-col">
+        return `<div class="flex flex-wrap items-center justify-between gap-2 bg-gray-100 rounded px-3 py-2">
+          <div class="flex flex-col min-w-0">
             <span class="text-black" style="${FONT} font-size:11px;">${a.kind === 'pokemon' ? '🐾' : '🎁'} ${label}</span>
             <span class="text-gray-600" style="${FONT} font-size:9px;">${statusLabel[a.status] ?? a.status} · ${this.priceLine(a)}</span>
           </div>
@@ -254,7 +254,7 @@ export class AuctionHouseView {
         </div>`;
       })
       .join('');
-    body.innerHTML = panelCard(`<div class="flex flex-col gap-2" style="width:640px; max-width:100%;">${rows}</div>`);
+    body.innerHTML = panelCard(`<div class="flex flex-col gap-2 w-full max-w-xl">${rows}</div>`);
     body.querySelectorAll<HTMLButtonElement>('button[data-cancel]').forEach((b) =>
       b.addEventListener('click', async () => {
         const r = await AuctionApi.cancel(b.dataset.cancel!);

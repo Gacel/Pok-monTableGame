@@ -30,7 +30,7 @@ export class AvatarCreationView {
     }).join('');
 
     this.container.innerHTML = `
-      <div class="transform scale-125 lg:scale-150 origin-center transition-transform">
+      <div class="w-full flex justify-center px-2 transform scale-100 sm:scale-125 lg:scale-150 origin-center transition-transform">
         <div class="relative w-full max-w-lg mx-auto p-1 bg-gray-900" style="border: 4px solid #fff; border-radius: 8px; box-shadow: 0 0 0 4px #000, 0 0 20px rgba(0,0,0,0.8);">
           <div class="bg-blue-900 border-4 border-black p-5" style="border-radius: 4px; box-shadow: inset 0 0 20px rgba(0,0,0,0.5);">
           
@@ -41,13 +41,13 @@ export class AvatarCreationView {
           </div>
 
           <div class="flex flex-col items-center space-y-4">
-            <div class="grid grid-cols-4 gap-3 bg-black bg-opacity-40 p-3 rounded-lg border-2 border-gray-700">
+            <div class="grid grid-cols-4 gap-2 sm:gap-3 bg-black bg-opacity-40 p-3 rounded-lg border-2 border-gray-700">
               ${gridHtml}
             </div>
 
-            <input type="text" id="username-input" placeholder="TU NOMBRE" maxlength="10" class="w-64 p-3 bg-gray-200 text-black border-4 border-gray-400 focus:border-yellow-400 outline-none text-xs text-center uppercase font-bold" style="font-family: 'Press Start 2P', monospace; box-shadow: inset 2px 2px 0 rgba(0,0,0,0.2);">
+            <input type="text" id="username-input" placeholder="TU NOMBRE" maxlength="10" class="w-full max-w-xs p-3 bg-gray-200 text-black border-4 border-gray-400 focus:border-yellow-400 outline-none text-xs text-center uppercase font-bold" style="font-family: 'Press Start 2P', monospace; box-shadow: inset 2px 2px 0 rgba(0,0,0,0.2);">
 
-            <button id="btn-continue" class="w-64 py-3 bg-green-600 hover:bg-green-500 text-white border-b-4 border-green-800 active:border-b-0 active:mt-1 transition-all text-xs font-bold cursor-pointer" style="font-family: 'Press Start 2P', monospace; box-shadow: 0 4px 0 #000;">
+            <button id="btn-continue" class="w-full max-w-xs py-3 bg-green-600 hover:bg-green-500 text-white border-b-4 border-green-800 active:border-b-0 active:mt-1 transition-all text-xs font-bold cursor-pointer" style="font-family: 'Press Start 2P', monospace; box-shadow: 0 4px 0 #000;">
               LISTO
             </button>
           </div>

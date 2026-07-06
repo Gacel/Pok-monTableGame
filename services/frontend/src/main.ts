@@ -179,9 +179,27 @@ function resizeGameArea() {
   const sidebar = document.getElementById('right-sidebar');
   const isSidebarVisible = sidebar && !sidebar.classList.contains('hidden');
   const targetW = isSidebarVisible ? 1984 : GAME_W;
-  // Escala el container para aprovechar la pantalla dejando margen
+  // Escala el container para aprovechar la pantalla dejando margen.
+  // El tablero mantiene su relación de aspecto 16:10 (scale-to-fit).
   const scale = Math.min(window.innerWidth / targetW, window.innerHeight / GAME_H) * 0.95;
   container.style.transform = `scale(${scale})`;
+  updateRotateOverlay();
+}
+
+/**
+ * Muestra el aviso "gira el dispositivo" SOLO cuando el tablero está activo y el
+ * dispositivo está en vertical y es estrecho (móvil). El tablero 16:10 no es
+ * jugable en portrait; los menús sí reflowan y no necesitan aviso.
+ * Ver docs/RESPONSIVE.md.
+ */
+function updateRotateOverlay() {
+  const overlay = document.getElementById('rotate-overlay');
+  if (!overlay) return;
+  const inGame = !gameLayer.classList.contains('hidden');
+  const isPortraitPhone = window.innerHeight > window.innerWidth && window.innerWidth < 768;
+  const show = inGame && isPortraitPhone;
+  overlay.classList.toggle('hidden', !show);
+  overlay.classList.toggle('flex', show);
 }
 
 // ------------------------------------------------------------ PARTIDA LOCAL

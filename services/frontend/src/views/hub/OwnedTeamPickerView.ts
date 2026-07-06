@@ -94,10 +94,10 @@ export class OwnedTeamPickerView {
       ${panelCard(
         empty
           ? `<p class="text-gray-500 text-center" style="${FONT} font-size:10px;">No tienes Pokémon en el inventario.</p>`
-          : `<div class="grid grid-cols-4 gap-3 overflow-y-auto" style="width:640px; max-width:100%; max-height:420px;">${cards}</div>`,
+          : `<div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 sm:gap-3 overflow-y-auto w-full max-w-xl" style="max-height:min(420px, 60vh);">${cards}</div>`,
         'flex flex-col items-center'
       )}
-      <div class="flex gap-4 mt-6">
+      <div class="flex flex-wrap justify-center gap-4 mt-6">
         ${backButton('btn-owned-back')}
         <button id="btn-owned-confirm" ${ready ? '' : 'disabled'} class="px-8 py-3 rounded border-b-4 ${
           ready

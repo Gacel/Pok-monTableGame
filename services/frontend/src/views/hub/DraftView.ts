@@ -165,16 +165,16 @@ export class DraftView {
       : 'bg-gray-800 border-gray-900 text-gray-500 cursor-not-allowed opacity-60';
 
     this.container.innerHTML = `
-      <div class="h-full flex flex-col items-center justify-center p-3 overflow-hidden">
-        <h2 class="text-base mb-1" style="font-family:'Press Start 2P',monospace;color:${color};text-shadow:2px 2px 0 #000;">
+      <div class="min-h-full flex flex-col items-center justify-center p-3 sm:p-4 overflow-y-auto">
+        <h2 class="text-base mb-1 text-center" style="font-family:'Press Start 2P',monospace;color:${color};text-shadow:2px 2px 0 #000;">
           ${this.phaseTitle()}
         </h2>
-        <p class="text-[8px] text-gray-300 mb-3" style="font-family:'Press Start 2P',monospace;">
+        <p class="text-[8px] text-gray-300 mb-3 text-center" style="font-family:'Press Start 2P',monospace;">
           Elige ${TEAM_SIZE} Pokémon (${picks.length}/${TEAM_SIZE})${this.config.mode === 'local' ? ` · Fase ${this.phase + 1}/${this.totalPhases()}` : ''}
         </p>
-        <div class="grid grid-cols-6 gap-2 max-w-4xl">${cards}</div>
-        <div class="mt-4 flex gap-4 items-center justify-between w-full max-w-4xl px-4 bg-gray-900 bg-opacity-80 p-2 rounded border border-gray-700">
-          <span class="text-[8px] text-gray-300" style="font-family:'Press Start 2P',monospace;">Elegidos: <span class="text-yellow-400 font-bold">${picks.map((n) => n.toUpperCase()).join('  ') || '—'}</span></span>
+        <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2 w-full max-w-4xl">${cards}</div>
+        <div class="mt-4 flex flex-col sm:flex-row gap-2 sm:gap-4 items-center justify-between w-full max-w-4xl px-2 sm:px-4 bg-gray-900 bg-opacity-80 p-2 rounded border border-gray-700">
+          <span class="text-[8px] text-gray-300 text-center sm:text-left" style="font-family:'Press Start 2P',monospace;">Elegidos: <span class="text-yellow-400 font-bold">${picks.map((n) => n.toUpperCase()).join('  ') || '—'}</span></span>
           <button id="draft-confirm" ${isReady ? '' : 'disabled'}
             class="px-6 py-3 text-xs rounded border-2 transition-all ${btnStyle}"
             style="font-family:'Press Start 2P',monospace;">

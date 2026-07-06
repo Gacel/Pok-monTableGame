@@ -16,7 +16,7 @@ export class SettingsView {
     const user = authState.user;
 
     this.container.innerHTML = `
-      <div class="transform scale-125 lg:scale-150 origin-center transition-transform">
+      <div class="w-full flex justify-center px-2 transform scale-100 sm:scale-125 lg:scale-150 origin-center transition-transform">
         <div class="relative w-full max-w-2xl mx-auto p-1 bg-gray-900" style="border: 4px solid #fff; border-radius: 8px; box-shadow: 0 0 0 4px #000, 0 0 20px rgba(0,0,0,0.8);">
           <div class="bg-blue-900 border-4 border-black p-4 flex flex-col items-center min-h-[400px] relative" style="border-radius: 4px; box-shadow: inset 0 0 20px rgba(0,0,0,0.5);">
 

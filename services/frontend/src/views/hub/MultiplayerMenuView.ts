@@ -44,7 +44,7 @@ export class MultiplayerMenuView {
       `
       ${panelTitle('MULTIJUGADOR')}
       ${panelCard(
-        `<div class="flex flex-col gap-4" style="width:560px; max-width:100%;">
+        `<div class="flex flex-col gap-4 w-full max-w-xl">
           ${menuButton({ id: 'btn-local', label: 'PARTIDA LOCAL', icon: '🎮', sublabel: 'Misma pantalla · varios jugadores por turnos', color: 'red' })}
           ${menuButton({ id: 'btn-online', label: 'EN LÍNEA', icon: '📡', sublabel: 'Otro navegador · crear o buscar sala', color: 'blue' })}
           ${menuButton({ id: 'btn-arena', label: 'ARENA', icon: '🏟️', sublabel: 'Mundo vivo · entra directo (aunque estés solo) · máx 4', color: 'green' })}
@@ -79,8 +79,8 @@ export class MultiplayerMenuView {
       ${panelTitle('ELIGE MODO')}
       ${panelCard(
         `
-        <p class="text-gray-700 text-center mb-6" style="${FONT} font-size:11px;">${channelLabel}</p>
-        <div class="flex flex-col gap-4" style="width:560px; max-width:100%;">
+        <p class="text-gray-700 text-center mb-6" style="${FONT} font-size:clamp(9px, 2.4vw, 11px);">${channelLabel}</p>
+        <div class="flex flex-col gap-4 w-full max-w-xl">
           ${MODES.map((m) =>
             menuButton({
               id: `btn-mode-${m.key}`,

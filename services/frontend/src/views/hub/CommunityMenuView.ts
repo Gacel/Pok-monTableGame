@@ -151,7 +151,7 @@ export class CommunityMenuView {
       `
       ${panelTitle('COMUNIDAD')}
       ${panelCard(
-        `<div class="flex flex-col gap-4" style="width:560px; max-width:100%;">
+        `<div class="flex flex-col gap-4 w-full" style="max-width:560px;">
           ${menuButton({ id: 'btn-friends', label: 'AMIGOS CONECTADOS', icon: '🟢', color: 'green' })}
           ${menuButton({ id: 'btn-add', label: 'AÑADIR AMIGO', icon: '➕', color: 'blue' })}
           ${menuButton({ id: 'btn-requests', label: reqLabel, icon: '📨', color: this.requestCount > 0 ? 'yellow' : 'gray' })}
@@ -190,7 +190,7 @@ export class CommunityMenuView {
       ${panelTitle('MIS AMIGOS')}
       ${panelCard(
         `<p class="text-gray-600 text-center mb-3" style="${FONT} font-size:8px;">Pulsa un amigo para chatear</p>
-         <div class="flex flex-col gap-2 overflow-y-auto" style="width:560px; max-width:100%; max-height:420px;">${list}</div>`,
+         <div class="flex flex-col gap-2 overflow-y-auto w-full" style="max-width:560px; max-height:min(420px, 55vh);">${list}</div>`,
         'flex flex-col items-center'
       )}
       ${backButton()}
@@ -212,7 +212,7 @@ export class CommunityMenuView {
       `
       ${panelTitle('AÑADIR AMIGO')}
       ${panelCard(
-        `<div class="flex flex-col gap-4" style="width:560px; max-width:100%;">
+        `<div class="flex flex-col gap-4 w-full" style="max-width:560px;">
           ${menuButton({ id: 'btn-search', label: 'BUSCAR AMIGO', icon: '🔍', color: 'blue' })}
           ${menuButton({ id: 'btn-reco', label: 'RECOMENDADOS', icon: '✨', sublabel: 'Amigos de tus amigos', color: 'green' })}
         </div>`,
@@ -238,13 +238,13 @@ export class CommunityMenuView {
       `
       ${panelTitle('BUSCAR AMIGO')}
       ${panelCard(
-        `<div class="flex flex-col gap-3" style="width:560px; max-width:100%;">
+        `<div class="flex flex-col gap-3 w-full" style="max-width:560px;">
           <div class="flex gap-2">
             <input id="search-input" value="${this.escape(this.searchQuery)}" maxlength="16" placeholder="Nombre del entrenador…" class="flex-1 bg-gray-100 text-black px-3 py-2 rounded border-2 border-gray-400 focus:outline-none focus:border-yellow-500" style="${FONT} font-size:10px;" />
             <button id="btn-do-search" class="px-4 bg-blue-600 hover:bg-blue-500 text-white rounded border-b-2 border-blue-800 active:border-b-0" style="${FONT} font-size:10px;">🔍</button>
           </div>
           ${this.notice ? `<p class="text-red-500 text-center" style="${FONT} font-size:9px;">⚠ ${this.escape(this.notice)}</p>` : ''}
-          <div class="flex flex-col gap-2 overflow-y-auto" style="max-height:340px;">${results}</div>
+          <div class="flex flex-col gap-2 overflow-y-auto" style="max-height:min(340px, 50vh);">${results}</div>
         </div>`,
         'flex flex-col items-center'
       )}
@@ -306,9 +306,9 @@ export class CommunityMenuView {
       `
       ${panelTitle('RECOMENDADOS')}
       ${panelCard(
-        `<div class="flex flex-col gap-3" style="width:560px; max-width:100%;">
+        `<div class="flex flex-col gap-3 w-full" style="max-width:560px;">
           ${this.notice ? `<p class="text-red-500 text-center" style="${FONT} font-size:9px;">⚠ ${this.escape(this.notice)}</p>` : ''}
-          <div class="flex flex-col gap-2 overflow-y-auto" style="max-height:380px;">${list}</div>
+          <div class="flex flex-col gap-2 overflow-y-auto" style="max-height:min(380px, 50vh);">${list}</div>
         </div>`,
         'flex flex-col items-center'
       )}
@@ -346,7 +346,7 @@ export class CommunityMenuView {
       `
       ${panelTitle('SOLICITUDES')}
       ${panelCard(
-        `<div class="flex flex-col gap-2 overflow-y-auto" style="width:560px; max-width:100%; max-height:400px;">${list}</div>`,
+        `<div class="flex flex-col gap-2 overflow-y-auto w-full" style="max-width:560px; max-height:min(400px, 55vh);">${list}</div>`,
         'flex flex-col items-center'
       )}
       ${backButton()}
@@ -388,8 +388,8 @@ export class CommunityMenuView {
       `
       ${panelTitle(`CHAT · ${this.escape(friend.username ?? '')}`)}
       ${panelCard(
-        `<div class="flex flex-col" style="width:600px; max-width:100%;">
-          <div id="dm-messages" class="flex flex-col gap-2 overflow-y-auto bg-gray-100 border-2 border-gray-400 rounded p-3 mb-3" style="height:360px;"></div>
+        `<div class="flex flex-col w-full" style="max-width:600px;">
+          <div id="dm-messages" class="flex flex-col gap-2 overflow-y-auto bg-gray-100 border-2 border-gray-400 rounded p-3 mb-3" style="height:min(360px, 50vh);"></div>
           <div class="flex gap-2">
             <input id="dm-input" maxlength="200" placeholder="Escribe un mensaje…" class="flex-1 bg-gray-100 text-black px-3 py-2 rounded border-2 border-gray-400 focus:outline-none focus:border-yellow-500" style="${FONT} font-size:10px;" />
             <button id="dm-send" class="px-4 bg-green-600 hover:bg-green-500 text-white rounded border-b-2 border-green-800 active:border-b-0" style="${FONT} font-size:10px;">▶</button>
@@ -447,7 +447,7 @@ export class CommunityMenuView {
       `
       ${panelTitle('ENVIAR REGALO')}
       ${panelCard(
-        `<div class="grid grid-cols-2 gap-4" style="width:640px; max-width:100%;">
+        `<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full" style="max-width:640px;">
           ${menuButton({ label: 'COSMÉTICO', icon: '🎨', color: 'purple', disabled: true })}
           ${menuButton({ label: 'POKÉMON', icon: '🐾', color: 'red', disabled: true })}
           ${menuButton({ label: 'POKÉBALLS', icon: '🔴', color: 'blue', disabled: true })}

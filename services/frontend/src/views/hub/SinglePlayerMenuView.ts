@@ -21,13 +21,13 @@ export class SinglePlayerMenuView {
       ${panelTitle('UN JUGADOR')}
       ${panelCard(
         `
-        <p class="text-black text-center mb-6" style="${FONT} font-size:12px;">ELIGE DIFICULTAD</p>
-        <div class="grid grid-cols-2 gap-4" style="width:640px; max-width:100%;">
+        <p class="text-black text-center mb-6" style="${FONT} font-size:clamp(10px, 2.4vw, 12px);">ELIGE DIFICULTAD</p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4 w-full max-w-2xl">
           ${menuButton({ label: 'IA FÁCIL', icon: '🟢', color: 'green', disabled: true })}
           ${menuButton({ label: 'IA NORMAL', icon: '🔵', color: 'blue', disabled: true })}
           ${menuButton({ label: 'IA DIFÍCIL', icon: '🟠', color: 'yellow', disabled: true })}
           ${menuButton({ label: 'IA HARDCORE', icon: '🔴', color: 'red', lock: '1000 monedas (logro)' })}
-          ${menuButton({ label: 'SURVIVAL MODE', icon: '💀', color: 'purple', disabled: true, extraClass: 'col-span-2' })}
+          ${menuButton({ label: 'SURVIVAL MODE', icon: '💀', color: 'purple', disabled: true, extraClass: 'col-span-1 sm:col-span-2' })}
         </div>`,
         'flex flex-col items-center'
       )}

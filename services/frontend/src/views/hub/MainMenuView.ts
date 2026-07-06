@@ -53,7 +53,7 @@ export class MainMenuView {
 
       <!-- Secciones en lista vertical -->
       ${panelCard(
-        `<div class="flex flex-col gap-4" style="width:560px; max-width:100%;">
+        `<div class="flex flex-col gap-3 sm:gap-4 w-full max-w-xl">
           ${menuButton({ id: 'btn-play', label: 'JUGAR', icon: '🎮', sublabel: 'Un jugador (vs IA) o multijugador', color: 'red' })}
           ${menuButton({ id: 'btn-community', label: 'COMUNIDAD', icon: '👥', sublabel: 'Amigos · añadir · enviar regalo', color: 'blue' })}
           ${menuButton({ id: 'btn-shop', label: 'TIENDA', icon: '🛒', sublabel: 'Cosméticos · pokéballs · recuperar', color: 'yellow' })}

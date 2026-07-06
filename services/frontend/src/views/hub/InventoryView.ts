@@ -74,8 +74,8 @@ export class InventoryView {
 
   private drawShell(bodyMsg: string): void {
     this.container.innerHTML = `
-      <div class="w-full h-full flex flex-col p-6 bg-blue-900" style="box-shadow: inset 0 0 30px rgba(0,0,0,0.6);">
-        <div class="flex items-center justify-between mb-4">
+      <div class="w-full h-full flex flex-col p-4 sm:p-6 bg-blue-900 overflow-y-auto" style="box-shadow: inset 0 0 30px rgba(0,0,0,0.6);">
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
           ${panelTitle('INVENTARIO')}
           ${backButton('btn-inv-back')}
         </div>
@@ -121,18 +121,18 @@ export class InventoryView {
       : `<p class="text-gray-400" style="${FONT} font-size:9px;">Sin objetos todavía.</p>`;
 
     this.container.innerHTML = `
-      <div class="w-full h-full flex flex-col p-6 bg-blue-900" style="box-shadow: inset 0 0 30px rgba(0,0,0,0.6);">
-        <div class="flex items-center justify-between mb-4">
+      <div class="w-full h-full flex flex-col p-4 sm:p-6 bg-blue-900 overflow-y-auto" style="box-shadow: inset 0 0 30px rgba(0,0,0,0.6);">
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
           ${panelTitle('INVENTARIO')}
           ${backButton('btn-inv-back')}
         </div>
 
-        <div class="flex flex-1 gap-6 min-h-0">
+        <div class="flex flex-col md:flex-row flex-1 gap-3 md:gap-6 min-h-0">
           <!-- IZQUIERDA: entrenador (>=50% alto) -->
-          <div class="w-1/3 flex">
+          <div class="w-full md:w-1/3 flex">
             ${panelCard(
-              `<div class="w-full h-full flex flex-col items-center justify-center text-center gap-4" style="min-height:50vh;">
-                 <img src="${this.trainerSprite()}" alt="entrenador" class="pixelated block mx-auto" style="width:220px;height:220px;object-fit:contain;image-rendering:pixelated;" />
+              `<div class="w-full h-full flex flex-col items-center justify-center text-center gap-4" style="min-height:min(50vh, 320px);">
+                 <img src="${this.trainerSprite()}" alt="entrenador" class="pixelated block mx-auto" style="width:clamp(120px,30vw,220px);height:clamp(120px,30vw,220px);object-fit:contain;image-rendering:pixelated;" />
                  <span class="text-black" style="${FONT} font-size:16px;">${u?.username ?? ''}</span>
                  <span class="text-gray-600" style="${FONT} font-size:11px;">Lv. ${u?.level ?? 1} · 🪙 ${u?.coins ?? 0}</span>
                  <span class="text-gray-500" style="${FONT} font-size:9px;">${pokemon.length} Pokémon · ${items.length} objetos</span>
@@ -142,7 +142,7 @@ export class InventoryView {
           </div>
 
           <!-- DERECHA: dos secciones con scroll -->
-          <div class="flex-1 flex flex-col gap-6 min-h-0">
+          <div class="flex-1 flex flex-col gap-3 md:gap-6 min-h-0">
             <div class="flex-1 flex flex-col min-h-0">
               ${panelCard(
                 `<h3 class="text-black mb-3" style="${FONT} font-size:13px;">POKÉMON OBTENIDOS</h3>
