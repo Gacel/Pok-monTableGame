@@ -64,8 +64,8 @@ export class AuthState {
       });
       const body = await res.json().catch(() => ({}));
       if (res.ok && body.success) {
-        this.user = body.user;
-        this.notify();
+        // Recarga el perfil completo (incluye pokemonCount) para enrutar bien.
+        await this.fetchUserProfile();
         return { ok: true };
       }
       return { ok: false, error: body.error ?? 'No se pudo registrar' };
@@ -83,8 +83,8 @@ export class AuthState {
       });
       const body = await res.json().catch(() => ({}));
       if (res.ok && body.success) {
-        this.user = body.user;
-        this.notify();
+        // Recarga el perfil completo (incluye pokemonCount) para enrutar bien.
+        await this.fetchUserProfile();
         return { ok: true };
       }
       return { ok: false, error: body.error ?? 'No se pudo entrar', twoFactorRequired: !!body.twoFactorRequired };
