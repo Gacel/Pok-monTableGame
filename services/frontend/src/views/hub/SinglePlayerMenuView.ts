@@ -1,12 +1,12 @@
-import { showPlayMenu, startLocalGame } from '../../main';
+import { showPlayMenu, startSinglePlayer } from '../../main';
 import type { BotLevel } from '../../controllers/botStrategy';
 import { FONT, hubPanel, panelTitle, panelCard, menuButton, backButton } from './panel';
 
 /**
- * Capa VISTA: UN JUGADOR (vs IA). Lanza una partida LOCAL 1v1 (tú = P1, la IA =
- * P2) con el nivel elegido, reutilizando el flujo de startLocalGame → draft →
- * tablero. HARDCORE queda bloqueado por logro; SURVIVAL, pendiente de modo.
- * Ver botStrategy.ts (3 niveles) y docs/RESPONSIVE.md.
+ * Capa VISTA: UN JUGADOR (vs IA). Lanza una partida 1v1 (tú = P1, la IA = P2) con
+ * el nivel elegido: TÚ drafteas solo tu equipo y la IA autoelige el suyo según su
+ * dificultad (ver aiDraft.ts). HARDCORE bloqueado por logro; SURVIVAL, pendiente.
+ * Ver botStrategy.ts (3 niveles).
  */
 export class SinglePlayerMenuView {
   private container: HTMLElement;
@@ -17,7 +17,7 @@ export class SinglePlayerMenuView {
 
   /** Partida rápida contra la IA: 1v1 FFA, P1 humano y P2 bot del nivel dado. */
   private startVsAI(level: BotLevel) {
-    startLocalGame({ players: 2, gameMode: 'ffa', bots: { player2: level } });
+    startSinglePlayer(level);
   }
 
   public render() {

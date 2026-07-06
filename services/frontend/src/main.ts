@@ -21,6 +21,8 @@ import { AuctionHouseView } from './views/hub/AuctionHouseView';
 import { LocalSetupView } from './views/hub/LocalSetupView';
 import type { LocalGameConfig } from './views/hub/LocalSetupView';
 import type { BotLevel } from './controllers/botStrategy';
+import { pickAiTeam } from './controllers/aiDraft';
+import type { RosterMon } from './controllers/aiDraft';
 import { SettingsView } from './views/hub/SettingsView';
 import { LobbyView } from './views/hub/LobbyView';
 import { DraftView } from './views/hub/DraftView';
@@ -248,6 +250,66 @@ async function onLocalDraftConfirmed(
   }
   draftLayer.classList.add('hidden');
   enterGame(null, config.bots);
+}
+
+// ------------------------------------------------------- UN JUGADOR (vs IA)
+// El usuario draftea SOLO su equipo; la IA autoelige el suyo según dificultad.
+
+export function startSinglePlayer(level: BotLevel) {
+  hubLayer.classList.add('opacity-0');
+  setTimeout(() => {
+    hubLayer.style.display = 'none';
+    void showSinglePlayerDraft(level);
+  }, 500);
+}
+
+async function showSinglePlayerDraft(level: BotLevel) {
+  hideSidebar();
+  const draftLayer = document.getElementById('draft-layer') as HTMLElement;
+  draftLayer.classList.remove('hidden');
+  const view = new DraftView(
+    draftLayer,
+    { mode: 'online', playerLabel: 'TU EQUIPO' },
+    (teams) => void onSinglePlayerDraftConfirmed(draftLayer, level, teams[0] ?? [])
+  );
+  await view.render();
+}
+
+async function onSinglePlayerDraftConfirmed(
+  draftLayer: HTMLElement,
+  level: BotLevel,
+  humanTeam: string[]
+) {
+  // La IA elige su equipo con su "inteligencia" (nivel) contra el equipo del jugador.
+  let aiTeam: string[] = [];
+  try {
+    const res = await apiFetch('/api/game/roster');
+    const data = await res.json();
+    const roster = (data.roster ?? []) as RosterMon[];
+    aiTeam = pickAiTeam(roster, humanTeam, level, Math.random);
+  } catch {
+    /* sin roster: se maneja abajo */
+  }
+  if (aiTeam.length < 3) {
+    alert('No se pudo formar el equipo de la IA');
+    return;
+  }
+  try {
+    const res = await apiFetch('/api/game/start', {
+      method: 'POST',
+      body: JSON.stringify({ player1: humanTeam, player2: aiTeam, gameMode: 'ffa' }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      alert(data.error ?? 'No se pudo iniciar la partida');
+      return;
+    }
+  } catch {
+    alert('Error de red al iniciar la partida');
+    return;
+  }
+  draftLayer.classList.add('hidden');
+  enterGame(null, { player2: level });
 }
 
 // ----------------------------------------------------------- PARTIDA ONLINE

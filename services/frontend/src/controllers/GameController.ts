@@ -118,7 +118,12 @@ export class GameController {
    * pequeña pausa para que se vea el juego. Se re-invoca tras cada cambio de estado.
    */
   private maybeRunBot(): void {
-    if (this.session || this.botTimer !== null || this.busy) return;
+    // OJO: NO se comprueba `this.busy` aquí. maybeRunBot se invoca desde
+    // applyMatchState, que corre DENTRO de la ventana busy=true (el finally que
+    // libera busy va después). El retardo de scheduleBot (650ms) garantiza que
+    // busy ya esté libre cuando se ejecute la acción; el guard botTimer evita
+    // dobles programaciones.
+    if (this.session || this.botTimer !== null) return;
     const m = this.state.match;
     if (!m) return;
 
