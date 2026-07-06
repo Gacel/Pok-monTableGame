@@ -31,7 +31,7 @@ export function hubPanel(inner: string, opts: HubPanelOpts = {}): string {
   const width = opts.width ?? 1200;
   const minHeight = opts.minHeight ?? 760;
   return `
-    <div class="w-full min-h-full flex items-center justify-center p-2 sm:p-4">
+    <div class="w-full flex justify-center p-2 sm:p-4">
       <div class="relative bg-gray-900 w-full" style="max-width:min(${width}px, 96vw); border:6px solid #fff; border-radius:12px; box-shadow:0 0 0 6px #000, 0 0 40px rgba(0,0,0,0.85);">
         <div class="bg-blue-900 border-4 border-black flex flex-col items-center relative w-full" style="min-height:min(${minHeight}px, 82vh); border-radius:6px; box-shadow: inset 0 0 30px rgba(0,0,0,0.6); padding:clamp(16px, 4vw, 40px);">
           ${inner}

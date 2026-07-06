@@ -25,11 +25,16 @@ async function fetchPair(name: string): Promise<SpritePair> {
     const r = await fetch(`https://pokeapi.co/api/v2/pokemon/${key}`);
     if (!r.ok) return { gif: '', static: '' };
     const d = await r.json();
+    // Cadena de fallback: gen-V animado → estático → artwork oficial → home.
+    // Cubre Pokémon que no tienen sprite animado ni front_default (evita huecos).
+    const artwork = d.sprites?.other?.['official-artwork']?.front_default || '';
+    const home = d.sprites?.other?.home?.front_default || '';
+    const staticSprite = d.sprites?.front_default || artwork || home || '';
     const gif =
       d.sprites?.versions?.['generation-v']?.['black-white']?.animated?.front_default ||
-      d.sprites?.front_default ||
+      staticSprite ||
       '';
-    const pair: SpritePair = { gif, static: d.sprites?.front_default || gif };
+    const pair: SpritePair = { gif, static: staticSprite || gif };
     cache.set(key, pair);
     return pair;
   } catch {
