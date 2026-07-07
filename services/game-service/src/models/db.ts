@@ -41,7 +41,8 @@ async function openAndMigrate(): Promise<Database> {
       atk             INTEGER NOT NULL DEFAULT 50,
       def             INTEGER NOT NULL DEFAULT 40,
       type            TEXT NOT NULL,
-      movementPattern TEXT NOT NULL,
+      speed           INTEGER NOT NULL DEFAULT 3,
+      size            TEXT NOT NULL DEFAULT 'medium',
       raw_data        TEXT
     );
 
@@ -80,6 +81,8 @@ async function openAndMigrate(): Promise<Database> {
       pp           INTEGER,
       damage_class TEXT,
       short_effect TEXT,
+      target       TEXT,
+      display_name TEXT,
       raw_data     TEXT
     );
 
@@ -195,6 +198,15 @@ async function openAndMigrate(): Promise<Database> {
   const names = new Set(cols.map((c: { name: string }) => c.name));
   if (!names.has('atk')) await db.exec(`ALTER TABLE pokemons ADD COLUMN atk INTEGER NOT NULL DEFAULT 50`);
   if (!names.has('def')) await db.exec(`ALTER TABLE pokemons ADD COLUMN def INTEGER NOT NULL DEFAULT 40`);
+  if (!names.has('speed')) await db.exec(`ALTER TABLE pokemons ADD COLUMN speed INTEGER NOT NULL DEFAULT 3`);
+  if (!names.has('size')) await db.exec(`ALTER TABLE pokemons ADD COLUMN size TEXT NOT NULL DEFAULT 'medium'`);
+  if (names.has('movementPattern')) {
+    try {
+      await db.exec(`ALTER TABLE pokemons DROP COLUMN movementPattern`);
+    } catch {
+      // Si SQLite es viejo y no soporta DROP COLUMN, no importa, ya no se usa, pero requeriría default value o nullable.
+    }
+  }
 
   // Migración defensiva: columnas del lobby multijugador en `matches`.
   const matchCols = await db.all(`PRAGMA table_info(matches)`);
@@ -209,6 +221,12 @@ async function openAndMigrate(): Promise<Database> {
   if (!matchNames.has('host_id')) await db.exec(`ALTER TABLE matches ADD COLUMN host_id TEXT`);
   if (!matchNames.has('players_json'))
     await db.exec(`ALTER TABLE matches ADD COLUMN players_json TEXT`);
+
+  // Migración defensiva: columna target en moves
+  const moveCols = await db.all(`PRAGMA table_info(moves)`);
+  if (!moveCols.some((c: { name: string }) => c.name === 'target')) {
+    await db.exec(`ALTER TABLE moves ADD COLUMN target TEXT`);
+  }
 
   return db;
 }
