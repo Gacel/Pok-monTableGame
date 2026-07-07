@@ -228,6 +228,15 @@ export class MatchManager {
       gameMode === 'arena'
     );
     await this.persist();
+    
+    setTimeout(() => {
+      if (this.match?.id === DEFAULT_MATCH_ID && this.match.getStateDTO().status === 'deployment') {
+         this.match.forceStart();
+         this.persist().catch(console.error);
+         import('../realtime/hub.js').then(m => m.hub.broadcast('local', { type: 'state', state: this.match!.getStateDTO() })).catch(console.error);
+      }
+    }, 42000);
+    
     return this.match;
   }
 
@@ -269,6 +278,16 @@ export class MatchManager {
     );
     this.onlineMatches.set(id, game);
     await this.persistMatch(id);
+    
+    setTimeout(() => {
+      const g = this.onlineMatches.get(id);
+      if (g && g.getStateDTO().status === 'deployment') {
+         g.forceStart();
+         this.persistMatch(id).catch(console.error);
+         import('../realtime/hub.js').then(m => m.hub.broadcast(id, { type: 'state', state: g.getStateDTO() })).catch(console.error);
+      }
+    }, 42000);
+    
     return game;
   }
 
