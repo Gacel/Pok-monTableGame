@@ -7,6 +7,7 @@ import { escapeHtml } from '../utils/html';
 export class HUDView {
   private state: GameState;
   private toastTimer: number | null = null;
+  private deploymentTimerId: number | null = null;
 
   constructor(state: GameState) {
     this.state = state;
@@ -26,6 +27,131 @@ export class HUDView {
     this.updateTurnBanner();
     this.updateLog();
     this.updateWinOverlay();
+    this.updateActionPanel();
+  }
+
+  private updateActionPanel(): void {
+    const panel = document.getElementById('action-panel');
+    if (!panel) return;
+
+    const match = this.state.match;
+    const selectedHex = this.state.selectedHex;
+    
+    if (!match) {
+      panel.classList.add('hidden');
+      return;
+    }
+
+    if (match.status === 'deployment') {
+      this.renderDeploymentPanel(panel, match);
+      return;
+    }
+
+    if (!selectedHex) {
+      panel.classList.add('hidden');
+      return;
+    }
+
+    const tile = match.tiles.find((t) => t.hex.q === selectedHex.q && t.hex.r === selectedHex.r);
+    const occ = tile?.occupant;
+
+    // Solo mostramos si es del jugador actual y es su turno
+    if (!occ || occ.playerId !== match.currentPlayer) {
+      panel.classList.add('hidden');
+      return;
+    }
+
+    const isMe = this.state.mySlot === null || this.state.mySlot === match.currentPlayer;
+    if (!isMe) {
+      panel.classList.add('hidden');
+      return;
+    }
+
+    const moves = occ.moves ?? [];
+    if (moves.length === 0) {
+      panel.classList.add('hidden');
+      return;
+    }
+
+    panel.classList.remove('hidden');
+    
+    const keys = ['Q', 'W', 'E', 'R'];
+    panel.innerHTML = moves.slice(0, 4).map((m, i) => {
+      const typeColor = this.getTypeColor(m.type);
+      const isActive = this.state.activeMoveIndex === i;
+      const borderStyle = isActive ? `border-color: #fff; box-shadow: 0 0 10px ${typeColor}; scale: 1.1;` : `border-color: ${typeColor};`;
+      
+      const damageIcon = m.damageClass === 'special' ? '🔮' : m.damageClass === 'status' ? '🛡️' : '⚔️';
+      const moveName = m.displayName ? m.displayName.toUpperCase() : m.name.toUpperCase();
+      
+      const typeTranslations: Record<string, string> = {
+        FIRE: 'FUEGO', WATER: 'AGUA', GRASS: 'PLANTA', ELECTRIC: 'ELÉCTRICO',
+        ICE: 'HIELO', FIGHTING: 'LUCHA', POISON: 'VENENO', GROUND: 'TIERRA',
+        FLYING: 'VOLADOR', PSYCHIC: 'PSÍQUICO', BUG: 'BICHO', ROCK: 'ROCA',
+        GHOST: 'FANTASMA', DRAGON: 'DRAGÓN', STEEL: 'ACERO', FAIRY: 'HADA', NORMAL: 'NORMAL'
+      };
+      const translatedType = typeTranslations[m.type] || m.type;
+
+      return `
+        <div class="move-btn flex flex-col items-center justify-center p-2 rounded cursor-pointer border-2 transition-transform hover:scale-105 active:scale-95 w-28 h-28" style="background-color: ${typeColor}40; ${borderStyle}" data-move-idx="${i}" title="Power: ${m.power || '-'} | Acc: ${m.accuracy || '-'} | Range: ${m.range || 1} | AoE: ${m.aoe || 'single'}">
+          <span class="text-white text-[8px] font-bold mb-1" style="font-family: 'Press Start 2P', monospace;">[${keys[i]}]</span>
+          <div class="text-xl mb-1">${damageIcon}</div>
+          <span class="text-white text-[10px] font-bold text-center leading-tight overflow-hidden text-ellipsis" style="font-family: 'Press Start 2P', monospace; max-width: 100%; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">${moveName}</span>
+          <span class="text-gray-300 text-[8px] mt-1 text-center">${translatedType}</span>
+        </div>
+      `;
+    }).join('');
+  }
+
+  private renderDeploymentPanel(panel: HTMLElement, match: NonNullable<GameState['match']>): void {
+    const isMe = this.state.mySlot === null || this.state.mySlot === match.currentPlayer;
+    if (!isMe) {
+      panel.classList.add('hidden');
+      return;
+    }
+
+    const myReserve = match.reserve?.[match.currentPlayer] ?? [];
+    if (myReserve.length === 0) {
+      panel.classList.remove('hidden');
+      panel.innerHTML = `
+        <button id="ready-btn" class="px-6 py-4 bg-green-600 hover:bg-green-500 text-white font-bold rounded shadow-lg border-2 border-green-400 transition-transform hover:scale-105 active:scale-95" style="font-family: 'Press Start 2P', monospace;">
+          ¡LISTO!
+        </button>
+      `;
+      return;
+    }
+
+    panel.classList.remove('hidden');
+    
+    panel.innerHTML = myReserve.map((p) => {
+      const typeColor = this.getTypeColor(p.type);
+      const isActive = this.state.selectedReserveId === p.id;
+      const borderStyle = isActive ? `border-color: #fff; box-shadow: 0 0 10px ${typeColor}; scale: 1.1;` : `border-color: ${typeColor};`;
+      const spriteUrl = this.state.pokeGifs[p.name ?? ''] ?? '';
+      
+      return `
+        <div class="reserve-btn flex flex-col items-center justify-center p-2 rounded cursor-pointer border-2 transition-transform hover:scale-105 active:scale-95 min-w-[120px] h-28" style="background-color: ${typeColor}40; ${borderStyle}" data-reserve-id="${p.id}" title="Desplegar a ${p.name}">
+          <img src="${spriteUrl}" class="w-12 h-12 object-contain mb-1" style="image-rendering: pixelated;" />
+          <span class="text-white text-[8px] font-bold text-center w-full break-words" style="font-family: 'Press Start 2P', monospace; line-height: 1.2;">${(p.name??'').toUpperCase()}</span>
+          <span class="text-gray-300 text-[8px] mt-1 text-center">${p.type.toUpperCase()}</span>
+        </div>
+      `;
+    }).join('');
+
+    // Attach event listeners manually (since it's dynamically rendered, we let GameController handle clicks, or we dispatch an event here)
+    // GameController listens to clicks on the document, but it's better if HUDView dispatches a custom event for reserve selection.
+    // Wait, GameController.ts uses data-move-idx, we can use a similar approach in GameController.ts to listen to data-reserve-id clicks.
+  }
+
+  private getTypeColor(type: string): string {
+    const colors: Record<string, string> = {
+      normal: '#A8A77A', fire: '#EE8130', water: '#6390F0', electric: '#F7D02C',
+      grass: '#7AC74C', ice: '#96D9D6', fighting: '#C22E28', poison: '#A33EA1',
+      ground: '#E2BF65', flying: '#A98FF3', psychic: '#F95587', bug: '#A6B91A',
+      rock: '#B6A136', ghost: '#735797', dragon: '#6F35FC', dark: '#705898',
+      steel: '#B7B7CE', fairy: '#D685AD'
+    };
+    return colors[type.toLowerCase()] || '#A8A77A';
   }
 
   private updateTurnBanner(): void {
@@ -52,10 +178,41 @@ export class HUDView {
 
     const label = this.state.labelFor(match.currentPlayer).toUpperCase();
     const isMe = this.state.mySlot !== null && this.state.mySlot === match.currentPlayer;
-    playerEl.textContent = isMe ? `TU TURNO · ${label}` : `TURNO: ${label}`;
-    playerEl.style.color = color;
-    banner.style.borderColor = color;
-    numberEl.textContent = `Turno ${match.turn}`;
+    
+    if (match.status === 'deployment') {
+      playerEl.textContent = isMe ? `TU TURNO · FASE DE DESPLIEGUE` : `FASE DE DESPLIEGUE`;
+      playerEl.style.color = '#fff';
+      banner.style.borderColor = '#fff';
+      this.startDeploymentTimer(numberEl, match.deploymentDeadline);
+    } else {
+      this.stopDeploymentTimer();
+      playerEl.textContent = isMe ? `TU TURNO · ${label}` : `TURNO: ${label}`;
+      playerEl.style.color = color;
+      banner.style.borderColor = color;
+      numberEl.textContent = `Turno ${match.turn}`;
+    }
+  }
+
+  private startDeploymentTimer(el: HTMLElement, deadline: number | undefined): void {
+    if (this.deploymentTimerId !== null) window.clearInterval(this.deploymentTimerId);
+    if (!deadline) {
+      el.textContent = '42s';
+      return;
+    }
+    const update = () => {
+      const remaining = Math.max(0, Math.floor((deadline - Date.now()) / 1000));
+      el.textContent = `Tiempo: ${remaining}s`;
+      if (remaining === 0) this.stopDeploymentTimer();
+    };
+    update();
+    this.deploymentTimerId = window.setInterval(update, 1000);
+  }
+
+  private stopDeploymentTimer(): void {
+    if (this.deploymentTimerId !== null) {
+      window.clearInterval(this.deploymentTimerId);
+      this.deploymentTimerId = null;
+    }
   }
 
   private updatePlayerHUD(
