@@ -14,19 +14,23 @@ export interface Hex {
 }
 
 /** Biomas del tablero (lógica Catan). */
-export const BIOMES = ['FIRE', 'WATER', 'GRASS', 'SAND', 'ICE'] as const;
+export const BIOMES = ['FIRE', 'WATER', 'GRASS', 'SAND', 'ICE', 'MOUNTAIN', 'TALL_GRASS', 'SWAMP'] as const;
 export type Biome = (typeof BIOMES)[number];
 
 /** Tipos de Pokémon (afectan a la ventaja de tipo en combate). */
 export const POKEMON_TYPES = [
   'FIRE', 'WATER', 'GRASS', 'POISON', 'FLYING',
   'DRAGON', 'PSYCHIC', 'NORMAL', 'ELECTRIC', 'ICE', 'FAIRY',
+  'BUG', 'ROCK', 'FIGHTING', 'GHOST', 'GROUND', 'STEEL',
 ] as const;
 export type PokemonType = (typeof POKEMON_TYPES)[number];
 
-/** Patrones de movimiento (lógica Ajedrez). */
-export const MOVEMENT_PATTERNS = ['FLYING', 'TANK', 'SPEEDSTER'] as const;
-export type MovementPattern = (typeof MOVEMENT_PATTERNS)[number];
+/** Tamaños de Pokémon (dicta si bloquean visión y casillas ocupadas). */
+export const POKEMON_SIZES = ['small', 'medium', 'large'] as const;
+export type PokemonSize = (typeof POKEMON_SIZES)[number];
+
+/** Área de efecto de un ataque. */
+export type AreaOfEffect = 'single' | 'line' | 'cone' | 'radius';
 
 /** Categoría PokeAPI del movimiento. */
 export type MoveDamageClass = 'physical' | 'special' | 'status';
@@ -35,6 +39,8 @@ export type MoveDamageClass = 'physical' | 'special' | 'status';
 export interface PokemonMove {
   /** Identificador/nombre del movimiento (ej. 'ember'); se muestra y se valida por él. */
   name: string;
+  /** Nombre a mostrar en la interfaz, en el idioma del usuario (ej. 'Ascuas'). */
+  displayName?: string;
   /** Tipo del movimiento, ya normalizado al dominio (afecta a la ventaja de tipo). */
   type: PokemonType;
   /** Potencia base (0 si no inflige daño directo). */
@@ -45,6 +51,10 @@ export interface PokemonMove {
   accuracy?: number;
   /** Puntos de poder (informativo). */
   pp?: number;
+  /** Rango máximo en hexágonos para lanzar el ataque. */
+  range?: number;
+  /** Forma del área de efecto. */
+  aoe?: AreaOfEffect;
 }
 
 export interface Pokemon {
@@ -52,7 +62,8 @@ export interface Pokemon {
   playerId: string;
   name?: string;
   type: PokemonType;
-  movementPattern: MovementPattern;
+  speed: number;
+  size: PokemonSize;
   hp: number;
   maxHp: number;
   /** Ataque base (por defecto 50 si no se especifica). */
