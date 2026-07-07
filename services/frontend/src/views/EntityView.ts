@@ -20,7 +20,7 @@ export class EntityView {
     // VICTORIA) ocultamos los sprites del tablero: su z-index dinámico es alto
     // (basado en la Y de pantalla) y si no se colarían por encima del overlay.
     const status = this.state.match?.status;
-    if (status === 'combat' || status === 'finished') {
+    if (status === 'finished') {
       this.entitiesLayer.style.display = 'none';
       return;
     }
