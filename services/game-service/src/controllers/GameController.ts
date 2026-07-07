@@ -11,6 +11,15 @@ interface MoveBody {
   from?: Hex;
   to?: Hex;
 }
+interface DeployBody {
+  pokemonId?: string;
+  hex?: Hex;
+}
+interface CastBody {
+  from?: Hex;
+  target?: Hex;
+  moveIndex?: number;
+}
 interface OptionsQuery {
   q?: string;
   r?: string;
@@ -18,11 +27,7 @@ interface OptionsQuery {
 interface PokedexParams {
   name?: string;
 }
-interface CombatBody {
-  action?: string;
-  moveName?: string;
-  targetId?: string;
-}
+
 interface StartBody {
   player1?: unknown;
   player2?: unknown;
@@ -87,7 +92,8 @@ export const GameController = {
       pokemon: {
         name: tpl.name,
         type: tpl.type,
-        movementPattern: tpl.movementPattern,
+        speed: tpl.speed,
+        size: tpl.size,
         hp: tpl.hp,
         maxHp: tpl.maxHp,
         atk: tpl.atk,
@@ -151,19 +157,24 @@ export const GameController = {
     return applyLocal({ type: 'move', from, to });
   },
 
-  /** Acción dentro del combate interactivo (ATACAR/HABILIDAD/OBJETO/HUIR). */
-  async combatAction(request: FastifyRequest<{ Body: CombatBody }>) {
-    const action = String(request.body?.action ?? '');
-    const moveName =
-      typeof request.body?.moveName === 'string' ? request.body.moveName.slice(0, 40) : undefined;
-    const targetId =
-      typeof request.body?.targetId === 'string' ? request.body.targetId.slice(0, 40) : undefined;
-    return applyLocal({ type: 'combat_action', action, moveName, targetId });
+  async deploy(request: FastifyRequest<{ Body: DeployBody }>, reply: FastifyReply) {
+    const { pokemonId, hex } = request.body ?? {};
+    if (typeof pokemonId !== 'string' || !isHex(hex)) {
+      return reply.code(400).send({ success: false, error: 'Parámetros inválidos' });
+    }
+    return applyLocal({ type: 'deploy', pokemonId, hex });
   },
 
-  /** Cierra la fase de resultado del combate y devuelve al tablero. */
-  async combatContinue() {
-    return applyLocal({ type: 'combat_continue' });
+  async cast(request: FastifyRequest<{ Body: CastBody }>, reply: FastifyReply) {
+    const { from, target, moveIndex } = request.body ?? {};
+    if (!isHex(from) || !isHex(target) || typeof moveIndex !== 'number') {
+      return reply.code(400).send({ success: false, error: 'Parámetros inválidos' });
+    }
+    return applyLocal({ type: 'cast', from, target, moveIndex });
+  },
+
+  async forceStart() {
+    return applyLocal({ type: 'forceStart' });
   },
 
   async reset() {
