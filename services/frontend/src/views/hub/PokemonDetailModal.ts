@@ -3,7 +3,7 @@ import { getSprite } from '../../net/PokeSprites';
 import { escapeHtml } from '../../utils/html';
 import { FONT } from './panel';
 import { POKEMON_TYPES, typeAdvantage } from '@transcendence/shared';
-import type { MovementPattern, PokemonMove, PokemonType } from '../../models/Types';
+import type { PokemonMove, PokemonType } from '../../models/Types';
 
 /**
  * Ficha modal reutilizable de un Pokémon (inventario y draft).
@@ -23,11 +23,7 @@ const TYPE_COLOR: Record<string, string> = {
   PSYCHIC: '#f85888', DRAGON: '#7038f8', FLYING: '#a890f0',
 };
 
-const PATTERN_LABEL: Record<MovementPattern, string> = {
-  FLYING: 'Volador · Alfil',
-  TANK: 'Tanque · Rey',
-  SPEEDSTER: 'Velocista · Caballo',
-};
+
 
 const CLASS_LABEL: Record<string, string> = {
   physical: '⚔ Físico',
@@ -40,7 +36,6 @@ export interface PokemonDetailSeed {
   name: string;
   type?: PokemonType;
   level?: number;
-  movementPattern?: MovementPattern;
   hp?: number;
   atk?: number;
   def?: number;
@@ -51,7 +46,6 @@ export interface PokemonDetailSeed {
 interface PokedexData {
   name: string;
   type: PokemonType;
-  movementPattern: MovementPattern;
   hp: number;
   maxHp: number;
   atk: number;
@@ -127,7 +121,6 @@ function bodyHtml(
   loading: boolean
 ): string {
   const curType = data?.type ?? seed.type;
-  const pattern = data?.movementPattern ?? seed.movementPattern;
   const hp = data?.hp ?? seed.hp;
   const atk = data?.atk ?? seed.atk;
   const def = data?.def ?? seed.def;
@@ -150,7 +143,6 @@ function bodyHtml(
         ${curType ? typeBadge(curType, 7) : ''}
         ${seed.level != null ? `<span class="text-white" style="${FONT} font-size:7px;">Lv.${escapeHtml(seed.level)}</span>` : ''}
       </div>
-      ${pattern ? `<span class="text-gray-300 mt-1" style="${FONT} font-size:6px;">${PATTERN_LABEL[pattern]}</span>` : ''}
     </div>
 
     <div class="grid grid-cols-3 gap-2 mt-3">
