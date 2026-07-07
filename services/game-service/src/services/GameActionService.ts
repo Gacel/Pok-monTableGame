@@ -65,7 +65,7 @@ export const GameActionService = {
       await EconomyService.awardForResult(ctx.matchId, result);
     }
 
-    hub.broadcast(ctx.room, { type: 'state', state: result.state });
+    hub.broadcastPersonalized(ctx.room, (sCtx) => ({ type: 'state', state: ctx.game.getStateDTO(sCtx.slot ?? undefined) }));
 
     if (!ctx.isLocal && ctx.matchId && result.state.status === 'finished') {
       matchManager.evict(ctx.matchId);

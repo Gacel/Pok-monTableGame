@@ -123,6 +123,11 @@ export class EntityView {
           label.style.left = `${screenX}px`;
           label.style.top = `${screenY - sSize/1.1 - (10 * this.state.zoom)}px`;
           label.style.zIndex = Math.floor(screenY + 1).toString();
+
+          const opacity = tile.occupant.isHidden ? '0.4' : '1';
+          img.style.opacity = opacity;
+          base.style.opacity = opacity;
+          label.style.opacity = opacity;
       }
     }
     

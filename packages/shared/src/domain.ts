@@ -78,6 +78,8 @@ export interface Pokemon {
   lavaTurns?: number;
   /** Si ya realizó su acción de movimiento o ataque en el turno actual. */
   hasActed?: boolean;
+  /** Si el Pokémon está oculto en la hierba alta. */
+  isHidden?: boolean;
   /** Ataques curados (≤4) disponibles en la fase de combate. */
   moves?: PokemonMove[];
 }

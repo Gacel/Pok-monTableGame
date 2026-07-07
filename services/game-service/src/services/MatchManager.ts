@@ -233,7 +233,7 @@ export class MatchManager {
       if (this.match?.id === DEFAULT_MATCH_ID && this.match.getStateDTO().status === 'deployment') {
          this.match.forceStart();
          this.persist().catch(console.error);
-         import('../realtime/hub.js').then(m => m.hub.broadcast('local', { type: 'state', state: this.match!.getStateDTO() })).catch(console.error);
+         import('../realtime/hub.js').then(m => m.hub.broadcastPersonalized('local', (ctx) => ({ type: 'state', state: this.match!.getStateDTO(ctx.slot ?? undefined) }))).catch(console.error);
       }
     }, 42000);
     
@@ -284,7 +284,7 @@ export class MatchManager {
       if (g && g.getStateDTO().status === 'deployment') {
          g.forceStart();
          this.persistMatch(id).catch(console.error);
-         import('../realtime/hub.js').then(m => m.hub.broadcast(id, { type: 'state', state: g.getStateDTO() })).catch(console.error);
+         import('../realtime/hub.js').then(m => m.hub.broadcastPersonalized(id, (ctx) => ({ type: 'state', state: g.getStateDTO(ctx.slot ?? undefined) }))).catch(console.error);
       }
     }, 42000);
     

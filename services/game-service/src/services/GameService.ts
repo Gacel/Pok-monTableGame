@@ -1,5 +1,5 @@
-import { Board, Pokemon } from '../engine/board.js';
-import { Hex, hexEqual, hexDistance } from '../engine/hex.js';
+import { Board, Pokemon, Tile } from '../engine/board.js';
+import { Hex, hexEqual, hexDistance, hexNeighbors } from '../engine/hex.js';
 import { getMoveOptions, MoveOptions } from '../engine/movement.js';
 import { computeMoveDamage, calculateAoE } from '../engine/combat.js';
 import { terrainDamage } from '../engine/environment.js';
@@ -189,10 +189,25 @@ export class GameService {
     return this.alliances.some((team) => team.includes(a) && team.includes(b));
   };
 
-  getStateDTO(): MatchStateDTO {
+  getStateDTO(requestingPlayerId?: string): MatchStateDTO {
+    const serializedTiles = this.board.serialize().map((tile: Tile) => {
+      // Si la partida está activa, el pokemon está oculto, y no somos de su equipo, lo censuramos.
+      // En fase de despliegue, la visibilidad la gestiona el frontend de forma global.
+      if (
+        this.status === 'active' &&
+        tile.occupant &&
+        tile.occupant.isHidden &&
+        requestingPlayerId &&
+        !this.sameTeam(tile.occupant.playerId, requestingPlayerId)
+      ) {
+        return { ...tile, occupant: null };
+      }
+      return tile;
+    });
+
     return {
       id: this.id,
-      tiles: this.board.serialize(),
+      tiles: serializedTiles,
       players: this.players,
       currentPlayer: this.currentPlayer,
       turn: this.turn,
@@ -284,6 +299,7 @@ export class GameService {
       }
       this.reserve = {};
     }
+    this.updateStealthVisibility();
     return { ok: true, state: this.getStateDTO() };
   }
 
@@ -318,9 +334,54 @@ export class GameService {
       const moved = this.board.getOccupant(to);
       if (moved) moved.hasActed = true;
       this.log.push(`${nameOf(mover)} se mueve.`);
+      this.updateStealthVisibility();
       return { ok: true, state: this.getStateDTO() };
     }
     return { ok: false, error: 'Movimiento ilegal', state: this.getStateDTO() };
+  }
+
+  private updateStealthVisibility(): void {
+    if (this.status !== 'active') return;
+    const pokes = new Map<string, { pokemon: Pokemon; hexes: Hex[] }>();
+    for (const tile of this.board.tiles.values()) {
+      if (tile.occupant) {
+        if (!pokes.has(tile.occupant.id)) {
+          pokes.set(tile.occupant.id, { pokemon: tile.occupant, hexes: [] });
+        }
+        pokes.get(tile.occupant.id)!.hexes.push(tile.hex);
+      }
+    }
+
+    for (const { pokemon, hexes } of pokes.values()) {
+      // Si está en hierba, asume oculto inicialmente, salvo que haya un enemigo cerca.
+      // Solo consideramos hierba alta si TODAS sus casillas ocupadas son TALL_GRASS.
+      const inGrass = hexes.length > 0 && hexes.every((h) => this.board.getTile(h)?.biome === 'TALL_GRASS');
+      
+      let enemyAdjacent = false;
+      for (const hex of hexes) {
+        const neighbors = hexNeighbors(hex);
+        for (const n of neighbors) {
+          const adjOcc = this.board.getOccupant(n);
+          if (adjOcc && !this.sameTeam(adjOcc.playerId, pokemon.playerId)) {
+            enemyAdjacent = true;
+            break;
+          }
+        }
+        if (enemyAdjacent) break;
+      }
+
+      if (inGrass && !enemyAdjacent && !pokemon.hasActed) {
+        // Puede esconderse
+        if (pokemon.isHidden === false || pokemon.isHidden === undefined) {
+           pokemon.isHidden = true;
+        }
+      } else if (enemyAdjacent && pokemon.isHidden) {
+        pokemon.isHidden = false;
+        this.log.push(`👁️ ¡${nameOf(pokemon)} ha sido descubierto!`);
+      } else if (!inGrass && pokemon.isHidden) {
+        pokemon.isHidden = false;
+      }
+    }
   }
 
   // ---------------------------------------------------------------- combate AoE
@@ -401,6 +462,9 @@ export class GameService {
     }
 
     caster.hasActed = true;
+    caster.isHidden = false; // El ataque rompe el sigilo inmediatamente
+    
+    this.updateStealthVisibility();
     this.checkWinCondition();
     return { ok: true, state: this.getStateDTO() };
   }

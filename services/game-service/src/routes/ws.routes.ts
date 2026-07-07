@@ -90,7 +90,7 @@ export async function wsRoutes(app: FastifyInstance): Promise<void> {
       }
       hub.send(socket, { type: 'room', room });
       const game = await matchManager.getMatch(matchId);
-      if (game) hub.send(socket, { type: 'state', state: game.getStateDTO() });
+      if (game) hub.send(socket, { type: 'state', state: game.getStateDTO(room.youAre ?? undefined) });
     }
 
     socket.on('message', async (raw: Buffer) => {

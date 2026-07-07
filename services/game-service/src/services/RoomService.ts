@@ -183,7 +183,7 @@ export const RoomService = {
       for (const p of players) teams[p.slot] = p.team!;
       const game = await matchManager.createGame(matchId, teams, row.game_mode);
       hub.broadcast(matchId, { type: 'room', room: toRoomInfo(await loadRoom(matchId), null) });
-      hub.broadcast(matchId, { type: 'state', state: game.getStateDTO() });
+      hub.broadcastPersonalized(matchId, (ctx) => ({ type: 'state', state: game.getStateDTO(ctx.slot ?? undefined) }));
     } else {
       hub.broadcast(matchId, { type: 'room', room: toRoomInfo(await loadRoom(matchId), null) });
     }

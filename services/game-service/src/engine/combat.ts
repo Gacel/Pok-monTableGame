@@ -24,7 +24,8 @@ export function computeMoveDamage(
   const power = move.power;
   const adv = typeAdvantage(move.type, defender.type);
   const stab = move.type === attacker.type ? STAB_MULT : 1.0;
-  const raw = Math.round(atk * (power / POWER_REF) * adv * stab) - Math.floor(def / 2);
+  const ambush = attacker.isHidden ? 1.5 : 1.0; // Bono de daño de emboscada
+  const raw = Math.round(atk * (power / POWER_REF) * adv * stab * ambush) - Math.floor(def / 2);
   return Math.max(1, raw);
 }
 
