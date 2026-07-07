@@ -44,6 +44,8 @@ export class GameController {
   private botTimer: number | null = null;
   private botActionCount = 0;
   private botTurnKey = '';
+  /** Coalescido de render: varias mutaciones en un frame → un solo repintado. */
+  private renderScheduled = false;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -58,7 +60,10 @@ export class GameController {
     );
     this.minimapView = new MinimapView(this.state, this.boardView, this.canvas);
 
-    this.state.subscribe(() => this.renderAll());
+    // Coalescido: el estado notifica en cada mutación (incluida la cámara en cada
+    // mousemove del pan). En vez de repintar de forma síncrona por cada notify,
+    // agrupamos en un único render por frame → sin tirones al arrastrar/zoom.
+    this.state.subscribe(() => this.scheduleRender());
     this.setupEvents();
     this.setupKeyboardShortcuts();
     this.setupHUDListeners();
@@ -330,8 +335,9 @@ export class GameController {
       const ease = progress < 0.5 ? 4 * progress * progress * progress : 1 - Math.pow(-2 * progress + 2, 3) / 2;
       const curX = startX + (targetX - startX) * ease;
       const curY = startY + (targetY - startY) * ease;
+      // setCameraOffset ya programa el render (coalescido); no repintamos aquí
+      // para no hacer doble trabajo por frame.
       this.state.setCameraOffset(curX, curY);
-      this.renderAll();
       if (progress < 1) {
         this.cameraAnimId = requestAnimationFrame(step);
       } else {
@@ -379,6 +385,16 @@ export class GameController {
     this.state.pokeGifs[name] = gif;
     this.state.pokeStatic[name] = staticUrl;
     return gif;
+  }
+
+  /** Programa un repintado para el próximo frame (coalesce múltiples notify). */
+  private scheduleRender(): void {
+    if (this.renderScheduled) return;
+    this.renderScheduled = true;
+    requestAnimationFrame(() => {
+      this.renderScheduled = false;
+      this.renderAll();
+    });
   }
 
   private renderAll(): void {

@@ -21,6 +21,11 @@ export class MinimapView {
   private boundsCache: { tiles: Tile[]; minX: number; minY: number; w: number; h: number } | null =
     null;
 
+  // Capa ESTÁTICA de biomas pre-renderizada a un canvas offscreen. Solo cambia si
+  // cambia el tablero (referencia de tiles): en cada frame se hace un único blit en
+  // vez de recorrer y pintar las ~5400 celdas de ARENA.
+  private biomeLayer: { tiles: Tile[]; canvas: HTMLCanvasElement } | null = null;
+
   private static readonly BIOME_COLORS: Record<string, string> = {
     FIRE: '#e2523f',
     WATER: '#2f6fd0',
@@ -89,6 +94,31 @@ export class MinimapView {
     return { scale, offX, offY };
   }
 
+  /** Capa de biomas cacheada (offscreen), reconstruida solo al cambiar el tablero. */
+  private getBiomeLayer(
+    tiles: Tile[],
+    b: { minX: number; minY: number; w: number; h: number },
+    scale: number,
+    offX: number,
+    offY: number
+  ): HTMLCanvasElement {
+    if (this.biomeLayer && this.biomeLayer.tiles === tiles) return this.biomeLayer.canvas;
+    const c = document.createElement('canvas');
+    c.width = this.canvas!.width;
+    c.height = this.canvas!.height;
+    const lctx = c.getContext('2d')!;
+    const cell = Math.max(2, this.boardView.HEX_SIZE * 1.9 * scale);
+    for (const t of tiles) {
+      const p = this.boardView.hexToPixel(t.hex.q, t.hex.r);
+      const x = offX + (p.x - b.minX) * scale;
+      const y = offY + (p.y - b.minY) * scale;
+      lctx.fillStyle = MinimapView.BIOME_COLORS[t.biome] ?? '#3f9b4f';
+      lctx.fillRect(x - cell / 2, y - cell / 2, cell, cell);
+    }
+    this.biomeLayer = { tiles, canvas: c };
+    return c;
+  }
+
   render(): void {
     if (!this.canvas || !this.ctx) return;
     const tiles = this.state.currentTiles;
@@ -99,15 +129,10 @@ export class MinimapView {
     const b = this.getBounds(tiles);
     const { scale, offX, offY } = this.fit(b);
 
-    // Tiles como celdas pequeñas coloreadas por bioma.
+    // Capa estática de biomas (un solo blit en vez de miles de fillRect por frame).
+    ctx.drawImage(this.getBiomeLayer(tiles, b, scale, offX, offY), 0, 0);
+
     const cell = Math.max(2, this.boardView.HEX_SIZE * 1.9 * scale);
-    for (const t of tiles) {
-      const p = this.boardView.hexToPixel(t.hex.q, t.hex.r);
-      const x = offX + (p.x - b.minX) * scale;
-      const y = offY + (p.y - b.minY) * scale;
-      ctx.fillStyle = MinimapView.BIOME_COLORS[t.biome] ?? '#3f9b4f';
-      ctx.fillRect(x - cell / 2, y - cell / 2, cell, cell);
-    }
 
     // Piezas: cada Pokémon con el color de SU jugador (P1..P4).
     for (const t of tiles) {

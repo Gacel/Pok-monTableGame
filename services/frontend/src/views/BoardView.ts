@@ -27,6 +27,32 @@ export class BoardView {
     { q: 1, r: -1 },  // top-right
   ];
 
+  /**
+   * Geometría cacheada por REFERENCIA del array de tiles: orden de pintado (por Y,
+   * painter's algorithm) con sus coordenadas de píxel precalculadas, y el mapa de
+   * vecindad. Antes se reordenaba y remapeaba TODO en cada frame (con 2 hexToPixel
+   * por comparación); ahora solo se recalcula cuando cambia el estado del tablero.
+   */
+  private geomCache: {
+    tiles: Tile[];
+    order: { tile: Tile; x: number; y: number }[];
+    tileMap: Map<string, Tile>;
+  } | null = null;
+
+  private getGeom(): { order: { tile: Tile; x: number; y: number }[]; tileMap: Map<string, Tile> } {
+    const tiles = this.state.currentTiles;
+    if (this.geomCache && this.geomCache.tiles === tiles) return this.geomCache;
+    const order = tiles.map((t) => {
+      const p = this.hexToPixel(t.hex.q, t.hex.r);
+      return { tile: t, x: p.x, y: p.y };
+    });
+    order.sort((a, b) => a.y - b.y);
+    const tileMap = new Map<string, Tile>();
+    for (const t of tiles) tileMap.set(`${t.hex.q},${t.hex.r}`, t);
+    this.geomCache = { tiles, order, tileMap };
+    return this.geomCache;
+  }
+
   constructor(canvas: HTMLCanvasElement, state: GameState) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d')!;
@@ -262,12 +288,8 @@ export class BoardView {
 
   public render() {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-    
-    const sortedTiles = [...this.state.currentTiles].sort((a, b) => {
-      const pA = this.hexToPixel(a.hex.q, a.hex.r);
-      const pB = this.hexToPixel(b.hex.q, b.hex.r);
-      return pA.y - pB.y;
-    });
+
+    const { order, tileMap } = this.getGeom();
 
     this.ctx.save();
     this.ctx.translate(this.CENTER_X, this.CENTER_Y);
@@ -275,11 +297,19 @@ export class BoardView {
     this.ctx.translate(-this.CENTER_X, -this.CENTER_Y);
     this.ctx.translate(this.state.cameraOffset.x, this.state.cameraOffset.y);
 
-    const tileMap = new Map<string, Tile>();
-    for (const t of sortedTiles) tileMap.set(`${t.hex.q},${t.hex.r}`, t);
+    // Culling de viewport: solo dibujamos las casillas cuyo píxel cae dentro del
+    // canvas (con margen para el alto del hex y su relieve). En ARENA (~5400
+    // casillas) esto reduce los dibujados a las ~pocas cientos visibles.
+    const z = this.state.zoom;
+    const { x: offX, y: offY } = this.state.cameraOffset;
+    const m = this.HEX_SIZE * 2;
+    const minX = (0 - this.CENTER_X) / z + this.CENTER_X - offX - m;
+    const maxX = (this.canvas.width - this.CENTER_X) / z + this.CENTER_X - offX + m;
+    const minY = (0 - this.CENTER_Y) / z + this.CENTER_Y - offY - m;
+    const maxY = (this.canvas.height - this.CENTER_Y) / z + this.CENTER_Y - offY + m;
 
-    for (const tile of sortedTiles) {
-      const { x, y } = this.hexToPixel(tile.hex.q, tile.hex.r);
+    for (const { tile, x, y } of order) {
+      if (x < minX || x > maxX || y < minY || y > maxY) continue;
       this.drawHex(x, y, this.getBiomeTexture(tile.biome));
       this.drawBiomeTransitions(tile, x, y, tileMap);
 
