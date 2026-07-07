@@ -2,6 +2,8 @@ import { authState } from '../../auth/AuthState';
 import { apiFetch } from '../../net/api';
 import { getSprite } from '../../net/PokeSprites';
 import { FONT, panelTitle, panelCard, backButton } from './panel';
+import { openPokemonDetail } from './PokemonDetailModal';
+import type { PokemonType } from '../../models/Types';
 
 interface InvPokemon {
   id: string;
@@ -10,6 +12,9 @@ interface InvPokemon {
   isStarter: boolean;
   acquiredVia: string;
   type: string;
+  hp?: number;
+  atk?: number;
+  def?: number;
 }
 interface InvItem {
   kind: string;
@@ -88,11 +93,26 @@ export class InventoryView {
     const color = TYPE_COLOR[p.type] ?? '#888';
     const tag = p.isStarter ? '⭐' : p.acquiredVia === 'capture' ? '🎯' : '';
     return `
-      <div class="flex flex-col items-center rounded border-2 border-gray-700 bg-gray-800" style="padding:4px;">
+      <div class="pkmn-cell flex flex-col items-center rounded border-2 border-gray-700 bg-gray-800 cursor-pointer transition-transform hover:scale-105 hover:border-yellow-400" data-name="${p.name}" role="button" tabindex="0" title="Ver ficha de ${p.name}" style="padding:4px;">
         <img src="${this.sprites[p.name] ?? ''}" alt="${p.name}" class="w-11 h-11 object-contain" style="image-rendering:pixelated;" />
         <span class="uppercase text-white truncate" style="${FONT} font-size:6px; max-width:100%;">${tag}${p.name}</span>
         <span style="${FONT} font-size:5px; color:${color};">Lv.${p.level}</span>
       </div>`;
+  }
+
+  /** Abre la ficha del Pokémon con lo ya conocido (tipo/nivel/stats/sprite). */
+  private openDetail(pokemon: InvPokemon[], name: string): void {
+    const p = pokemon.find((x) => x.name === name);
+    if (!p) return;
+    openPokemonDetail({
+      name: p.name,
+      type: p.type as PokemonType,
+      level: p.level,
+      hp: p.hp,
+      atk: p.atk,
+      def: p.def,
+      spriteUrl: this.sprites[p.name],
+    });
   }
 
   private itemCell(it: InvItem): string {
@@ -162,5 +182,17 @@ export class InventoryView {
       </div>`;
 
     document.getElementById('btn-inv-back')?.addEventListener('click', () => this.onClose());
+
+    // Click (o Enter/Espacio) en un Pokémon → ficha modal.
+    this.container.querySelectorAll<HTMLElement>('.pkmn-cell').forEach((cell) => {
+      const open = () => this.openDetail(pokemon, cell.dataset.name ?? '');
+      cell.addEventListener('click', open);
+      cell.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          open();
+        }
+      });
+    });
   }
 }

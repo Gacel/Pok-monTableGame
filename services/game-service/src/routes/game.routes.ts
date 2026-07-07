@@ -22,6 +22,22 @@ export async function gameRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/game/moves', GameController.getMoveOptions);
   app.get('/api/game/roster', GameController.getRoster);
 
+  // Ficha de un Pokémon (inventario/draft). Ruta ESTÁTICA (`pokedex`) → tiene
+  // precedencia sobre `/api/game/:matchId/...` en find-my-way, así que no colisiona.
+  app.get(
+    '/api/game/pokedex/:name',
+    {
+      schema: {
+        params: {
+          type: 'object',
+          required: ['name'],
+          properties: { name: { type: 'string', minLength: 1, maxLength: 32 } },
+        },
+      },
+    },
+    GameController.getPokedex
+  );
+
   app.post(
     '/api/game/start',
     {

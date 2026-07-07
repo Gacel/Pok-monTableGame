@@ -1,6 +1,7 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 import type { GameMode } from '@transcendence/shared';
 import { matchManager } from '../services/MatchManager.js';
+import { PokemonService } from '../services/PokemonService.js';
 import { hub, LOCAL_ROOM } from '../realtime/hub.js';
 import { Hex } from '../engine/hex.js';
 import { GameActionService, GameAction } from '../services/GameActionService.js';
@@ -13,6 +14,9 @@ interface MoveBody {
 interface OptionsQuery {
   q?: string;
   r?: string;
+}
+interface PokedexParams {
+  name?: string;
 }
 interface CombatBody {
   action?: string;
@@ -62,6 +66,35 @@ export const GameController = {
   /** Pool de Pokémon para el draft inicial (≥12). */
   async getRoster() {
     return { roster: await matchManager.getRoster() };
+  },
+
+  /**
+   * Ficha (Pokédex) de un Pokémon por nombre: stats, patrón y ataques curados.
+   * TODO cache-first: `getTemplate` (tabla `pokemons`) y `getCuratedMoves`
+   * (tablas `moves`/`pokemon_moves`) solo tocan PokeAPI la PRIMERA vez y luego
+   * sirven desde SQLite. Las fortalezas/debilidades por tipo las deriva el cliente
+   * de `typeAdvantage` (@transcendence/shared), sin datos extra.
+   */
+  async getPokedex(request: FastifyRequest<{ Params: PokedexParams }>, reply: FastifyReply) {
+    const name = String(request.params.name ?? '').toLowerCase().slice(0, 32);
+    if (!/^[a-z0-9-]+$/.test(name)) {
+      return reply.code(400).send({ success: false, error: 'Nombre inválido' });
+    }
+    const tpl = await PokemonService.getTemplate(name);
+    const moves = await PokemonService.getCuratedMoves(name, tpl.type);
+    return {
+      success: true,
+      pokemon: {
+        name: tpl.name,
+        type: tpl.type,
+        movementPattern: tpl.movementPattern,
+        hp: tpl.hp,
+        maxHp: tpl.maxHp,
+        atk: tpl.atk,
+        def: tpl.def,
+        moves,
+      },
+    };
   },
 
   async getMoveOptions(request: FastifyRequest<{ Querystring: OptionsQuery }>, reply: FastifyReply) {

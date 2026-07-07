@@ -2,6 +2,7 @@ import type { MovementPattern, PokemonType } from '../../models/Types';
 import type { GameMode } from '@transcendence/shared';
 import { apiFetch } from '../../net/api';
 import { getSprite } from '../../net/PokeSprites';
+import { openPokemonDetail } from './PokemonDetailModal';
 
 interface RosterEntry {
   name: string;
@@ -140,15 +141,19 @@ export class DraftView {
         const disabled = isTakenByOther || isTeamFull;
         const border = selected ? '#facc15' : disabled ? '#374151' : '#1e293b';
         return `
-        <button data-name="${p.name}" ${disabled ? 'disabled' : ''}
-          class="draft-card relative flex flex-col items-center bg-gray-800 p-1.5 rounded-lg transition-all ${disabled ? 'opacity-35 cursor-not-allowed grayscale bg-gray-950' : 'hover:bg-gray-700 hover:scale-105'}"
-          style="border:3px solid ${border};">
-          <img src="${this.sprites[p.name] ?? ''}" alt="${p.name}" class="w-14 h-14 object-contain" style="image-rendering:pixelated;" />
-          <span class="text-[8px] text-white mt-0.5 uppercase font-bold" style="font-family:'Press Start 2P',monospace;">${p.name}</span>
-          <span class="text-[6px] mt-1 px-1.5 py-0.5 rounded font-bold" style="font-family:'Press Start 2P',monospace;background:${TYPE_COLOR[p.type] ?? '#666'};color:#000;">${p.type}</span>
-          <span class="text-[5.5px] text-gray-300 mt-0.5" style="font-family:'Press Start 2P',monospace;">${PATTERN_LABEL[p.movementPattern]}</span>
-          ${selected ? '<span class="absolute top-1 right-1 text-yellow-400 text-sm animate-pulse">★</span>' : ''}
-        </button>`;
+        <div class="relative">
+          <button data-name="${p.name}" ${disabled ? 'disabled' : ''}
+            class="draft-card w-full relative flex flex-col items-center bg-gray-800 p-1.5 rounded-lg transition-all ${disabled ? 'opacity-35 cursor-not-allowed grayscale bg-gray-950' : 'hover:bg-gray-700 hover:scale-105'}"
+            style="border:3px solid ${border};">
+            <img src="${this.sprites[p.name] ?? ''}" alt="${p.name}" class="w-14 h-14 object-contain" style="image-rendering:pixelated;" />
+            <span class="text-[8px] text-white mt-0.5 uppercase font-bold" style="font-family:'Press Start 2P',monospace;">${p.name}</span>
+            <span class="text-[6px] mt-1 px-1.5 py-0.5 rounded font-bold" style="font-family:'Press Start 2P',monospace;background:${TYPE_COLOR[p.type] ?? '#666'};color:#000;">${p.type}</span>
+            <span class="text-[5.5px] text-gray-300 mt-0.5" style="font-family:'Press Start 2P',monospace;">${PATTERN_LABEL[p.movementPattern]}</span>
+            ${selected ? '<span class="absolute top-1 right-1 text-yellow-400 text-sm animate-pulse">★</span>' : ''}
+          </button>
+          <span class="draft-info" role="button" tabindex="0" data-name="${p.name}" title="Ver ficha de ${p.name}"
+            style="position:absolute; top:3px; left:3px; width:18px; height:18px; display:flex; align-items:center; justify-content:center; border-radius:9999px; background:rgba(15,23,42,0.88); color:#fbbf24; border:1px solid #fbbf24; font-size:10px; line-height:1; cursor:pointer; z-index:5;">ℹ</span>
+        </div>`;
       })
       .join('');
 
@@ -186,7 +191,36 @@ export class DraftView {
     this.container.querySelectorAll<HTMLButtonElement>('.draft-card').forEach((btn) => {
       btn.addEventListener('click', () => this.toggle(btn.dataset.name ?? ''));
     });
+
+    // Botón ℹ️ de cada carta → ficha modal (no interfiere con la selección;
+    // funciona también en cartas deshabilitadas, porque es hermano del botón).
+    this.container.querySelectorAll<HTMLElement>('.draft-info').forEach((info) => {
+      const open = (e: Event) => {
+        e.stopPropagation();
+        this.openDetail(info.dataset.name ?? '');
+      };
+      info.addEventListener('click', open);
+      info.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') open(e);
+      });
+    });
+
     this.container.querySelector('#draft-confirm')?.addEventListener('click', () => this.confirm());
+  }
+
+  /** Abre la ficha del Pokémon del roster con lo ya conocido (tipo/patrón/stats/sprite). */
+  private openDetail(name: string): void {
+    const p = this.roster.find((x) => x.name === name);
+    if (!p) return;
+    openPokemonDetail({
+      name: p.name,
+      type: p.type,
+      movementPattern: p.movementPattern,
+      hp: p.hp,
+      atk: p.atk,
+      def: p.def,
+      spriteUrl: this.sprites[p.name],
+    });
   }
 
   private toggle(name: string): void {
