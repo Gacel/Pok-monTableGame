@@ -248,15 +248,24 @@ export class GameService {
     return balls;
   }
 
-  /** ARENA: reaparece el cofre si tocaba y ya no hay ninguno en el mapa. */
+  /** ARENA: reaparece el cofre si tocaba (o si el mundo se quedó sin ninguno). */
   private maybeRespawnChest(): void {
-    if (!this.persistent || this.chestRespawnTurn <= 0 || this.turn < this.chestRespawnTurn) return;
-    if (this.hasChest()) {
-      this.chestRespawnTurn = 0;
-      return;
-    }
+    if (!this.persistent || this.hasChest()) return;
+    // Si hay respawn programado, espera al turno; si no (mundo sin cofre), siembra ya.
+    if (this.chestRespawnTurn > 0 && this.turn < this.chestRespawnTurn) return;
     this.seedChest(false);
     this.chestRespawnTurn = 0;
+  }
+
+  /**
+   * ARENA: garantiza que haya al menos un cofre (para mundos persistentes creados
+   * antes de esta mecánica, que se cargan sin cofre). Respeta el respawn en curso.
+   * Devuelve true si sembró (para que el caller persista).
+   */
+  ensureChest(): boolean {
+    if (!this.persistent || this.hasChest() || this.chestRespawnTurn > 0) return false;
+    this.seedChest(false);
+    return true;
   }
 
   /** Aliados en 2v2 (incluye a uno mismo); en FFA cada jugador va solo. */
