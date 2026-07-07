@@ -120,17 +120,15 @@ function moveRow(m: PokedexMove): string {
     .filter(Boolean)
     .join(' · ');
   const desc = cleanEffect(m.shortEffect);
-  // Título del ataque arriba (fuente retro) y descripción debajo (fuente legible,
-  // como el narrador/chat del juego): aprovechamos el espacio del modal.
+  // Tres líneas para que el nombre NO se corte: tipo + nombre arriba, metadatos
+  // debajo (a ancho completo, sin nowrap) y la descripción al final (fuente legible).
   return `
     <li class="rounded bg-gray-800/80 border border-gray-700" style="padding:7px 9px;">
-      <div class="flex items-center justify-between gap-2">
-        <span class="flex items-center gap-1.5 min-w-0">
-          ${typeBadge(m.type, 5)}
-          <span class="text-white uppercase truncate" style="${FONT} font-size:8px;">${escapeHtml(m.name.replace(/-/g, ' '))}</span>
-        </span>
-        <span class="text-gray-400 whitespace-nowrap" style="${FONT} font-size:5.5px;">${escapeHtml(cls)}${meta ? ` · ${escapeHtml(meta)}` : ''}</span>
+      <div class="flex items-center gap-1.5">
+        ${typeBadge(m.type, 5)}
+        <span class="text-white uppercase" style="${FONT} font-size:8px; line-height:1.4;">${escapeHtml(m.name.replace(/-/g, ' '))}</span>
       </div>
+      <div class="text-gray-400 mt-1" style="${FONT} font-size:6px; line-height:1.5;">${escapeHtml(cls)}${meta ? ` · ${escapeHtml(meta)}` : ''}</div>
       ${desc ? `<p class="text-gray-200 mt-1.5 font-mono" style="font-size:10px; line-height:1.45;">${escapeHtml(desc)}</p>` : ''}
     </li>`;
 }
