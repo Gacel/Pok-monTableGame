@@ -73,30 +73,35 @@ export async function gameRoutes(app: FastifyInstance): Promise<void> {
   );
 
   app.post(
-    '/api/game/combat/action',
+    '/api/game/deploy',
     {
       schema: {
         body: {
           type: 'object',
-          required: ['action'],
-          properties: {
-            action: {
-              type: 'string',
-              enum: ['ATACAR', 'HABILIDAD', 'OBJETO', 'HUIR', 'MOVE', 'TARGET'],
-            },
-            moveName: { type: 'string', maxLength: 40 },
-            targetId: { type: 'string', maxLength: 40 },
-          },
+          required: ['pokemonId', 'hex'],
+          properties: { pokemonId: { type: 'string' }, hex: hexSchema },
         },
       },
     },
-    GameController.combatAction
+    GameController.deploy
+  );
+  app.post(
+    '/api/game/cast',
+    {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['from', 'target', 'moveIndex'],
+          properties: { from: hexSchema, target: hexSchema, moveIndex: { type: 'integer' } },
+        },
+      },
+    },
+    GameController.cast
   );
 
-  app.post('/api/game/combat/continue', GameController.combatContinue);
 
   app.post('/api/game/end-turn', GameController.endTurn);
-
+  app.post('/api/game/force-start', GameController.forceStart);
   app.post('/api/game/abandon', GameController.abandon);
 
   app.post('/api/game/reset', GameController.reset);
@@ -128,32 +133,37 @@ export async function gameRoutes(app: FastifyInstance): Promise<void> {
     },
     OnlineGameController.move
   );
+
   app.post(
-    '/api/game/:matchId/combat/action',
+    '/api/game/:matchId/deploy',
     {
       schema: {
         params: matchParamsSchema,
         body: {
           type: 'object',
-          required: ['action'],
-          properties: {
-            action: {
-              type: 'string',
-              enum: ['ATACAR', 'HABILIDAD', 'OBJETO', 'HUIR', 'MOVE', 'TARGET'],
-            },
-            moveName: { type: 'string', maxLength: 40 },
-            targetId: { type: 'string', maxLength: 40 },
-          },
+          required: ['pokemonId', 'hex'],
+          properties: { pokemonId: { type: 'string' }, hex: hexSchema },
         },
       },
     },
-    OnlineGameController.combatAction
+    OnlineGameController.deploy
   );
+
   app.post(
-    '/api/game/:matchId/combat/continue',
-    { schema: { params: matchParamsSchema } },
-    OnlineGameController.combatContinue
+    '/api/game/:matchId/cast',
+    {
+      schema: {
+        params: matchParamsSchema,
+        body: {
+          type: 'object',
+          required: ['from', 'target', 'moveIndex'],
+          properties: { from: hexSchema, target: hexSchema, moveIndex: { type: 'integer' } },
+        },
+      },
+    },
+    OnlineGameController.cast
   );
+
   app.post(
     '/api/game/:matchId/end-turn',
     { schema: { params: matchParamsSchema } },
