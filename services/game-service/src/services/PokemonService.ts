@@ -1,6 +1,6 @@
 import { PokemonModel, PokemonTemplate } from '../models/PokemonModel.js';
 import { MoveModel, MoveRow } from '../models/MoveModel.js';
-import { MovementPattern, PokemonMove, PokemonType } from '../engine/board.js';
+import { PokemonMove, PokemonType } from '../engine/board.js';
 
 interface PokeApiStat {
   base_stat: number;
@@ -28,6 +28,8 @@ interface PokeApiMove {
   type?: { name?: string };
   damage_class?: { name?: string };
   effect_entries?: { short_effect?: string; language?: { name?: string } }[];
+  target?: { name?: string };
+  names?: { name: string; language: { name: string } }[];
 }
 
 /** Nº de movimientos del learnset que consideramos para curar (acota los fetch). */
@@ -66,15 +68,10 @@ function typeFromPokeApi(primaryType: string): PokemonType {
   return 'NORMAL';
 }
 
-function patternFromType(type: PokemonType): MovementPattern {
-  if (['FIRE', 'FLYING', 'DRAGON', 'PSYCHIC'].includes(type)) return 'FLYING';
-  if (['GRASS', 'ELECTRIC', 'FAIRY'].includes(type)) return 'SPEEDSTER';
-  return 'TANK'; // WATER, POISON, NORMAL, ICE
-}
 
-/** Movimiento básico gratuito: garantiza que siempre se puede atacar sin candies. */
+
 function fallbackMove(type: PokemonType): PokemonMove {
-  return { name: 'golpe', type, power: 45, damageClass: 'physical', accuracy: 100, pp: 35 };
+  return { name: 'golpe', type, power: 45, damageClass: 'physical', accuracy: 100, pp: 35, range: 1, aoe: 'single' };
 }
 
 /** Extrae el learnset de la respuesta de PokeAPI (nombre + método/nivel principal). */
@@ -118,7 +115,8 @@ export const PokemonService = {
         atk,
         def,
         type,
-        movementPattern: patternFromType(type),
+        speed: Math.max(2, Math.floor(statOf(data, 'speed', 60) / 20)),
+        size: 'medium',
       };
       await PokemonModel.save(tpl, data);
       // Importa el learnset completo (barato: viene en la misma respuesta).
@@ -133,7 +131,8 @@ export const PokemonService = {
         atk: 50,
         def: 40,
         type: 'GRASS',
-        movementPattern: 'TANK',
+        speed: 3,
+        size: 'medium',
       };
       await PokemonModel.save(tpl);
       return tpl;
@@ -155,6 +154,8 @@ export const PokemonService = {
         damageClass: (data.damage_class?.name as MoveRow['damageClass']) ?? null,
         shortEffect:
           data.effect_entries?.find((e) => e.language?.name === 'en')?.short_effect ?? null,
+        target: data.target?.name ?? null,
+        displayName: data.names?.find((n) => n.language?.name === 'es')?.name ?? null,
       };
       await MoveModel.saveMove(row, data);
       return row;
@@ -201,9 +202,28 @@ export const PokemonService = {
           type: m.type,
           power: m.power ?? 0,
           damageClass: (m.damageClass ?? 'physical') as PokemonMove['damageClass'],
+          range: 1,
+          aoe: 'single',
         };
+        if (m.displayName != null) mv.displayName = m.displayName;
         if (m.accuracy != null) mv.accuracy = m.accuracy;
         if (m.pp != null) mv.pp = m.pp;
+        
+        // Mapeo rudimentario de targets de PokeAPI a geometría AoE
+        const target = m.target ?? 'selected-pokemon';
+        if (target === 'all-other-pokemon' || target === 'all-pokemon') {
+          mv.aoe = 'radius';
+          mv.range = 0; // se castea sobre uno mismo y afecta al radio
+        } else if (target === 'all-opponents') {
+          mv.aoe = 'cone';
+          mv.range = 2; // un cono de tamaño 2
+        } else if (m.damageClass === 'special') {
+          // ataques especiales (proyectiles) suelen tener rango
+          mv.range = 3;
+          // Si es muy potente, puede ser línea o cono
+          if (mv.power >= 90) mv.aoe = 'line';
+        }
+        
         return mv;
       };
 
