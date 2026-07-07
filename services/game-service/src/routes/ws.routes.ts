@@ -14,12 +14,14 @@ import { Hex } from '../engine/hex.js';
 import { isHex } from '../utils/hex.js';
 
 interface WsMessage {
-  type: 'move' | 'chat' | 'combat_action' | 'combat_continue' | 'end_turn' | 'abandon';
+  type: 'move' | 'cast' | 'chat' | 'deploy' | 'end_turn' | 'abandon';
   from?: Hex;
   to?: Hex;
+  hex?: Hex;
+  pokemonId?: string;
   text?: string;
   action?: string;
-  moveName?: string;
+  moveIndex?: number;
 }
 
 interface WsQuery {
@@ -151,10 +153,21 @@ export async function wsRoutes(app: FastifyInstance): Promise<void> {
           return;
         }
         action = { type: 'move', from: msg.from, to: msg.to };
-      } else if (msg.type === 'combat_action') {
-        action = { type: 'combat_action', action: String(msg.action ?? ''), moveName: msg.moveName };
-      } else if (msg.type === 'combat_continue') {
-        action = { type: 'combat_continue' };
+
+      } else if (msg.type === 'cast') {
+        if (!isHex(msg.from) || !isHex(msg.to) || typeof msg.moveIndex !== 'number') {
+          hub.send(socket, { type: 'error', error: 'Parámetros de ataque inválidos' });
+          return;
+        }
+        action = { type: 'cast', from: msg.from, target: msg.to, moveIndex: msg.moveIndex };
+
+      } else if (msg.type === 'deploy') {
+        if (!isHex(msg.hex) || typeof msg.pokemonId !== 'string') {
+          hub.send(socket, { type: 'error', error: 'Parámetros de despliegue inválidos' });
+          return;
+        }
+        action = { type: 'deploy', pokemonId: msg.pokemonId, hex: msg.hex };
+
       } else if (msg.type === 'end_turn') {
         action = { type: 'end_turn' };
       } else if (msg.type === 'abandon') {
