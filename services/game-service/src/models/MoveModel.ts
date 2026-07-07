@@ -10,6 +10,8 @@ export interface MoveRow {
   pp: number | null;
   damageClass: MoveDamageClass | null;
   shortEffect: string | null;
+  target: string | null;
+  displayName: string | null;
 }
 
 /** Entrada del learnset de un Pokémon. */
@@ -24,7 +26,7 @@ export const MoveModel = {
   async findMove(name: string): Promise<MoveRow | undefined> {
     const db = await getDb();
     const row = await db.get(
-      `SELECT name, type, power, accuracy, pp, damage_class AS damageClass, short_effect AS shortEffect
+      `SELECT name, type, power, accuracy, pp, damage_class AS damageClass, short_effect AS shortEffect, target, display_name AS displayName
        FROM moves WHERE name = ?`,
       name
     );
@@ -34,8 +36,8 @@ export const MoveModel = {
   async saveMove(row: MoveRow, rawData?: unknown): Promise<void> {
     const db = await getDb();
     await db.run(
-      `INSERT OR REPLACE INTO moves (name, type, power, accuracy, pp, damage_class, short_effect, raw_data)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT OR REPLACE INTO moves (name, type, power, accuracy, pp, damage_class, short_effect, target, display_name, raw_data)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       row.name,
       row.type,
       row.power,
@@ -43,6 +45,8 @@ export const MoveModel = {
       row.pp,
       row.damageClass,
       row.shortEffect,
+      row.target,
+      row.displayName,
       rawData ? JSON.stringify(rawData) : null
     );
   },
