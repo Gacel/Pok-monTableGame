@@ -101,17 +101,31 @@ export class MinimapView {
 
     // Tiles como celdas pequeñas coloreadas por bioma.
     const cell = Math.max(2, this.boardView.HEX_SIZE * 1.9 * scale);
+    const isDeployment = this.state.match?.status === 'deployment';
+    const deploymentZones = this.state.match?.deploymentZones?.[this.state.match.currentPlayer] ?? [];
+
     for (const t of tiles) {
       const p = this.boardView.hexToPixel(t.hex.q, t.hex.r);
       const x = offX + (p.x - b.minX) * scale;
       const y = offY + (p.y - b.minY) * scale;
-      ctx.fillStyle = MinimapView.BIOME_COLORS[t.biome] ?? '#3f9b4f';
+      
+      let color = MinimapView.BIOME_COLORS[t.biome] ?? '#3f9b4f';
+      
+      if (isDeployment) {
+         const inZone = deploymentZones.some(z => z.q === t.hex.q && z.r === t.hex.r);
+         if (!inZone) {
+            color = 'rgba(0, 0, 0, 0.45)';
+         }
+      }
+
+      ctx.fillStyle = color;
       ctx.fillRect(x - cell / 2, y - cell / 2, cell, cell);
     }
 
     // Piezas: cada Pokémon con el color de SU jugador (P1..P4).
     for (const t of tiles) {
       if (!t.occupant) continue;
+      if (isDeployment && t.occupant.playerId !== this.state.match?.currentPlayer) continue;
       const p = this.boardView.hexToPixel(t.hex.q, t.hex.r);
       const x = offX + (p.x - b.minX) * scale;
       const y = offY + (p.y - b.minY) * scale;
