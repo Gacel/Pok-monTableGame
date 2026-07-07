@@ -48,6 +48,9 @@ export interface PokemonDetailSeed {
   spriteUrl?: string;
 }
 
+/** Ataque curado + su descripción corta (short_effect de PokeAPI, cacheada). */
+type PokedexMove = PokemonMove & { shortEffect?: string | null };
+
 interface PokedexData {
   name: string;
   type: PokemonType;
@@ -56,7 +59,13 @@ interface PokedexData {
   maxHp: number;
   atk: number;
   def: number;
-  moves: PokemonMove[];
+  moves: PokedexMove[];
+}
+
+/** Limpia el texto de efecto de PokeAPI (sustituye placeholders tipo $effect_chance). */
+function cleanEffect(s: string | null | undefined): string {
+  if (!s) return '';
+  return s.replace(/\$effect_chance/g, 'X').replace(/\s+/g, ' ').trim();
 }
 
 /** Relaciones de tipo derivadas de la rueda `typeAdvantage`. */
@@ -101,7 +110,7 @@ function relRow(label: string, color: string, types: PokemonType[]): string {
     </div>`;
 }
 
-function moveRow(m: PokemonMove): string {
+function moveRow(m: PokedexMove): string {
   const cls = CLASS_LABEL[m.damageClass] ?? m.damageClass;
   const meta = [
     m.power > 0 ? `Pot ${m.power}` : null,
@@ -110,13 +119,19 @@ function moveRow(m: PokemonMove): string {
   ]
     .filter(Boolean)
     .join(' · ');
+  const desc = cleanEffect(m.shortEffect);
+  // Título del ataque arriba (fuente retro) y descripción debajo (fuente legible,
+  // como el narrador/chat del juego): aprovechamos el espacio del modal.
   return `
-    <li class="flex items-center justify-between gap-2 rounded bg-gray-800/80 border border-gray-700" style="padding:5px 7px;">
-      <span class="flex items-center gap-1.5 min-w-0">
-        ${typeBadge(m.type, 5)}
-        <span class="text-white uppercase truncate" style="${FONT} font-size:7px;">${escapeHtml(m.name.replace(/-/g, ' '))}</span>
-      </span>
-      <span class="text-gray-300 whitespace-nowrap" style="${FONT} font-size:5.5px;">${escapeHtml(cls)}${meta ? ` · ${escapeHtml(meta)}` : ''}</span>
+    <li class="rounded bg-gray-800/80 border border-gray-700" style="padding:7px 9px;">
+      <div class="flex items-center justify-between gap-2">
+        <span class="flex items-center gap-1.5 min-w-0">
+          ${typeBadge(m.type, 5)}
+          <span class="text-white uppercase truncate" style="${FONT} font-size:8px;">${escapeHtml(m.name.replace(/-/g, ' '))}</span>
+        </span>
+        <span class="text-gray-400 whitespace-nowrap" style="${FONT} font-size:5.5px;">${escapeHtml(cls)}${meta ? ` · ${escapeHtml(meta)}` : ''}</span>
+      </div>
+      ${desc ? `<p class="text-gray-200 mt-1.5 font-mono" style="font-size:10px; line-height:1.45;">${escapeHtml(desc)}</p>` : ''}
     </li>`;
 }
 

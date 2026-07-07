@@ -2,6 +2,7 @@ import { FastifyReply, FastifyRequest } from 'fastify';
 import type { GameMode } from '@transcendence/shared';
 import { matchManager } from '../services/MatchManager.js';
 import { PokemonService } from '../services/PokemonService.js';
+import { MoveModel } from '../models/MoveModel.js';
 import { hub, LOCAL_ROOM } from '../realtime/hub.js';
 import { Hex } from '../engine/hex.js';
 import { GameActionService, GameAction } from '../services/GameActionService.js';
@@ -81,7 +82,15 @@ export const GameController = {
       return reply.code(400).send({ success: false, error: 'Nombre inválido' });
     }
     const tpl = await PokemonService.getTemplate(name);
-    const moves = await PokemonService.getCuratedMoves(name, tpl.type);
+    const curated = await PokemonService.getCuratedMoves(name, tpl.type);
+    // Enriquece cada ataque con su descripción corta YA cacheada en la tabla
+    // `moves` (findMove es una lectura de SQLite: NO genera llamadas a PokeAPI).
+    const moves = await Promise.all(
+      curated.map(async (m) => {
+        const row = await MoveModel.findMove(m.name);
+        return { ...m, shortEffect: row?.shortEffect ?? null };
+      })
+    );
     return {
       success: true,
       pokemon: {
