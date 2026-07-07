@@ -1,14 +1,14 @@
-import { Board, Biome, Pokemon } from '../engine/board.js';
-import { Hex, hexEqual, hexNeighbors } from '../engine/hex.js';
+import { Board, Pokemon } from '../engine/board.js';
+import { Hex, hexEqual, hexDistance } from '../engine/hex.js';
 import { getMoveOptions, MoveOptions } from '../engine/movement.js';
-import { computeDamage, computeMoveDamage } from '../engine/combat.js';
+import { computeMoveDamage, calculateAoE } from '../engine/combat.js';
 import { terrainDamage } from '../engine/environment.js';
 import { collectResources, PlayerResources } from '../engine/resources.js';
 
 // Contratos de estado en @transcendence/shared (única fuente de verdad).
 // Se re-exportan para no romper los imports existentes `from '../services/GameService.js'`.
-export type { MatchStatus, CombatAction, CombatState, MatchStateDTO } from '@transcendence/shared';
-import type { MatchStatus, CombatAction, CombatState, MatchStateDTO } from '@transcendence/shared';
+export type { MatchStatus, MatchStateDTO } from '@transcendence/shared';
+import type { MatchStatus, MatchStateDTO } from '@transcendence/shared';
 
 export interface PlayResult {
   ok: boolean;
@@ -17,14 +17,7 @@ export interface PlayResult {
 }
 
 const emptyResources = (): PlayerResources => ({ FIRE_CANDY: 0, WATER_CANDY: 0, GRASS_CANDY: 0 });
-const candyKey = (type: string): keyof PlayerResources =>
-  type === 'FIRE' ? 'FIRE_CANDY' : type === 'WATER' || type === 'ICE' ? 'WATER_CANDY' : 'GRASS_CANDY';
 const nameOf = (p: Pokemon) => (p.name ?? p.id).toUpperCase();
-
-const HABILIDAD_MULT = 1.6; // daño de habilidad
-const HABILIDAD_COST = 1; // candies del propio tipo
-const OBJETO_COST = 2; // candies (cualquier tipo)
-const OBJETO_HEAL = 0.3; // fracción de maxHp curada
 
 /**
  * Capa SERVICIO/DOMINIO: partida autoritativa. Única fuente de verdad del estado.
@@ -41,11 +34,13 @@ export class GameService {
     private winner: string | null,
     private resources: Record<string, PlayerResources>,
     private log: string[],
-    private combat: CombatState | null = null,
     private alliances: string[][] | null = null,
     private eliminated: string[] = [],
     /** ARENA: la partida NUNCA termina (siempre viva, aunque quede 0-1 jugadores). */
-    private persistent: boolean = false
+    private persistent: boolean = false,
+    public deploymentDeadline?: number,
+    public reserve: Record<string, Pokemon[]> = {},
+    public deploymentZones: Record<string, Hex[]> = {}
   ) {}
 
   static create(
@@ -57,11 +52,44 @@ export class GameService {
   ): GameService {
     const players: string[] = [];
     const resources: Record<string, PlayerResources> = {};
-    for (const { hex, pokemon } of placements) {
-      board.setOccupant(hex, pokemon);
+    const reserve: Record<string, Pokemon[]> = {};
+    const deploymentZones: Record<string, Hex[]> = {};
+
+    for (const { pokemon } of placements) {
       if (!players.includes(pokemon.playerId)) {
         players.push(pokemon.playerId);
         resources[pokemon.playerId] = emptyResources();
+        reserve[pokemon.playerId] = [];
+        deploymentZones[pokemon.playerId] = [];
+      }
+      reserve[pokemon.playerId]!.push(pokemon);
+    }
+    
+    // Assign deployment zones using Voronoi diagram based on first placement hex
+    const playerBases: Record<string, Hex> = {};
+    for (const { hex, pokemon } of placements) {
+      if (!playerBases[pokemon.playerId]) {
+        playerBases[pokemon.playerId] = hex;
+      }
+    }
+
+    for (const t of board.tiles.values()) {
+      if (t.biome === 'WATER') continue;
+      
+      let minD = Infinity;
+      let owner: string | null = null;
+      for (const [pId, base] of Object.entries(playerBases)) {
+        const d = hexDistance(t.hex, base);
+        if (d < minD) {
+          minD = d;
+          owner = pId;
+        } else if (d === minD) {
+          // Break ties deterministically
+          if (pId < (owner ?? '')) owner = pId;
+        }
+      }
+      if (owner) {
+        deploymentZones[owner]!.push(t.hex);
       }
     }
     return new GameService(
@@ -70,14 +98,16 @@ export class GameService {
       players,
       players[0]!,
       1,
-      'active',
+      'deployment',
       null,
       resources,
-      [persistent ? '¡Bienvenido a la ARENA!' : '¡Comienza la partida!'],
-      null,
+      ['¡Fase de despliegue! Tienes 42 segundos.'],
       alliances,
       [],
-      persistent
+      persistent,
+      Date.now() + 42000, // 42 seconds from now
+      reserve,
+      deploymentZones
     );
   }
 
@@ -96,7 +126,6 @@ export class GameService {
       null,
       {},
       ['🏟️ La ARENA está viva. Entra cuando quieras.'],
-      null,
       null,
       [],
       true
@@ -136,15 +165,6 @@ export class GameService {
    * aunque no quede nadie. Cancela con seguridad un combate en el que participara.
    */
   removePlayer(playerId: string): void {
-    if (this.combat && (this.combat.attackerPlayer === playerId || this.combat.defenderPlayer === playerId)) {
-      const c = this.combat;
-      this.board.setOccupant(c.attackerHex, c.attacker.hp > 0 ? { ...c.attacker, hasActed: true } : null);
-      c.defenders.forEach((d, i) => {
-        this.board.setOccupant(c.defenderHexes[i]!, d.hp > 0 ? { ...d } : null);
-      });
-      this.combat = null;
-      if (this.status === 'combat') this.status = 'active';
-    }
     for (const tile of this.board.tiles.values()) {
       if (tile.occupant?.playerId === playerId) this.board.setOccupant(tile.hex, null);
     }
@@ -180,11 +200,13 @@ export class GameService {
       winner: this.winner,
       resources: this.resources,
       log: this.log.slice(-30),
-      combat: this.combat,
       alliances: this.alliances,
       eliminated: this.eliminated,
       persistent: this.persistent,
       defeats: this.defeats,
+      ...(this.deploymentDeadline !== undefined ? { deploymentDeadline: this.deploymentDeadline } : {}),
+      reserve: this.reserve,
+      deploymentZones: this.deploymentZones,
     };
   }
 
@@ -195,14 +217,84 @@ export class GameService {
     return getMoveOptions(hex, this.board, this.sameTeam);
   }
 
+  // ---------------------------------------------------------------- despliegue
+  public deploy(playerId: string, pokemonId: string, hex: Hex): PlayResult {
+    this.defeats = [];
+    if (this.status === 'deployment' && this.deploymentDeadline && Date.now() > this.deploymentDeadline) {
+      this.forceStart();
+    }
+    if (this.status !== 'deployment') {
+      return { ok: false, error: 'La fase de despliegue ha terminado', state: this.getStateDTO() };
+    }
+    const myReserve = this.reserve[playerId];
+    if (!myReserve) {
+      return { ok: false, error: 'No tienes Pokémon en reserva', state: this.getStateDTO() };
+    }
+    const pokeIndex = myReserve.findIndex((p) => p.id === pokemonId);
+    if (pokeIndex < 0) {
+      return { ok: false, error: 'El Pokémon no está en tu reserva', state: this.getStateDTO() };
+    }
+    const validZones = this.deploymentZones[playerId];
+    if (!validZones || !validZones.some((z) => hexEqual(z, hex))) {
+      return { ok: false, error: 'Casilla fuera de tu zona de despliegue', state: this.getStateDTO() };
+    }
+    // Check occupancy using getOccupiedHexes for sizes
+    const pokemon = myReserve[pokeIndex]!;
+    const hexes = this.board.getOccupiedHexes(pokemon, hex);
+    for (const h of hexes) {
+      if (this.board.getOccupant(h)) {
+        return { ok: false, error: 'Casilla ocupada o insuficiente espacio', state: this.getStateDTO() };
+      }
+    }
+    
+    // Place it
+    myReserve.splice(pokeIndex, 1);
+    this.board.setOccupant(hex, pokemon);
+    this.log.push(`${playerId} despliega a ${nameOf(pokemon)}.`);
+
+    // If everyone has deployed everything, start match automatically?
+    const allDeployed = Object.values(this.reserve).every((res) => res.length === 0);
+    if (allDeployed) {
+      this.forceStart();
+    }
+
+    return { ok: true, state: this.getStateDTO() };
+  }
+
+  public forceStart(): PlayResult {
+    if (this.status === 'deployment') {
+      this.status = 'active';
+      this.log.push('¡El despliegue ha terminado! ¡Comienza la partida!');
+      // Colocar los Pokémon no desplegados en casillas aleatorias válidas de su zona
+      for (const [playerId, res] of Object.entries(this.reserve)) {
+        if (!res || res.length === 0) continue;
+        const zones = this.deploymentZones[playerId] ?? [];
+        // Aleatorizar el orden de las zonas
+        const shuffledZones = [...zones].sort(() => Math.random() - 0.5);
+        for (const p of res) {
+          for (const hex of shuffledZones) {
+             const hexes = this.board.getOccupiedHexes(p, hex);
+             const canPlace = hexes.every(h => !this.board.getOccupant(h) && this.board.getTile(h));
+             if (canPlace) {
+                this.board.setOccupant(hex, p);
+                break;
+             }
+          }
+        }
+      }
+      this.reserve = {};
+    }
+    return { ok: true, state: this.getStateDTO() };
+  }
+
   // ---------------------------------------------------------------- movimiento
   play(playerId: string, from: Hex, to: Hex): PlayResult {
     this.defeats = [];
     if (this.status === 'finished') {
       return { ok: false, error: 'La partida ha terminado', state: this.getStateDTO() };
     }
-    if (this.status === 'combat') {
-      return { ok: false, error: 'Hay un combate en curso', state: this.getStateDTO() };
+    if (this.status === 'deployment') {
+      return { ok: false, error: 'Aún en fase de despliegue', state: this.getStateDTO() };
     }
     if (playerId !== this.currentPlayer) {
       return { ok: false, error: 'No es tu turno', state: this.getStateDTO() };
@@ -220,7 +312,6 @@ export class GameService {
 
     const opts = getMoveOptions(from, this.board, this.sameTeam);
     const isMove = opts.moves.some((h) => hexEqual(h, to));
-    const isAttack = opts.attacks.some((h) => hexEqual(h, to));
 
     if (isMove) {
       this.board.moveOccupant(from, to);
@@ -229,314 +320,89 @@ export class GameService {
       this.log.push(`${nameOf(mover)} se mueve.`);
       return { ok: true, state: this.getStateDTO() };
     }
-    if (isAttack) {
-      this.initiateCombat(from, to);
-      return { ok: true, state: this.getStateDTO() };
-    }
     return { ok: false, error: 'Movimiento ilegal', state: this.getStateDTO() };
   }
 
-  // ------------------------------------------------------------------- combate
-  private initiateCombat(from: Hex, to: Hex): void {
-    const attacker = { ...this.board.getOccupant(from)!, hasActed: true };
-    const primary = { ...this.board.getOccupant(to)! };
-    const defenderPlayer = primary.playerId;
-
-    // "Varios contra uno": todos los Pokémon del jugador defensor que están a
-    // rango (adyacentes al punto de combate) se unen a la defensa contra el
-    // atacante solitario. El primer defensor es el objetivo inicial.
-    const defenders: Pokemon[] = [primary];
-    const defenderHexes: Hex[] = [{ ...to }];
-    for (const nb of hexNeighbors(to)) {
-      const occ = this.board.getOccupant(nb);
-      if (occ && occ.playerId === defenderPlayer && occ.id !== primary.id && occ.id !== attacker.id) {
-        defenders.push({ ...occ });
-        defenderHexes.push({ ...nb });
-      }
-    }
-
-    this.combat = {
-      attackerId: attacker.id,
-      defenderId: primary.id,
-      attackerHex: from,
-      defenderHex: to,
-      attacker,
-      defender: primary,
-      attackerPlayer: attacker.playerId,
-      defenderPlayer,
-      defenders,
-      defenderHexes,
-      targetId: primary.id,
-      turnActorId: attacker.id, // el atacante actúa primero
-      round: 1,
-      log: [`¡${nameOf(attacker)} ataca a ${nameOf(primary)}!`],
-      status: 'active',
-      winnerId: null,
-      loserId: null,
-      outcome: null,
-    };
-    this.status = 'combat';
-    const extra = defenders.length - 1;
-    this.log.push(
-      `Combate: ${nameOf(attacker)} vs ${nameOf(primary)}${extra > 0 ? ` (+${extra} de refuerzo)` : ''}.`
-    );
-  }
-
-  /** Índice de un defensor por id (o -1). */
-  private defenderIndex(id: string): number {
-    return this.combat ? this.combat.defenders.findIndex((d) => d.id === id) : -1;
-  }
-
-  /** Defensores aún en pie, en orden. */
-  private livingDefenders(): Pokemon[] {
-    return this.combat ? this.combat.defenders.filter((d) => d.hp > 0) : [];
-  }
-
-  /** Fija el objetivo del atacante y sincroniza los campos espejo `defender*`. */
-  private setTarget(id: string): boolean {
-    const c = this.combat;
-    if (!c) return false;
-    const idx = this.defenderIndex(id);
-    if (idx < 0 || c.defenders[idx]!.hp <= 0) return false;
-    c.targetId = id;
-    c.defenderId = id;
-    c.defender = c.defenders[idx]!;
-    c.defenderHex = c.defenderHexes[idx]!;
-    return true;
-  }
-
-  private terrainOf(hex: Hex): Biome {
-    return this.board.getTile(hex)?.biome ?? 'GRASS';
-  }
-
-  private spendCandies(playerId: string, amount: number, prefer: string): boolean {
-    const res = this.resources[playerId] ?? emptyResources();
-    const total = res.FIRE_CANDY + res.WATER_CANDY + res.GRASS_CANDY;
-    if (total < amount) return false;
-    let left = amount;
-    const order: (keyof PlayerResources)[] = [
-      candyKey(prefer),
-      'FIRE_CANDY',
-      'WATER_CANDY',
-      'GRASS_CANDY',
-    ];
-    for (const k of order) {
-      while (left > 0 && res[k] > 0) {
-        res[k]--;
-        left--;
-      }
-    }
-    this.resources[playerId] = res;
-    return true;
-  }
-
-  /** Aplica una acción de combate para el Pokémon cuyo turno es. */
-  combatAction(action: CombatAction, moveName?: string, targetId?: string): PlayResult {
+  // ---------------------------------------------------------------- combate AoE
+  cast(playerId: string, from: Hex, targetHex: Hex, moveIndex: number): PlayResult {
     this.defeats = [];
-    if (this.status !== 'combat' || !this.combat) {
-      return { ok: false, error: 'No hay combate en curso', state: this.getStateDTO() };
+    if (this.status !== 'active') {
+      return { ok: false, error: 'La partida no está activa', state: this.getStateDTO() };
     }
-    const c = this.combat;
-    if (c.status !== 'active') {
-      return { ok: false, error: 'Fase de combate cerrada', state: this.getStateDTO() };
+    if (playerId !== this.currentPlayer) {
+      return { ok: false, error: 'No es tu turno', state: this.getStateDTO() };
     }
-
-    const actorIsAttacker = c.turnActorId === c.attackerId;
-
-    // Selección de objetivo: solo el atacante y solo entre defensores vivos.
-    if (action === 'TARGET') {
-      if (!actorIsAttacker) {
-        return { ok: false, error: 'Solo el atacante elige objetivo', state: this.getStateDTO() };
-      }
-      if (!targetId || !this.setTarget(targetId)) {
-        return { ok: false, error: 'Objetivo no válido', state: this.getStateDTO() };
-      }
-      return { ok: true, state: this.getStateDTO() };
+    const caster = this.board.getOccupant(from);
+    if (!caster) {
+      return { ok: false, error: 'No hay ninguna pieza tuya en el origen', state: this.getStateDTO() };
+    }
+    if (caster.playerId !== playerId) {
+      return { ok: false, error: 'Esa pieza no es tuya', state: this.getStateDTO() };
+    }
+    if (caster.hasActed) {
+      return { ok: false, error: 'Esa pieza ya ha actuado en este turno', state: this.getStateDTO() };
     }
 
-    // El atacante puede reapuntar en la misma acción (targetId opcional).
-    if (actorIsAttacker && targetId) this.setTarget(targetId);
-
-    const actor = actorIsAttacker
-      ? c.attacker
-      : (c.defenders.find((d) => d.id === c.turnActorId) ?? c.defender);
-    const target = actorIsAttacker
-      ? (c.defenders.find((d) => d.id === c.targetId && d.hp > 0) ?? this.livingDefenders()[0])
-      : c.attacker;
-    if (!target) {
-      return { ok: false, error: 'No hay objetivo válido', state: this.getStateDTO() };
+    const move = caster.moves?.[moveIndex];
+    if (!move) {
+      return { ok: false, error: 'El movimiento seleccionado no existe', state: this.getStateDTO() };
     }
-    const actorHex = actorIsAttacker ? c.attackerHex : c.defenderHexes[this.defenderIndex(actor.id)]!;
-    const targetHex = actorIsAttacker
-      ? c.defenderHexes[this.defenderIndex(target.id)]!
-      : c.attackerHex;
-    const actorTerrain = this.terrainOf(actorHex);
-    const targetTerrain = this.terrainOf(targetHex);
-
-    switch (action) {
-      case 'MOVE': {
-        const move = (actor.moves ?? []).find((m) => m.name === moveName);
-        if (!move) {
-          return { ok: false, error: 'Ataque no disponible', state: this.getStateDTO() };
-        }
-        // Los ataques especiales cuestan 1 candy del tipo del movimiento; los físicos son gratis.
-        if (move.damageClass === 'special' && !this.spendCandies(actor.playerId, 1, move.type)) {
-          return { ok: false, error: 'Sin candies para ataque especial', state: this.getStateDTO() };
-        }
-        const dmg = computeMoveDamage(actor, target, move, actorTerrain, targetTerrain);
-        target.hp = Math.max(0, target.hp - dmg);
-        c.log.push(`${nameOf(actor)} usa ${move.name.toUpperCase()}: ${dmg} de daño (${nameOf(target)}: ${target.hp}).`);
-        break;
-      }
-      case 'ATACAR': {
-        const dmg = computeDamage(actor, target, actorTerrain, targetTerrain);
-        target.hp = Math.max(0, target.hp - dmg);
-        c.log.push(`${nameOf(actor)} ATACA: ${dmg} de daño (${nameOf(target)}: ${target.hp}).`);
-        break;
-      }
-      case 'HABILIDAD': {
-        if (!this.spendCandies(actor.playerId, HABILIDAD_COST, actor.type)) {
-          return { ok: false, error: 'Sin recursos para HABILIDAD', state: this.getStateDTO() };
-        }
-        const dmg = Math.round(computeDamage(actor, target, actorTerrain, targetTerrain) * HABILIDAD_MULT);
-        target.hp = Math.max(0, target.hp - dmg);
-        c.log.push(`${nameOf(actor)} usa HABILIDAD: ${dmg} de daño (${nameOf(target)}: ${target.hp}).`);
-        break;
-      }
-      case 'OBJETO': {
-        if (!this.spendCandies(actor.playerId, OBJETO_COST, actor.type)) {
-          return { ok: false, error: 'Sin recursos para OBJETO', state: this.getStateDTO() };
-        }
-        const heal = Math.round(actor.maxHp * OBJETO_HEAL);
-        actor.hp = Math.min(actor.maxHp, actor.hp + heal);
-        c.log.push(`${nameOf(actor)} usa OBJETO: cura ${heal} (${nameOf(actor)}: ${actor.hp}).`);
-        break;
-      }
-      case 'HUIR': {
-        // Huir tiene riesgo: el rival lanza un golpe libre.
-        const dmg = computeDamage(target, actor, targetTerrain, actorTerrain);
-        actor.hp = Math.max(0, actor.hp - dmg);
-        c.log.push(`${nameOf(actor)} huye; ${nameOf(target)} le alcanza con ${dmg} de daño.`);
-        if (actor.hp <= 0) {
-          c.outcome = 'ko';
-          c.winnerId = target.id;
-          c.loserId = actor.id;
-          // Economía: al huir, el que se queda (target) derrota al que huye (actor).
-          this.defeats.push({ killerSlot: target.playerId, victimSlot: actor.playerId });
-        } else {
-          c.outcome = 'fled';
-          c.winnerId = null;
-          c.loserId = actor.id; // el que huyó
-        }
-        c.status = 'finished'; // fase de resultado; se resuelve con continueCombat()
-        return { ok: true, state: this.getStateDTO() };
-      }
+    
+    // Validar rango (distancia geométrica entre centro del caster y el targetHex)
+    // Asumimos que los ataques siempre se pueden lanzar si el centro está dentro del range.
+    const range = move.range ?? 1;
+    const dist = hexDistance(from, targetHex);
+    
+    // Excepción: "radius" con target=self o all-enemies a menudo tiene range=0.
+    if (dist > range && move.aoe !== 'radius') {
+       return { ok: false, error: 'El objetivo está fuera de rango', state: this.getStateDTO() };
+    }
+    
+    if (dist === 0 && move.aoe !== 'radius') {
+       return { ok: false, error: 'No puedes atacarte a ti mismo con este movimiento', state: this.getStateDTO() };
     }
 
-    // KO por daño (OBJETO cura, no puede tumbar a nadie).
-    if (action !== 'OBJETO' && target.hp <= 0) {
-      c.log.push(`¡${nameOf(target)} se ha debilitado!`);
-      // Economía: el que actúa (actor) derrota al objetivo (target).
-      this.defeats.push({ killerSlot: actor.playerId, victimSlot: target.playerId });
-      if (!actorIsAttacker) {
-        // Un defensor tumbó al atacante → gana el bando defensor.
-        c.outcome = 'ko';
-        c.winnerId = actor.id;
-        c.loserId = c.attackerId;
-        c.status = 'finished';
-        return { ok: true, state: this.getStateDTO() };
+    const aoe = move.aoe || 'single';
+    const moveRange = move.range || 1;
+    const aoeHexes = calculateAoE(from, targetHex, aoe, moveRange);
+    let hits = 0;
+    
+    this.log.push(`🔥 ${nameOf(caster)} lanza ${move.name.toUpperCase()}!`);
+    
+    // Aplicar daño a todo ocupante en el área afectada
+    const processed = new Set<string>(); // para no dañar al mismo pokemon grande 2 veces
+    for (const h of aoeHexes) {
+      const tile = this.board.getTile(h);
+      if (tile && tile.occupant && !processed.has(tile.occupant.id)) {
+         // Evitar fuego amigo a no ser que el ataque lo especifique (simplificado: daña a todos los enemigos)
+         if (!this.sameTeam(tile.occupant.playerId, caster.playerId)) {
+            processed.add(tile.occupant.id);
+            const targetTerrain = tile.biome;
+            const casterTerrain = this.board.getTile(from)?.biome ?? 'GRASS';
+            
+            const dmg = computeMoveDamage(caster, tile.occupant, move, casterTerrain, targetTerrain);
+            if (dmg > 0) {
+              tile.occupant.hp = Math.max(0, tile.occupant.hp - dmg);
+              hits++;
+              this.log.push(`💥 ${nameOf(tile.occupant)} recibe ${dmg} de daño (HP: ${tile.occupant.hp}).`);
+              
+              if (tile.occupant.hp <= 0) {
+                 this.log.push(`💀 ¡${nameOf(tile.occupant)} ha caído KO!`);
+                 this.defeats.push({ killerSlot: caster.playerId, victimSlot: tile.occupant.playerId });
+                 this.board.setOccupant(tile.hex, null);
+              }
+            }
+         }
       }
-      // El atacante tumbó a un defensor: ¿quedan más?
-      const living = this.livingDefenders();
-      if (living.length === 0) {
-        c.outcome = 'ko';
-        c.winnerId = c.attackerId;
-        c.loserId = target.id;
-        c.status = 'finished';
-        return { ok: true, state: this.getStateDTO() };
-      }
-      // Aún hay defensores: se reapunta al primero vivo y responden ellos.
-      this.setTarget(living[0]!.id);
-      c.turnActorId = living[0]!.id;
-      c.round += 1;
-      return { ok: true, state: this.getStateDTO() };
+    }
+    
+    if (hits === 0) {
+      this.log.push(`💨 El ataque no golpeó a nadie.`);
     }
 
-    // Sin KO: pasa el turno al siguiente actor (atacante ⇄ ronda de defensores).
-    c.turnActorId = this.nextCombatActor(actorIsAttacker, actor.id);
-    c.round += 1;
-    return { ok: true, state: this.getStateDTO() };
-  }
-
-  /**
-   * Siguiente en actuar. Tras el atacante actúan, en orden, todos los defensores
-   * vivos; cuando el último defensor termina, el turno vuelve al atacante.
-   */
-  private nextCombatActor(actorIsAttacker: boolean, actorId: string): string {
-    const c = this.combat!;
-    const living = this.livingDefenders();
-    if (actorIsAttacker) {
-      return living.length ? living[0]!.id : c.attackerId;
-    }
-    const idx = living.findIndex((d) => d.id === actorId);
-    if (idx >= 0 && idx + 1 < living.length) return living[idx + 1]!.id;
-    return c.attackerId;
-  }
-
-  /** Cierra un combate ya resuelto (fase de resultado): aplica el tablero y sigue. */
-  continueCombat(): PlayResult {
-    this.defeats = [];
-    if (this.status !== 'combat' || !this.combat || this.combat.status !== 'finished') {
-      return { ok: false, error: 'No hay combate por resolver', state: this.getStateDTO() };
-    }
-    this.finalizeCombat();
-    return { ok: true, state: this.getStateDTO() };
-  }
-
-  private finalizeCombat(): void {
-    const c = this.combat;
-    if (!c) return;
-
-    // Vuelca los defensores al tablero: los vivos con su HP, los KO se retiran.
-    const writeDefenders = () => {
-      c.defenders.forEach((d, i) => {
-        this.board.setOccupant(c.defenderHexes[i]!, d.hp > 0 ? { ...d } : null);
-      });
-    };
-
-    if (c.outcome === 'ko') {
-      const attackerWon = c.winnerId === c.attackerId;
-      this.board.setOccupant(c.attackerHex, null);
-      if (attackerWon) {
-        // Cayeron TODOS los defensores: se limpian sus casillas y el atacante
-        // ocupa la casilla de combate INICIAL (adyacente a su origen), no la del
-        // último reapuntado, que podría quedar lejos.
-        c.defenders.forEach((_, i) => this.board.setOccupant(c.defenderHexes[i]!, null));
-        this.board.setOccupant(c.defenderHexes[0] ?? c.defenderHex, { ...c.attacker, hasActed: true });
-        this.log.push(`${nameOf(c.attacker)} vence y ocupa la casilla.`);
-      } else {
-        // Cayó el atacante: los defensores supervivientes permanecen.
-        writeDefenders();
-        this.log.push(`${nameOf(c.attacker)} ha sido derrotado.`);
-      }
-    } else {
-      // Huida: el atacante (si sobrevive) vuelve a su casilla; defensores igual.
-      this.board.setOccupant(
-        c.attackerHex,
-        c.attacker.hp > 0 ? { ...c.attacker, hasActed: true } : null
-      );
-      writeDefenders();
-      this.log.push('El combate termina en huida.');
-    }
-
-    this.combat = null;
-    this.status = 'active';
+    caster.hasActed = true;
     this.checkWinCondition();
-    // Si el eliminado era el jugador de turno (p.ej. atacante que pierde su
-    // último Pokémon), el turno pasa al siguiente vivo.
-    if (this.status === 'active' && this.eliminated.includes(this.currentPlayer)) {
-      this.switchPlayer();
-    }
+    return { ok: true, state: this.getStateDTO() };
   }
 
   // --------------------------------------------------------------------- turnos
@@ -545,8 +411,8 @@ export class GameService {
     if (this.status === 'finished') {
       return { ok: false, error: 'La partida ha terminado', state: this.getStateDTO() };
     }
-    if (this.status === 'combat') {
-      return { ok: false, error: 'Hay un combate en curso', state: this.getStateDTO() };
+    if (this.status === 'deployment') {
+      return { ok: false, error: 'La partida aún no ha empezado', state: this.getStateDTO() };
     }
     if (playerId && playerId !== this.currentPlayer) {
       return { ok: false, error: 'No es tu turno', state: this.getStateDTO() };
@@ -572,19 +438,6 @@ export class GameService {
     const loser = playerId ?? this.currentPlayer;
     if (!this.players.includes(loser) || this.eliminated.includes(loser)) {
       return { ok: false, error: 'Ese jugador no está en la partida', state: this.getStateDTO() };
-    }
-
-    // Si hay combate en curso se cancela: el atacante y TODOS los defensores
-    // vuelven al tablero con su HP actual antes de retirar las piezas del que
-    // abandona.
-    if (this.combat) {
-      const c = this.combat;
-      this.board.setOccupant(c.attackerHex, c.attacker.hp > 0 ? { ...c.attacker, hasActed: true } : null);
-      c.defenders.forEach((d, i) => {
-        this.board.setOccupant(c.defenderHexes[i]!, d.hp > 0 ? { ...d } : null);
-      });
-      this.combat = null;
-      this.status = 'active';
     }
 
     // Abandonar = eliminación: se retiran todas sus piezas y la partida sigue
@@ -695,24 +548,18 @@ export class GameService {
       winner: this.winner,
       resources: this.resources,
       log: this.log,
-      combat: this.combat,
       alliances: this.alliances,
       eliminated: this.eliminated,
       persistent: this.persistent,
+      deploymentDeadline: this.deploymentDeadline,
+      reserve: this.reserve,
+      deploymentZones: this.deploymentZones,
     });
   }
 
   static deserialize(json: string): GameService {
     const d = JSON.parse(json);
     const board = Board.deserialize(d.tiles);
-    // Compatibilidad: combates guardados antes de "varios contra uno" no tienen
-    // `defenders`; se normalizan al defensor único que sí guardaban.
-    const combat: CombatState | null = d.combat ?? null;
-    if (combat && !Array.isArray((combat as Partial<CombatState>).defenders)) {
-      combat.defenders = [combat.defender];
-      combat.defenderHexes = [combat.defenderHex];
-      combat.targetId = combat.defenderId;
-    }
     return new GameService(
       d.id,
       board,
@@ -723,10 +570,12 @@ export class GameService {
       d.winner,
       d.resources,
       d.log ?? [],
-      combat,
       d.alliances ?? null,
       d.eliminated ?? [],
-      d.persistent ?? false
+      d.persistent ?? false,
+      d.deploymentDeadline,
+      d.reserve ?? {},
+      d.deploymentZones ?? {}
     );
   }
 
