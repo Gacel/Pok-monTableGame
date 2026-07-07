@@ -22,7 +22,7 @@ export const StarterController = {
       const options = await Promise.all(
         STARTER_POOL.map(async (name) => {
           const t = await PokemonService.getTemplate(name);
-          return { name, type: t.type, hp: t.hp, atk: t.atk, def: t.def, movementPattern: t.movementPattern };
+          return { name, type: t.type, hp: t.hp, atk: t.atk, def: t.def, speed: t.speed, size: t.size };
         })
       );
       return { success: true, pick: STARTER_PICK, options };
