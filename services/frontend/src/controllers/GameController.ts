@@ -10,7 +10,8 @@ import type { WsMessage } from '../net/WsClient';
 import { apiFetch } from '../net/api';
 import { MatchSession } from '../state/MatchSession';
 import type { OnlineSession } from '../state/MatchSession';
-import type { Hex, MatchState, CombatAction, Pokemon } from '../models/Types';
+import type { Hex, MatchState, CombatAction, Pokemon, BallKey } from '../models/Types';
+import { BALL_SPRITE, BALL_LABEL } from '@transcendence/shared';
 import { authState } from '../auth/AuthState';
 import { decideBotAction } from './botStrategy';
 import type { BotLevel, BotPieceOptions, EnemyPiece } from './botStrategy';
@@ -698,10 +699,18 @@ export class GameController {
       const data = await res.json();
       if (res.ok && data.success) {
         this.state.selectedHex = null;
-        this.applyMatchState(data.state as MatchState);
+        const state = data.state as MatchState;
+        this.applyMatchState(state);
+        // ARENA: si te llevas bolas al abandonar, muéstralas antes de salir.
+        const slot = this.session?.mySlot ?? 'player1';
+        const balls = state.rewards?.find((r) => r.slot === slot)?.balls ?? [];
         // Quien abandona sale SIEMPRE al menú principal (la partida sigue para
         // el resto en online; en local se cierra al volver al menú).
-        this.exitToMenu();
+        if (balls.length) {
+          this.showAbandonRewards(balls, () => this.exitToMenu());
+        } else {
+          this.exitToMenu();
+        }
       } else {
         this.hudView.flashToast(data.error ?? 'Error al abandonar partida');
       }
@@ -711,6 +720,35 @@ export class GameController {
     } finally {
       this.busy = false;
     }
+  }
+
+  /** Modal-resumen retro: bolas que te llevas al abandonar la ARENA. Al cerrar, `onClose`. */
+  private showAbandonRewards(balls: BallKey[], onClose: () => void): void {
+    const F = "font-family:'Press Start 2P',monospace;";
+    const base = 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items';
+    const ballsHtml = balls
+      .map(
+        (b) =>
+          `<img src="${base}/${BALL_SPRITE[b]}.png" title="${BALL_LABEL[b]}" class="w-10 h-10 object-contain" style="image-rendering:pixelated;" />`
+      )
+      .join('');
+    const overlay = document.createElement('div');
+    overlay.className = 'fixed inset-0 z-[220] flex items-center justify-center p-4';
+    overlay.style.background = 'rgba(0,0,0,0.75)';
+    overlay.innerHTML = `
+      <div class="relative bg-gray-900 w-full text-center" style="max-width:min(340px,94vw); border:6px solid #fff; border-radius:12px; box-shadow:0 0 0 6px #000, 0 0 40px rgba(0,0,0,0.85);">
+        <div class="bg-blue-900 border-4 border-black" style="border-radius:6px; box-shadow:inset 0 0 30px rgba(0,0,0,0.6); padding:22px;">
+          <h3 class="text-yellow-400 uppercase mb-3" style="${F} font-size:13px; text-shadow:2px 2px 0 #000;">TE LLEVAS</h3>
+          <div class="flex items-center justify-center gap-2 flex-wrap mb-4">${ballsHtml}</div>
+          <button id="ar-reward-ok" class="bg-green-600 hover:bg-green-500 text-white px-6 py-3 rounded border-b-4 border-green-800 active:border-b-0" style="${F} font-size:11px;">RECOGER</button>
+        </div>
+      </div>`;
+    const close = (): void => {
+      overlay.remove();
+      onClose();
+    };
+    overlay.querySelector('#ar-reward-ok')?.addEventListener('click', close);
+    document.body.appendChild(overlay);
   }
 
   /** Cierra el socket, limpia la sesión y avisa a la SPA para volver al menú. */

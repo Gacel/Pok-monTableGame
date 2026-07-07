@@ -21,6 +21,7 @@ export * from './ws.js';
 // ÚNICA fuente de verdad; backend y frontend re-exportan desde aquí.
 export * from './domain.js';
 export * from './match.js';
+export * from './balls.js';
 
 /** Estado de presencia de un usuario (status-service). */
 export type PresenceStatus = 'online' | 'offline' | 'in-game';

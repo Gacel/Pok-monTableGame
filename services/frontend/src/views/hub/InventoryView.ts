@@ -155,11 +155,33 @@ export class InventoryView {
     return { body, close };
   }
 
-  /** Diálogo para publicar el Pokémon en la casa de subastas. */
+  /** Diálogo para publicar un Pokémon en la casa de subastas. */
   private openSellDialog(p: InvPokemon): void {
+    this.sellDialog(`Vender ${p.name}`, 'El Pokémon queda retenido hasta que se venda o expire.', (s, b, d) =>
+      AuctionApi.create({ kind: 'pokemon', pokemonId: p.id, startingPrice: s, buyNowPrice: b, durationHours: d })
+    );
+  }
+
+  /** Diálogo para publicar un objeto (bola) en la casa de subastas. */
+  private openSellItemDialog(it: InvItem): void {
+    this.sellDialog(`Vender ${it.itemKey}`, 'El objeto queda retenido hasta que se venda o expire.', (s, b, d) =>
+      AuctionApi.create({ kind: 'item', itemKind: it.kind, itemKey: it.itemKey, startingPrice: s, buyNowPrice: b, durationHours: d })
+    );
+  }
+
+  /** Diálogo genérico de venta en subasta (Pokémon u objeto). */
+  private sellDialog(
+    title: string,
+    footnote: string,
+    doSell: (
+      startingPrice: number | null,
+      buyNowPrice: number | null,
+      durationHours: number
+    ) => Promise<{ ok: boolean; error?: string }>
+  ): void {
     const input = 'w-full p-2 bg-gray-100 text-black border-2 border-gray-400 rounded';
     const { body, close } = this.openDialog(
-      `Vender ${p.name}`,
+      title,
       `<div class="flex flex-col gap-2">
          <label class="text-gray-200" style="${FONT} font-size:8px;">Precio de salida (puja mínima, opcional)</label>
          <input id="sell-start" type="number" min="1" class="${input}" style="${FONT} font-size:10px;" />
@@ -173,7 +195,7 @@ export class InventoryView {
          </select>
          <p id="sell-msg" class="text-red-400 min-h-[14px] mt-1" style="${FONT} font-size:8px;"></p>
          <button id="sell-go" class="bg-yellow-500 hover:bg-yellow-400 text-black py-2 rounded border-b-4 border-yellow-700 active:border-b-0" style="${FONT} font-size:10px;">PUBLICAR SUBASTA</button>
-         <p class="text-gray-400" style="${FONT} font-size:7px; line-height:1.5;">Indica al menos un precio. El Pokémon queda retenido hasta que se venda o expire.</p>
+         <p class="text-gray-400" style="${FONT} font-size:7px; line-height:1.5;">Indica al menos un precio. ${escapeHtml(footnote)}</p>
        </div>`
     );
     const msg = body.querySelector('#sell-msg') as HTMLElement;
@@ -188,13 +210,7 @@ export class InventoryView {
           msg.textContent = 'Indica un precio de salida o fijo';
           return;
         }
-        const r = await AuctionApi.create({
-          kind: 'pokemon',
-          pokemonId: p.id,
-          startingPrice,
-          buyNowPrice,
-          durationHours: duration,
-        });
+        const r = await doSell(startingPrice, buyNowPrice, duration);
         if (r.ok) {
           close();
           await this.render();
@@ -205,10 +221,38 @@ export class InventoryView {
     });
   }
 
-  /** Diálogo para regalar el Pokémon a un amigo (transferencia directa). */
+  /** Regalar un Pokémon a un amigo. */
   private async openGiftDialog(p: InvPokemon): Promise<void> {
+    await this.giftDialog(`Regalar ${p.name}`, `${p.name} (Nv.${p.level})`, async (toUserId) => {
+      const res = await apiFetch(`/api/inventory/pokemon/${encodeURIComponent(p.id)}/gift`, {
+        method: 'POST',
+        body: JSON.stringify({ toUserId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      return { ok: res.ok && data.success, error: data.error };
+    });
+  }
+
+  /** Regalar un objeto (bola) a un amigo. */
+  private async openGiftItemDialog(it: InvItem): Promise<void> {
+    await this.giftDialog(`Regalar ${it.itemKey}`, `${it.itemKey}`, async (toUserId) => {
+      const res = await apiFetch('/api/inventory/item/gift', {
+        method: 'POST',
+        body: JSON.stringify({ kind: it.kind, itemKey: it.itemKey, toUserId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      return { ok: res.ok && data.success, error: data.error };
+    });
+  }
+
+  /** Diálogo genérico de regalo: lista amigos y ejecuta `doGift(toUserId)`. */
+  private async giftDialog(
+    title: string,
+    subject: string,
+    doGift: (toUserId: string) => Promise<{ ok: boolean; error?: string }>
+  ): Promise<void> {
     const { body, close } = this.openDialog(
-      `Regalar ${p.name}`,
+      title,
       `<p class="text-gray-300 animate-pulse text-center" style="${FONT} font-size:9px;">Cargando amigos…</p>`
     );
     let friends: { id: string; username: string | null }[] = [];
@@ -240,25 +284,51 @@ export class InventoryView {
         void (async () => {
           const toUserId = btn.dataset.uid ?? '';
           const uname = btn.textContent?.trim() || 'ese jugador';
-          if (!confirm(`¿Regalar ${p.name} (Nv.${p.level}) a ${uname}? No podrás deshacerlo.`)) return;
-          try {
-            const res = await apiFetch(`/api/inventory/pokemon/${encodeURIComponent(p.id)}/gift`, {
-              method: 'POST',
-              body: JSON.stringify({ toUserId }),
-            });
-            const data = await res.json().catch(() => ({}));
-            if (res.ok && data.success) {
-              close();
-              await this.render();
-            } else {
-              msg.textContent = data.error ?? 'No se pudo regalar';
-            }
-          } catch {
-            msg.textContent = 'Error de red';
+          if (!confirm(`¿Regalar ${subject} a ${uname}? No podrás deshacerlo.`)) return;
+          const r = await doGift(toUserId);
+          if (r.ok) {
+            close();
+            await this.render();
+          } else {
+            msg.textContent = r.error ?? 'No se pudo regalar';
           }
         })();
       });
     });
+  }
+
+  /** Menú contextual de un OBJETO (bola): Abrir / Vender / Regalar. */
+  private showItemContextMenu(it: InvItem, x: number, y: number): void {
+    openContextMenu(
+      x,
+      y,
+      [
+        { icon: '📦', label: 'Abrir', onClick: () => void this.openBall(it) },
+        { icon: '⚖️', label: 'Vender en subasta', onClick: () => this.openSellItemDialog(it) },
+        { icon: '🎁', label: 'Regalar a un amigo', onClick: () => void this.openGiftItemDialog(it) },
+      ],
+      `${it.itemKey} · x${it.qty}`
+    );
+  }
+
+  /** Abre una bola: el servidor tira loot y concede un Pokémon. */
+  private async openBall(it: InvItem): Promise<void> {
+    try {
+      const res = await apiFetch('/api/inventory/item/open', {
+        method: 'POST',
+        body: JSON.stringify({ itemKey: it.itemKey }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        const name = String(data.pokemon?.name ?? '').toUpperCase();
+        alert(`¡Has conseguido ${name}!`);
+        await this.render();
+      } else {
+        alert(data.error ?? 'No se pudo abrir la bola');
+      }
+    } catch {
+      alert('Error de red al abrir la bola');
+    }
   }
 
   private itemCell(it: InvItem): string {
@@ -266,8 +336,14 @@ export class InventoryView {
     const img = isBall
       ? `<img src="${BALL_SPRITE}/${it.itemKey}.png" alt="${it.itemKey}" class="w-11 h-11 object-contain" style="image-rendering:pixelated;" />`
       : `<div class="w-11 h-11 flex items-center justify-center" style="font-size:24px;">${it.kind === 'cosmetic' ? '🎨' : '📦'}</div>`;
+    // Solo las bolas tienen acciones (Abrir/Vender/Regalar) → celda interactiva.
+    const interactive = isBall
+      ? `item-cell cursor-pointer transition-colors hover:border-yellow-400 hover:bg-gray-700`
+      : '';
+    const dataAttrs = isBall ? `data-kind="${it.kind}" data-key="${it.itemKey}"` : '';
+    const title = isBall ? `title="Click derecho: acciones"` : '';
     return `
-      <div class="flex flex-col items-center rounded border-2 border-gray-700 bg-gray-800" style="padding:4px;">
+      <div class="${interactive} flex flex-col items-center rounded border-2 border-gray-700 bg-gray-800" ${dataAttrs} ${title} style="padding:4px;">
         ${img}
         <span class="uppercase text-white truncate" style="${FONT} font-size:6px; max-width:100%;">${it.itemKey}</span>
         <span class="text-yellow-300" style="${FONT} font-size:6px;">x${it.qty}</span>
@@ -344,6 +420,18 @@ export class InventoryView {
         e.preventDefault();
         this.showContextMenu(p, e.clientX, e.clientY);
       });
+    });
+
+    // Objetos (bolas): click izquierdo o derecho abre el menú de acciones.
+    this.container.querySelectorAll<HTMLElement>('.item-cell').forEach((cell) => {
+      const it = items.find((x) => x.kind === cell.dataset.kind && x.itemKey === cell.dataset.key);
+      if (!it) return;
+      const open = (e: MouseEvent) => {
+        e.preventDefault();
+        this.showItemContextMenu(it, e.clientX, e.clientY);
+      };
+      cell.addEventListener('click', open);
+      cell.addEventListener('contextmenu', open);
     });
   }
 }

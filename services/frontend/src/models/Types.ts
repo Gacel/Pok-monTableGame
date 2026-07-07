@@ -14,6 +14,7 @@ export type {
   PokemonMove,
   Pokemon,
   Tile,
+  BallKey,
   PlayerResources,
   MoveOptions,
   MatchStatus,

@@ -42,4 +42,23 @@ export const ItemModel = {
       qty
     );
   },
+
+  /**
+   * Transfiere `qty` de un objeto de un usuario a otro (regalo). Devuelve false si
+   * el emisor no tiene suficiente cantidad. Resta al emisor y suma al receptor.
+   */
+  async transfer(
+    fromUserId: string,
+    toUserId: string,
+    kind: string,
+    itemKey: string,
+    qty = 1
+  ): Promise<boolean> {
+    if (qty <= 0) return false;
+    const have = await this.getQty(fromUserId, kind, itemKey);
+    if (have < qty) return false;
+    await this.add(fromUserId, kind, itemKey, -qty);
+    await this.add(toUserId, kind, itemKey, qty);
+    return true;
+  },
 };
