@@ -147,15 +147,21 @@
               </div>
 
               <!-- BARRA DE TURNO Y BOTÓN FINALIZAR TURNO (INFERIOR CENTRO) -->
-              <div class="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-4 z-50 pointer-events-auto">
-                <div id="turn-banner" class="hidden bg-black bg-opacity-80 border-2 border-yellow-400 rounded-lg px-4 py-2 text-center shadow-lg">
-                  <div id="turn-player" class="text-[10px] text-yellow-400" style="font-family: 'Press Start 2P', monospace;">TURNO</div>
-                  <div id="turn-number" class="text-[8px] text-gray-300 mt-1" style="font-family: 'Press Start 2P', monospace;">Turno 1</div>
+              <div class="absolute bottom-4 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 z-50 pointer-events-auto">
+                <div id="action-panel" class="hidden flex gap-2 mb-2 p-2 bg-gray-900 bg-opacity-90 border-2 border-gray-700 rounded-lg shadow-lg pointer-events-auto">
+                  <!-- Movimientos inyectados aquí por HUDView -->
                 </div>
+                
+                <div class="flex items-center gap-4">
+                  <div id="turn-banner" class="hidden bg-black bg-opacity-80 border-2 border-yellow-400 rounded-lg px-4 py-2 text-center shadow-lg">
+                    <div id="turn-player" class="text-[10px] text-yellow-400" style="font-family: 'Press Start 2P', monospace;">TURNO</div>
+                    <div id="turn-number" class="text-[8px] text-gray-300 mt-1" style="font-family: 'Press Start 2P', monospace;">Turno 1</div>
+                  </div>
 
-                <button id="btn-end-turn" class="bg-gradient-to-r from-yellow-500 to-red-600 hover:from-yellow-400 hover:to-red-500 text-black font-bold text-xs px-6 py-3 rounded-lg border-2 border-yellow-300 shadow-[0_0_15px_rgba(234,179,8,0.5)] cursor-pointer transition-all duration-200 hover:scale-105 active:scale-95 uppercase tracking-wider" style="font-family: 'Press Start 2P', monospace;">
-                  FINALIZAR TURNO ▶
-                </button>
+                  <button id="btn-end-turn" class="bg-gradient-to-r from-yellow-500 to-red-600 hover:from-yellow-400 hover:to-red-500 text-black font-bold text-xs px-6 py-3 rounded-lg border-2 border-yellow-300 shadow-[0_0_15px_rgba(234,179,8,0.5)] cursor-pointer transition-all duration-200 hover:scale-105 active:scale-95 uppercase tracking-wider" style="font-family: 'Press Start 2P', monospace;">
+                    FINALIZAR TURNO ▶
+                  </button>
+                </div>
               </div>
 
               <!-- Toast feedback -->
