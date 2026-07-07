@@ -9,7 +9,6 @@ export type {
   Hex,
   Biome,
   PokemonType,
-  MovementPattern,
   MoveDamageClass,
   PokemonMove,
   Pokemon,
@@ -18,7 +17,6 @@ export type {
   MoveOptions,
   MatchStatus,
   CombatAction,
-  CombatState,
   MatchStateDTO,
   MatchState,
 } from '@transcendence/shared';
