@@ -3,14 +3,13 @@ import { getSpritePair } from '../net/PokeSprites';
 import { BoardView } from '../views/BoardView';
 import { HUDView } from '../views/HUDView';
 import { EntityView } from '../views/EntityView';
-import { CombatView } from '../views/CombatView';
 import { MinimapView } from '../views/MinimapView';
 import { WsClient } from '../net/WsClient';
 import type { WsMessage } from '../net/WsClient';
 import { apiFetch } from '../net/api';
 import { MatchSession } from '../state/MatchSession';
 import type { OnlineSession } from '../state/MatchSession';
-import type { Hex, MatchState, CombatAction, Pokemon } from '../models/Types';
+import type { Hex, MatchState, Pokemon } from '../models/Types';
 import { authState } from '../auth/AuthState';
 import { decideBotAction } from './botStrategy';
 import type { BotLevel, BotPieceOptions, EnemyPiece } from './botStrategy';
@@ -24,7 +23,6 @@ export class GameController {
   private boardView: BoardView;
   private hudView: HUDView;
   private entityView: EntityView;
-  private combatView: CombatView;
   private minimapView: MinimapView;
   private canvas: HTMLCanvasElement;
 
@@ -51,17 +49,13 @@ export class GameController {
     this.boardView = new BoardView(this.canvas, this.state);
     this.hudView = new HUDView(this.state);
     this.entityView = new EntityView(this.state, this.boardView);
-    this.combatView = new CombatView(
-      this.state,
-      (a, moveName, targetId) => this.sendCombatAction(a, moveName, targetId),
-      () => this.sendCombatContinue()
-    );
     this.minimapView = new MinimapView(this.state, this.boardView, this.canvas);
 
     this.state.subscribe(() => this.renderAll());
     this.setupEvents();
     this.setupKeyboardShortcuts();
     this.setupHUDListeners();
+    this.setupActionPanelListeners();
   }
 
   /**
@@ -126,22 +120,6 @@ export class GameController {
     if (this.session || this.botTimer !== null) return;
     const m = this.state.match;
     if (!m) return;
-
-    if (m.status === 'combat' && m.combat) {
-      const c = m.combat;
-      if (c.status === 'finished') {
-        if (this.isBotSlot(c.attackerPlayer) || this.isBotSlot(c.defenderPlayer)) {
-          this.scheduleBot(() => this.sendCombatContinue());
-        }
-        return;
-      }
-      const actor = c.turnActorId === c.attackerId ? c.attackerPlayer : c.defenderPlayer;
-      if (this.isBotSlot(actor)) {
-        // El combate lo resuelve a golpes básicos; la "listeza" está en elegir el enfrentamiento.
-        this.scheduleBot(() => this.sendCombatAction('ATACAR' as CombatAction));
-      }
-      return;
-    }
 
     if (m.status === 'active' && this.isBotSlot(m.currentPlayer)) {
       this.scheduleBot(() => this.runBotTurn());
@@ -353,8 +331,20 @@ export class GameController {
     }
 
     if (!oldPlayer || oldPlayer !== newState.currentPlayer || oldTurn !== newState.turn) {
-      const targetTile = this.state.getLastInteractedTile(newState.currentPlayer);
-      this.centerOnTile(targetTile, animateCamera && !!oldPlayer);
+      if (newState.status === 'deployment' && newState.deploymentZones) {
+        const zones = newState.deploymentZones[newState.currentPlayer];
+        if (zones && zones.length > 0) {
+           let sumQ = 0, sumR = 0;
+           for (const z of zones) { sumQ += z.q; sumR += z.r; }
+           const centerQ = Math.round(sumQ / zones.length);
+           const centerR = Math.round(sumR / zones.length);
+           const centerTile = newState.tiles.find(t => t.hex.q === centerQ && t.hex.r === centerR) || newState.tiles.find(t => t.hex.q === zones[0].q && t.hex.r === zones[0].r);
+           this.centerOnTile(centerTile, animateCamera && !!oldPlayer);
+        }
+      } else {
+        const targetTile = this.state.getLastInteractedTile(newState.currentPlayer);
+        this.centerOnTile(targetTile, animateCamera && !!oldPlayer);
+      }
     }
 
     // Nuevo turno de partida → reinicia el tope de acciones del bot.
@@ -369,6 +359,11 @@ export class GameController {
   private async preloadSprites(state: MatchState): Promise<void> {
     const names = new Set<string>();
     for (const t of state.tiles) if (t.occupant?.name) names.add(t.occupant.name);
+    if (state.reserve) {
+      for (const playerReserve of Object.values(state.reserve)) {
+        for (const p of playerReserve) if (p.name) names.add(p.name);
+      }
+    }
     await Promise.all(Array.from(names).map((n) => this.loadPokeSprite(n)));
   }
 
@@ -385,7 +380,6 @@ export class GameController {
     this.boardView.render();
     this.entityView.render();
     this.hudView.render();
-    this.combatView.render();
     this.minimapView.render();
     this.updateTurnControls();
   }
@@ -409,60 +403,6 @@ export class GameController {
     }
   }
 
-  private async sendCombatAction(
-    action: CombatAction,
-    moveName?: string,
-    targetId?: string
-  ): Promise<void> {
-    if (this.busy) return;
-    // Online: solo actúa el dueño del Pokémon al que le toca en el combate.
-    const combat = this.state.match?.combat;
-    if (this.session && combat) {
-      const actorPlayer =
-        combat.turnActorId === combat.attackerId ? combat.attackerPlayer : combat.defenderPlayer;
-      if (actorPlayer !== this.session.mySlot) {
-        this.hudView.flashToast(`Turno de ${this.state.labelFor(actorPlayer).toUpperCase()}`);
-        return;
-      }
-    }
-    this.busy = true;
-    try {
-      const body: Record<string, string> = { action };
-      if (moveName) body.moveName = moveName;
-      if (targetId) body.targetId = targetId;
-      const res = await apiFetch(this.apiPath('/combat/action'), {
-        method: 'POST',
-        body: JSON.stringify(body),
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        this.applyMatchState(data.state as MatchState);
-      } else {
-        this.hudView.flashToast(data.error ?? 'Acción no válida');
-      }
-    } catch (err) {
-      console.error(err);
-      this.hudView.flashToast('Error de red');
-    } finally {
-      this.busy = false;
-    }
-  }
-
-  private async sendCombatContinue(): Promise<void> {
-    if (this.busy) return;
-    this.busy = true;
-    try {
-      const res = await apiFetch(this.apiPath('/combat/continue'), { method: 'POST' });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        this.applyMatchState(data.state as MatchState);
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      this.busy = false;
-    }
-  }
 
   private setupEvents(): void {
     this.canvas.onmousedown = (e) => {
@@ -475,6 +415,24 @@ export class GameController {
     };
 
     this.canvas.onmousemove = (e) => {
+      const rect = this.canvas.getBoundingClientRect();
+      const scaleX = this.canvas.width / rect.width;
+      const scaleY = this.canvas.height / rect.height;
+      const mouseX = (e.clientX - rect.left) * scaleX;
+      const mouseY = (e.clientY - rect.top) * scaleY;
+
+      const hex = this.boardView.pixelToHex(
+        mouseX,
+        mouseY,
+        this.state.cameraOffset.x,
+        this.state.cameraOffset.y
+      );
+      
+      if (!this.state.hoverHex || this.state.hoverHex.q !== hex.q || this.state.hoverHex.r !== hex.r) {
+        this.state.hoverHex = hex;
+        this.renderAll();
+      }
+
       if (!this.isDragging) return;
       const dx = e.clientX - this.dragStartX;
       const dy = e.clientY - this.dragStartY;
@@ -482,9 +440,7 @@ export class GameController {
         this.hasDragged = true;
         this.canvas.style.cursor = 'grabbing';
       }
-      const rect = this.canvas.getBoundingClientRect();
-      const scaleX = this.canvas.width / rect.width;
-      const scaleY = this.canvas.height / rect.height;
+      
       this.state.setCameraOffset(
         this.initialCameraOffsetX + dx * scaleX,
         this.initialCameraOffsetY + dy * scaleY
@@ -540,12 +496,21 @@ export class GameController {
   private async handleCanvasClick(e: MouseEvent): Promise<void> {
     const match = this.state.match;
     // Durante el combate el tablero no acepta clics (se usa el menú de combate).
-    if (!match || match.status !== 'active' || this.busy) return;
+    if (!match || (match.status !== 'active' && match.status !== 'deployment') || this.busy) return;
 
     // Online: fuera de tu turno el tablero es de solo lectura.
-    if (!this.isMyTurn()) {
+    if (!this.isMyTurn() && match.status !== 'deployment') {
       this.hudView.flashToast(`Turno de ${this.turnOwnerLabel()}`);
       return;
+    }
+    
+    // En fase de despliegue, también debes ser el jugador de turno o es local (todos los turnos permitidos al ser compartidos, pero el match.currentPlayer dicta quién despliega ahora)
+    if (match.status === 'deployment') {
+      const isMe = this.state.mySlot === null || this.state.mySlot === match.currentPlayer;
+      if (!isMe) {
+        this.hudView.flashToast(`Turno de despliegue de ${this.turnOwnerLabel()}`);
+        return;
+      }
     }
 
     const rect = this.canvas.getBoundingClientRect();
@@ -566,7 +531,28 @@ export class GameController {
       return;
     }
 
-    // Si hay una pieza seleccionada y el destino está resaltado → ejecutar jugada.
+    if (match.status === 'deployment') {
+      if (this.state.selectedReserveId) {
+        const zones = match.deploymentZones?.[match.currentPlayer] ?? [];
+        const valid = zones.some(z => z.q === hex.q && z.r === hex.r);
+        if (valid) {
+          await this.performDeploy(this.state.selectedReserveId, hex);
+        } else {
+          this.hudView.flashToast('Casilla fuera de tu zona de despliegue');
+        }
+      } else {
+        this.hudView.flashToast('Selecciona un Pokémon de tu reserva abajo');
+      }
+      return;
+    }
+
+    // Si hay una pieza seleccionada y un movimiento activo (QWER), intentamos castear allí
+    if (this.state.selectedHex && this.state.activeMoveIndex !== null) {
+      await this.performCast(this.state.selectedHex, hex, this.state.activeMoveIndex);
+      return;
+    }
+
+    // Si hay una pieza seleccionada y el destino está resaltado → ejecutar jugada normal.
     if (this.state.selectedHex && (this.state.isMoveTarget(hex) || this.state.isAttackTarget(hex))) {
       await this.performMove(this.state.selectedHex, hex);
       return;
@@ -618,6 +604,76 @@ export class GameController {
       } else {
         this.hudView.flashToast(data.error ?? 'Jugada inválida');
         this.state.selectedHex = null;
+      }
+    } catch (err) {
+      console.error(err);
+      this.hudView.flashToast('Error de red');
+    } finally {
+      this.busy = false;
+    }
+  }
+
+  private async performForceStart(): Promise<void> {
+    if (this.busy) return;
+    this.busy = true;
+    try {
+      const res = await apiFetch(this.apiPath('/force-start'), {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        this.applyMatchState(data.state as MatchState);
+      } else {
+        this.hudView.flashToast(data.error ?? 'No se pudo iniciar la partida');
+      }
+    } catch (err) {
+      console.error(err);
+      this.hudView.flashToast('Error de red');
+    } finally {
+      this.busy = false;
+    }
+  }
+
+  private async performDeploy(pokemonId: string, hex: Hex): Promise<void> {
+    this.busy = true;
+    try {
+      const res = await apiFetch(this.apiPath('/deploy'), {
+        method: 'POST',
+        body: JSON.stringify({ pokemonId, hex }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        this.state.selectedReserveId = null;
+        this.applyMatchState(data.state as MatchState, false); // no animar cámara en cada despliegue
+      } else {
+        this.hudView.flashToast(data.error ?? 'Error al desplegar');
+      }
+    } catch (err) {
+      console.error(err);
+      this.hudView.flashToast('Error de red');
+    } finally {
+      this.busy = false;
+    }
+  }
+
+  private async performCast(from: Hex, to: Hex, moveIndex: number): Promise<void> {
+    const movingOcc = this.state.currentTiles.find((t) => t.hex.q === from.q && t.hex.r === from.r)?.occupant;
+    if (movingOcc) {
+      this.state.setLastInteractedPokemon(movingOcc.playerId, movingOcc.id);
+    }
+    this.busy = true;
+    try {
+      const res = await apiFetch(this.apiPath('/cast'), {
+        method: 'POST',
+        body: JSON.stringify({ from, target: to, moveIndex }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        this.state.selectedHex = null;
+        this.state.activeMoveIndex = null;
+        this.applyMatchState(data.state as MatchState);
+      } else {
+        this.hudView.flashToast(data.error ?? 'Jugada inválida');
       }
     } catch (err) {
       console.error(err);
@@ -730,6 +786,14 @@ export class GameController {
         lastKey = '';
         lastKeyTime = 0;
       } else {
+        const key = e.key.toUpperCase();
+        if (['Q', 'W', 'E', 'R'].includes(key) && this.state.selectedHex) {
+          const map: Record<string, number> = { Q: 0, W: 1, E: 2, R: 3 };
+          this.state.activeMoveIndex = map[key];
+        } else if (key === 'ESCAPE') {
+          this.state.activeMoveIndex = null;
+        }
+        
         lastKey = e.key;
         lastKeyTime = now;
       }
@@ -768,5 +832,37 @@ export class GameController {
         });
       }
     });
+  }
+
+  private setupActionPanelListeners(): void {
+    const panel = document.getElementById('action-panel');
+    if (panel) {
+      panel.addEventListener('click', (e) => {
+        const moveBtn = (e.target as HTMLElement).closest('.move-btn') as HTMLElement | null;
+        if (moveBtn) {
+          const idx = parseInt(moveBtn.dataset.moveIdx ?? '-1', 10);
+          if (idx >= 0 && idx < 4) {
+            this.state.activeMoveIndex = idx;
+          }
+          return;
+        }
+        
+        const reserveBtn = (e.target as HTMLElement).closest('.reserve-btn') as HTMLElement | null;
+        if (reserveBtn) {
+          const resId = reserveBtn.dataset.reserveId;
+          if (resId) {
+            this.state.selectedReserveId = resId;
+            this.renderAll(); // Fuerza a repintar el HUDView para mostrar la selección
+          }
+          return;
+        }
+
+        const readyBtn = (e.target as HTMLElement).closest('#ready-btn') as HTMLElement | null;
+        if (readyBtn) {
+          this.performForceStart();
+          return;
+        }
+      });
+    }
   }
 }
