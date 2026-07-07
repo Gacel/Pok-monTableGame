@@ -134,6 +134,35 @@ export class MinimapView {
 
     const cell = Math.max(2, this.boardView.HEX_SIZE * 1.9 * scale);
 
+    // Botín: cofres (rombo dorado) y bolas caídas (punto naranja) para localizarlos.
+    // Dinámico (aparecen/desaparecen) → se pinta cada frame, no en la capa cacheada.
+    for (const t of tiles) {
+      if (!t.chest && !t.groundBall) continue;
+      const p = this.boardView.hexToPixel(t.hex.q, t.hex.r);
+      const x = offX + (p.x - b.minX) * scale;
+      const y = offY + (p.y - b.minY) * scale;
+      if (t.chest) {
+        const s = Math.max(3, cell * 1.7);
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(Math.PI / 4);
+        ctx.fillStyle = '#f5c542';
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 1;
+        ctx.fillRect(-s / 2, -s / 2, s, s);
+        ctx.strokeRect(-s / 2, -s / 2, s, s);
+        ctx.restore();
+      } else {
+        ctx.beginPath();
+        ctx.arc(x, y, Math.max(2, cell * 0.6), 0, Math.PI * 2);
+        ctx.fillStyle = '#fb923c';
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 0.5;
+        ctx.fill();
+        ctx.stroke();
+      }
+    }
+
     // Piezas: cada Pokémon con el color de SU jugador (P1..P4).
     for (const t of tiles) {
       if (!t.occupant) continue;
