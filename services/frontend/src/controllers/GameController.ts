@@ -101,6 +101,9 @@ export class GameController {
     if (resetBtn) resetBtn.style.display = session ? 'none' : '';
     const rematchBtn = document.getElementById('btn-rematch');
     if (rematchBtn) rematchBtn.textContent = session ? 'VOLVER AL MENÚ' : 'REVANCHA';
+    // Online: la "revancha" ya lleva al menú → sobra el botón MENÚ extra.
+    const winMenuBtn = document.getElementById('btn-win-menu');
+    if (winMenuBtn) winMenuBtn.style.display = session ? 'none' : '';
   }
 
   /** Configura los slots controlados por la IA (solo local). */
@@ -537,6 +540,8 @@ export class GameController {
 
     document.getElementById('btn-reset')?.addEventListener('click', () => this.resetGame());
     document.getElementById('btn-rematch')?.addEventListener('click', () => this.resetGame());
+    // "◀ MENÚ" en el overlay de victoria: aceptar y volver al menú (no forzar revancha).
+    document.getElementById('btn-win-menu')?.addEventListener('click', () => this.exitToMenu());
     document.getElementById('btn-end-turn')?.addEventListener('click', () => this.endTurn());
     document.getElementById('btn-abandon')?.addEventListener('click', () => {
       if (confirm('¿Estás seguro de que quieres abandonar la partida? (Esto equivaldrá a una derrota)')) {

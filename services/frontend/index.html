@@ -166,11 +166,14 @@
 
               <!-- Win overlay -->
               <div id="win-overlay" class="absolute inset-0 hidden items-center justify-center bg-black bg-opacity-80 z-[60]">
-                <div class="bg-blue-900 border-4 border-yellow-400 rounded-lg p-8 text-center shadow-2xl">
+                <div class="bg-blue-900 border-4 border-yellow-400 rounded-lg p-8 text-center shadow-2xl" style="max-width:min(440px,92vw);">
                   <div class="text-2xl text-yellow-400 mb-4" style="font-family: 'Press Start 2P', monospace; text-shadow: 2px 2px 0 #000;">¡VICTORIA!</div>
                   <div id="win-text" class="text-xs text-white mb-4" style="font-family: 'Press Start 2P', monospace;"></div>
                   <div id="win-rewards" class="mb-6"></div>
-                  <button id="btn-rematch" class="bg-green-600 hover:bg-green-500 text-white text-xs px-6 py-3 rounded border-b-4 border-green-800 active:border-b-0 active:mt-1" style="font-family: 'Press Start 2P', monospace;">REVANCHA</button>
+                  <div class="flex flex-wrap gap-3 justify-center">
+                    <button id="btn-rematch" class="bg-green-600 hover:bg-green-500 text-white text-xs px-6 py-3 rounded border-b-4 border-green-800 active:border-b-0 active:mt-1" style="font-family: 'Press Start 2P', monospace;">REVANCHA</button>
+                    <button id="btn-win-menu" class="bg-gray-700 hover:bg-gray-600 text-white text-xs px-6 py-3 rounded border-b-4 border-gray-900 active:border-b-0 active:mt-1" style="font-family: 'Press Start 2P', monospace;">◀ MENÚ</button>
+                  </div>
                 </div>
               </div>
             </div>

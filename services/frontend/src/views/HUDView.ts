@@ -157,7 +157,14 @@ export class HUDView {
     const logEl = document.getElementById('event-log');
     if (!match || !logEl) return;
     const lines = match.log.slice(-6);
-    logEl.innerHTML = lines.map((l) => `<div>› ${this.escape(l)}</div>`).join('');
+    logEl.innerHTML = lines
+      .map((l) => `<div>› ${this.escape(this.prettifyPlayers(l))}</div>`)
+      .join('');
+  }
+
+  /** Sustituye los identificadores de slot (player1..4) por el nombre/login visible. */
+  private prettifyPlayers(line: string): string {
+    return line.replace(/player[1-4]/g, (slot) => this.state.labelFor(slot));
   }
 
   private updateWinOverlay(): void {
@@ -200,10 +207,10 @@ export class HUDView {
       : `<span class="text-gray-400" style="font-size:9px;">—</span>`;
     const F = "font-family:'Press Start 2P',monospace;";
     return `
-      <div class="text-left mx-auto bg-black/30 rounded p-3" style="max-width:280px;">
+      <div class="text-left mx-auto bg-black/30 rounded p-3" style="width:min(360px,86vw);">
         <div class="text-yellow-300 mb-2 text-center" style="${F} font-size:9px;">TE LLEVAS</div>
-        <div class="flex justify-between text-white items-center" style="font-size:11px;"><span>500 × ${kos} KO</span><span>🪙 ${koCoins}</span></div>
-        <div class="flex justify-between text-white items-center mt-1" style="font-size:11px;"><span>Botín de victoria</span><span>🪙 ${winShare}</span></div>
+        <div class="flex justify-between items-center gap-4 text-white" style="font-size:11px; white-space:nowrap;"><span>500 × ${kos} KO</span><span class="flex-shrink-0">🪙 ${koCoins}</span></div>
+        <div class="flex justify-between items-center gap-4 text-white mt-1" style="font-size:11px; white-space:nowrap;"><span>Botín de victoria</span><span class="flex-shrink-0">🪙 ${winShare}</span></div>
         <div class="flex items-center gap-1.5 mt-2 flex-wrap"><span class="text-white" style="font-size:11px;">Bolas:</span>${ballsHtml}</div>
       </div>`;
   }
