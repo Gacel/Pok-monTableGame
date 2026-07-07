@@ -1,6 +1,6 @@
 import { Hex, hexAdd } from './hex.js';
 import { Board } from './board.js';
-import { canEnter } from './environment.js';
+import { getTerrainCost } from './environment.js';
 
 export const DIRECTIONS = [
   { q: 1, r: 0 }, { q: 1, r: -1 }, { q: 0, r: -1 },
@@ -45,98 +45,55 @@ export function getMoveOptions(
   const moves: Hex[] = [];
   const attacks: Hex[] = [];
 
-  const consider = (target: Hex): 'continue' | 'stop' => {
-    const tile = board.getTile(target);
-    if (!tile) return 'stop'; // fuera del tablero
-    const key = `${target.q},${target.r}`;
-    if (tile.occupant) {
-      if (!sameTeam(tile.occupant.playerId, pokemon.playerId)) {
-        if (!attackSet.has(key)) {
-          attackSet.add(key);
-          attacks.push(target);
+  const speed = pokemon.speed ?? 3;
+
+  // Dijkstra para encontrar celdas alcanzables según el coste del terreno (PM)
+  // key -> coste mínimo acumulado
+  const costSoFar = new Map<string, number>();
+  // queue priorizada rudimentaria (el grid es pequeño)
+  const queue: { hex: Hex; cost: number }[] = [{ hex, cost: 0 }];
+  costSoFar.set(`${hex.q},${hex.r}`, 0);
+
+  while (queue.length > 0) {
+    // Extraer el de menor coste
+    queue.sort((a, b) => a.cost - b.cost);
+    const curr = queue.shift()!;
+
+    if (curr.cost > speed) continue;
+
+    for (const dir of DIRECTIONS) {
+      const nextHex = hexAdd(curr.hex, dir);
+      const nextKey = `${nextHex.q},${nextHex.r}`;
+      const nextTile = board.getTile(nextHex);
+
+      if (!nextTile) continue;
+
+      if (nextTile.occupant) {
+        if (!sameTeam(nextTile.occupant.playerId, pokemon.playerId)) {
+          // Es un enemigo, podemos atacarle si está a rango 1 del inicio o de un paso legal.
+          // Wait, los ataques en un juego tactics suelen poder hacerse desde CUALQUIER
+          // casilla a la que te puedas mover. Para simplificar, si podemos movernos a la casilla
+          // anterior, el enemigo es un target de ataque.
+          // Como los ataques directos son rango 1, si curr.cost <= speed, el enemigo adyacente es atacable.
+          if (!attackSet.has(nextKey)) {
+            attackSet.add(nextKey);
+            attacks.push(nextHex);
+          }
         }
+        continue; // No se puede atravesar a otros Pokémon (aliados o enemigos) en esta versión simple.
       }
-      return 'stop'; // enemigo o aliado bloquean el avance
-    }
-    if (canEnter(pokemon, tile.biome)) {
-      if (!moveSet.has(key)) {
-        moveSet.add(key);
-        moves.push(target);
-      }
-    }
-    return 'continue';
-  };
 
-  // 1) Paso adyacente garantizado: TODOS los Pokémon siempre pueden mover o atacar a 1 baldosa de distancia.
-  for (const dir of DIRECTIONS) {
-    consider(hexAdd(hex, dir));
-  }
+      const stepCost = getTerrainCost(pokemon, nextTile.biome);
+      if (stepCost === Infinity) continue;
 
-  if (pokemon.movementPattern === 'TANK') {
-    // Rey: casillas adyacentes (ya cubierto arriba, pero lo mantenemos por claridad del patrón)
-    for (const dir of DIRECTIONS) consider(hexAdd(hex, dir));
-  } else if (pokemon.movementPattern === 'SPEEDSTER') {
-    // Caballo: saltos fijos, ignora obstáculos en el camino
-    for (const jump of KNIGHT_JUMPS) consider(hexAdd(hex, jump));
-  } else if (pokemon.movementPattern === 'FLYING' || pokemon.type === 'FLYING') {
-    // Alfil/Reina: el tipo FLYING específico es el de mayor rango del juego (hasta 10 casillas en todas las direcciones y diagonales)
-    const maxSteps = pokemon.type === 'FLYING' ? 10 : 6;
-    const dirs = pokemon.type === 'FLYING' ? [...DIRECTIONS, ...DIAGONALS] : DIAGONALS;
-    for (const dir of dirs) {
-      let current = hexAdd(hex, dir);
-      let steps = 1;
-      while (steps <= maxSteps && consider(current) === 'continue') {
-        current = hexAdd(current, dir);
-        steps++;
-      }
-    }
-  }
-
-  // 2) Bonus Agua: Si el Pokémon es de tipo WATER o está en una baldosa de agua y entra en agua,
-  // puede recorrer hasta +3 baldosas adicionales dentro de baldosas conectadas de agua.
-  if (pokemon.type === 'WATER' || board.getTile(hex)?.biome === 'WATER') {
-    const waterSeeds: { hex: Hex; dist: number }[] = [];
-    const startTile = board.getTile(hex);
-    if (startTile && startTile.biome === 'WATER') {
-      waterSeeds.push({ hex, dist: 0 });
-    }
-    for (const m of moves) {
-      const t = board.getTile(m);
-      if (t && t.biome === 'WATER') {
-        waterSeeds.push({ hex: m, dist: 0 });
-      }
-    }
-
-    const visitedWater = new Set<string>(waterSeeds.map(s => `${s.hex.q},${s.hex.r}`));
-    const queue = [...waterSeeds];
-
-    while (queue.length > 0) {
-      const curr = queue.shift()!;
-      if (curr.dist >= 3) continue;
-
-      for (const dir of DIRECTIONS) {
-        const nextHex = hexAdd(curr.hex, dir);
-        const nextKey = `${nextHex.q},${nextHex.r}`;
-        if (visitedWater.has(nextKey)) continue;
-        visitedWater.add(nextKey);
-
-        const nextTile = board.getTile(nextHex);
-        if (!nextTile || nextTile.biome !== 'WATER') continue; // solo dentro de agua
-
-        if (nextTile.occupant) {
-           if (!sameTeam(nextTile.occupant.playerId, pokemon.playerId)) {
-             if (!attackSet.has(nextKey)) {
-               attackSet.add(nextKey);
-               attacks.push(nextHex);
-             }
-           }
-        } else {
-          if (canEnter(pokemon, nextTile.biome)) {
-            if (!moveSet.has(nextKey)) {
-              moveSet.add(nextKey);
-              moves.push(nextHex);
-            }
-            queue.push({ hex: nextHex, dist: curr.dist + 1 });
+      const newCost = curr.cost + stepCost;
+      if (newCost <= speed) {
+        if (!costSoFar.has(nextKey) || newCost < costSoFar.get(nextKey)!) {
+          costSoFar.set(nextKey, newCost);
+          queue.push({ hex: nextHex, cost: newCost });
+          if (!moveSet.has(nextKey)) {
+            moveSet.add(nextKey);
+            moves.push(nextHex);
           }
         }
       }
