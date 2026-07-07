@@ -1,5 +1,6 @@
 import { GameState } from '../models/GameState';
 import type { Hex, Tile } from '../models/Types';
+import { calculateAoE } from '@transcendence/shared';
 
 export class BoardView {
   private canvas: HTMLCanvasElement;
@@ -288,8 +289,36 @@ export class BoardView {
         this.state.selectedHex.q === tile.hex.q &&
         this.state.selectedHex.r === tile.hex.r;
 
+      const isDeploymentZone = 
+        this.state.match?.status === 'deployment' &&
+        this.state.match?.deploymentZones?.[this.state.match.currentPlayer]?.some(z => z.q === tile.hex.q && z.r === tile.hex.r);
+
       if (isSelected) {
         this.drawTileOverlay(x, y, 'rgba(255, 255, 0, 0.4)', '#fff', 3);
+      } else if (this.state.match?.status === 'deployment') {
+        if (isDeploymentZone) {
+          this.drawTileOverlay(x, y, 'rgba(34, 197, 94, 0.15)', '#4ade80', 2, false, true);
+        } else {
+          // Niebla de guerra profunda para el resto del mapa durante el despliegue
+          this.drawTileOverlay(x, y, 'rgba(0, 0, 0, 0.65)', 'rgba(0, 0, 0, 0.8)', 1);
+        }
+      }
+
+      // AoE hover logic
+      let isAoEHover = false;
+      if (this.state.activeMoveIndex !== null && this.state.hoverHex && this.state.selectedHex) {
+        const casterTile = this.state.currentTiles.find(
+          (t) => t.hex.q === this.state.selectedHex!.q && t.hex.r === this.state.selectedHex!.r
+        );
+        const move = casterTile?.occupant?.moves?.[this.state.activeMoveIndex];
+        if (move) {
+          const aoeHexes = calculateAoE(this.state.selectedHex, this.state.hoverHex, move.aoe || 'single', move.range || 1);
+          isAoEHover = aoeHexes.some(h => h.q === tile.hex.q && h.r === tile.hex.r);
+        }
+      }
+
+      if (isAoEHover) {
+        this.drawTileOverlay(x, y, 'rgba(249, 115, 22, 0.6)', '#fb923c', 2);
       } else if (this.state.isAttackTarget(tile.hex)) {
         this.drawTileOverlay(x, y, 'rgba(239, 68, 68, 0.45)', '#fca5a5', 2, true);
       } else if (this.state.isMoveTarget(tile.hex)) {
@@ -306,7 +335,8 @@ export class BoardView {
     fill: string,
     stroke: string,
     lineWidth: number,
-    dot = false
+    dot = false,
+    dashed = false
   ): void {
     const isoScale = 0.55;
     const points: { x: number; y: number }[] = [];
@@ -326,7 +356,13 @@ export class BoardView {
     this.ctx.fill();
     this.ctx.lineWidth = lineWidth;
     this.ctx.strokeStyle = stroke;
+    if (dashed) {
+      this.ctx.setLineDash([5, 5]);
+    }
     this.ctx.stroke();
+    if (dashed) {
+      this.ctx.setLineDash([]);
+    }
     if (dot) {
       this.ctx.beginPath();
       this.ctx.arc(x, y, 5, 0, Math.PI * 2);
