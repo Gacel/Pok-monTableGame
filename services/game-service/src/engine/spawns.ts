@@ -73,7 +73,7 @@ function clusterAround(
   perTeam: number,
   taken: Set<string>
 ): Hex[] {
-  const preference: Record<Biome, number> = { GRASS: 0, SAND: 1, FIRE: 2, ICE: 2, WATER: 9 };
+  const preference: Record<Biome, number> = { GRASS: 0, TALL_GRASS: 0, SAND: 1, MOUNTAIN: 1, FIRE: 2, ICE: 2, SWAMP: 2, WATER: 9 };
   const candidates = Array.from(component)
     .map(parseKey)
     .filter((h) => {
