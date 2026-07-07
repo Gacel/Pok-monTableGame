@@ -12,6 +12,9 @@ export class GameState {
   private _selectedHex: Hex | null = null;
   private _cameraOffset: { x: number; y: number } = { x: 0, y: 0 };
   private _zoom = 1.0;
+  private _activeMoveIndex: number | null = null;
+  public selectedReserveId: string | null = null;
+  public hoverHex: Hex | null = null;
   private _lastInteractedPokemonId: Record<string, string | null> = {};
   private listeners: Set<Listener> = new Set();
 
@@ -41,6 +44,9 @@ export class GameState {
   get selectedHex(): Hex | null {
     return this._selectedHex;
   }
+  get activeMoveIndex(): number | null {
+    return this._activeMoveIndex;
+  }
   get cameraOffset(): { x: number; y: number } {
     return this._cameraOffset;
   }
@@ -63,7 +69,15 @@ export class GameState {
 
   set selectedHex(hex: Hex | null) {
     this._selectedHex = hex;
-    if (!hex) this._moveOptions = null;
+    if (!hex) {
+      this._moveOptions = null;
+      this._activeMoveIndex = null;
+    }
+    this.notify();
+  }
+
+  set activeMoveIndex(idx: number | null) {
+    this._activeMoveIndex = idx;
     this.notify();
   }
 
