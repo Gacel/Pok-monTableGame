@@ -173,15 +173,34 @@ empujes, capturas), para poder animarlo sin adivinar diffeando estados.
 **Dudas resueltas:** feedback visual completo (D4); eventos estructurados, no diff de HP.
 
 **Criterios de aceptación:**
-- [ ] Cada respuesta/difusión de acción incluye `events` con lo ocurrido.
-- [ ] Un ataque que hace 2 daños y 1 KO emite 3 eventos coherentes.
-- [ ] `events` se reinicia entre acciones (no se acumula).
+- [x] Cada respuesta/difusión de acción incluye `events` con lo ocurrido.
+- [x] Un ataque que hace 2 daños y 1 KO emite los eventos coherentes (damage + ko).
+- [x] `events` se reinicia entre acciones (no se acumula).
 
 **Investigación:** `GameService.cast` (`GameService.ts:388-470`), fog en
 `getStateDTO` (`GameService.ts:192-226`), difusión en `GameActionService.apply`
 (`GameActionService.ts:55-74`), DTO en `packages/shared/src/match.ts`.
 
 **Dependencias:** ninguna (tras TR.1). **Paralelizable:** sí.
+
+### ✅ Resolución (lo realmente hecho)
+
+Sin desviaciones de alcance; se modeló sobre el patrón efímero `defeats`/`rewards` ya
+presente tras el merge (TR.1). Cambios:
+- `packages/shared/src/match.ts`: `TurnEventKind`, `TurnEvent` y `events?: TurnEvent[]` en el DTO.
+- `services/frontend/src/models/Types.ts`: reexport de `TurnEvent`/`TurnEventKind`.
+- `GameService.ts`: campo `events`; reset en las 5 acciones (deploy/play/cast/endTurn/abandon);
+  emite `damage` (delta negativo) + `ko` en el KO del `cast` on-map y en `applyLavaDamage`;
+  ensamblado en `getStateDTO` con **filtro de niebla** (omite eventos de un enemigo aún oculto
+  para el solicitante; conserva los `ko` de piezas ya retiradas). No se serializa.
+- Tests: `services/game-service/test/turnEvents.test.ts` (damage, ko, reset, niebla).
+
+**Nota de scope:** T0.1 solo **emite** `damage`/`ko` (lo que ya existe); `heal`/`reveal`/
+`knockback`/`dash`/`capture` los emitirán sus tickets. Doc detallado:
+[`15-TURN_EVENTS.md`](15-TURN_EVENTS.md).
+
+**Verificación:** tsc 3 workspaces limpio · game-service 13/13 · frontend 17/17 · revisión
+escéptica SAFE (sin issues). Sin cambio visual (el consumo lo hará T0.4).
 
 ## 🎟️ T0.2 — Refactor de efectos de fin de turno + curación + fix SWAMP
 
