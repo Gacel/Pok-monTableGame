@@ -36,17 +36,9 @@ export class EntityView {
           const occupantId = tile.occupant.id;
           currentOccupantIds.add(occupantId);
           
-          const { x, y } = this.boardView.hexToPixel(tile.hex.q, tile.hex.r);
-          let screenX = x + this.state.cameraOffset.x;
-          let screenY = y + this.state.cameraOffset.y;
-          
-          // Apply zoom around center (same as Canvas)
-          const cx = this.boardView.CENTER_X;
-          const cy = this.boardView.CENTER_Y;
-          screenX = (screenX - cx) * this.state.zoom + cx;
-          screenY = (screenY - cy) * this.state.zoom + cy;
+          const { x: screenX, y: screenY } = this.boardView.hexToScreen(tile.hex);
 
-          const sSize = this.boardView.HEX_SIZE * 1.5 * this.state.zoom; 
+          const sSize = this.boardView.HEX_SIZE * 1.5 * this.state.zoom;
 
           let base = document.getElementById(`base-${occupantId}`) as HTMLDivElement;
           if (!base) {
