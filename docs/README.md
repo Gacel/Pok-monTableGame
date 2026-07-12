@@ -10,7 +10,7 @@
   `SCREAMING_SNAKE_CASE`: `NN-NOMBRE.md`.
 - El número refleja el **orden de creación**, no la importancia ni un orden de
   lectura obligatorio. El siguiente documento nuevo usa el número más alto + 1
-  (el último a día de hoy es `16`, así que el próximo sería `17-*.md`).
+  (el último a día de hoy es `17`, así que el próximo sería `18-*.md`).
 - Los documentos **históricos** (diarios de sesión, auditorías puntuales, planes
   de refactor ya ejecutados) van a `docs/archive/`, sin numerar — son un
   registro de un momento concreto, no una referencia a mantener al día. Cada uno
@@ -40,6 +40,7 @@
 | 14 | [`14-FRONTEND_ARCHITECTURE.md`](14-FRONTEND_ARCHITECTURE.md) | Arquitectura del cliente fuera del árbol de menús: controllers, capa `net/`, estado de sesión, IA local. |
 | 15 | [`15-TURN_EVENTS.md`](15-TURN_EVENTS.md) | Canal de eventos de turno (`TurnEvent` en el DTO) para el feedback visual: emisión, patrón efímero y filtrado por niebla de guerra. (Ticket T0.1) |
 | 16 | [`16-TERRAIN_EFFECTS.md`](16-TERRAIN_EFFECTS.md) | Efectos de terreno de fin de turno: refactor `applyEndOfTurnEffects`, activación del daño de pantano, vía de curación (clamp) y generación/render de losetas de pantano. (Ticket T0.2) |
+| 17 | [`17-HEX_GEOMETRY.md`](17-HEX_GEOMETRY.md) | Geometría hexagonal del motor: conversión axial↔cube, `hexRound` (redondeo cúbico) y `hexLineDraw` (línea recta real punto a punto) para LoS/empuje/dash. (Ticket T0.3) |
 
 ## Archivo (histórico, no numerado)
 
