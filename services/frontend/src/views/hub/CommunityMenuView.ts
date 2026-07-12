@@ -19,7 +19,7 @@ function dmRoom(a: string, b: string): string {
  *  - Amigos (con presencia 🟢) → pulsar abre CHAT directo (DM por WSS).
  *  - Añadir amigo → Buscar / Recomendados: envía SOLICITUD (a confirmar).
  *  - Solicitudes entrantes: aceptar / rechazar.
- * Ver docs/FRONTEND_MENU.md §4.
+ * Ver docs/05-FRONTEND_MENU.md §4.
  */
 export class CommunityMenuView {
   private container: HTMLElement;

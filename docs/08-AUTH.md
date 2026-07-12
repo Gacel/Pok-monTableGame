@@ -1,7 +1,9 @@
 # Autenticación
 
 > Reescritura de seguridad (rama `refactor/security-mvc-audit`). Resuelve los
-> hallazgos C1, C2, A1, M3, M4, B1 y frontend #2/#3 de `docs/audit/SECURITY_AUDIT.md`.
+> hallazgos C1, C2, A1, M3, M4, B1 y frontend #2/#3 de
+> [`archive/SECURITY_AUDIT.md`](archive/SECURITY_AUDIT.md). Checklist vivo de
+> seguridad: [`13-SECURITY_CHECKLIST.md`](13-SECURITY_CHECKLIST.md).
 
 ## Modelo
 

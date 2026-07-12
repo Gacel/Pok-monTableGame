@@ -14,7 +14,7 @@ body {
  * `margin-block: auto` centra el contenido cuando cabe y colapsa a 0 (dejando
  * hacer scroll desde arriba) cuando no cabe. Evita el bug clásico de
  * `align-items: center` + `overflow`, que recorta la parte superior.
- * Ver docs/RESPONSIVE.md.
+ * Ver docs/10-RESPONSIVE.md.
  */
 #hub-layer > * {
   margin-block: auto;

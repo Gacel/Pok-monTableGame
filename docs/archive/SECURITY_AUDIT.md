@@ -1,9 +1,14 @@
 # Auditoría de seguridad — Transcendence Pokémon Edition
 
+> **[HISTÓRICO / RESUELTO]** Auditoría puntual del 2026-07-05. Los hallazgos
+> "Corregido" se resolvieron en el rewrite de auth documentado en
+> [`docs/08-AUTH.md`](../08-AUTH.md); el checklist vivo de seguridad está en
+> [`docs/13-SECURITY_CHECKLIST.md`](../13-SECURITY_CHECKLIST.md).
+
 > Fecha: 2026-07-05 · Alcance: `services/game-service/` (backend Fastify + SQLite),
 > `services/frontend/` (SPA TS + Tailwind) y `packages/shared/`.
 > Metodología: revisión estática con 2 agentes en paralelo (backend y frontend).
-> Estado de remediación: ver columna en cada tabla y `REFACTOR_PLAN.md`.
+> Estado de remediación: ver columna en cada tabla y [`REFACTOR_PLAN.md`](REFACTOR_PLAN.md).
 
 ## Resumen ejecutivo
 

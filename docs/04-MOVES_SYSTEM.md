@@ -3,7 +3,7 @@
 > Documento vivo. Describe el **sistema de ataques por Pokémon** del `game-service`:
 > importación desde PokeAPI, persistencia en SQLite, curación de 4 ataques por
 > Pokémon, fórmula de daño, coste de recursos y endpoint. Lee antes `CLAUDE.md`
-> (stack y reglas) y `docs/ARCHITECTURE.md` (arquitectura MVC del servicio).
+> (stack y reglas) y [`03-ARCHITECTURE.md`](03-ARCHITECTURE.md) (arquitectura MVC del servicio).
 
 ---
 
@@ -238,7 +238,7 @@ El frontend renderiza un botón por cada `pokemon.moves[i]` (además de `OBJETO`
 `MatchManager.ROSTER_NAMES` pasó de **32 a 27** Pokémon: se eliminaron 5 evoluciones
 (`charizard`, `blastoise`, `pidgeot`, `dragonite`, `jolteon`). El pool del draft
 queda con **solo formas base**; las evoluciones se tratarán más adelante (evolución
-en partida, ver `IMPLEMENTATION_PLAN.md` C3.8).
+en partida, ver [`01-IMPLEMENTATION_PLAN.md`](01-IMPLEMENTATION_PLAN.md) C3.8 — no implementada todavía).
 
 Consecuencias en la distribución por tipo:
 - `FLYING` queda solo con `aerodactyl` (se fue `pidgeot`).

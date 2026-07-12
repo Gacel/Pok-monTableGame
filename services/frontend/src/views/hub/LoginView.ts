@@ -9,7 +9,7 @@ const btnBase =
 /**
  * Pantalla de acceso: LOGIN (email + contraseña) y REGISTRO completo
  * (Nombre, email, contraseña, confirmación, edad, Estudiante42). La sesión se
- * guarda en cookie HttpOnly (no en JS). Ver docs/AUTH.md.
+ * guarda en cookie HttpOnly (no en JS). Ver docs/08-AUTH.md.
  */
 export class LoginView {
   private container: HTMLElement;

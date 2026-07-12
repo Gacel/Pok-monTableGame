@@ -99,7 +99,8 @@ Cada servicio incluye: `Dockerfile`, `package.json`, `tsconfig.json`,
 
 ## 5. Reglas de trabajo (cómo quiero que construyas)
 
-1. **Un componente a la vez.** Sigue el orden de `docs/IMPLEMENTATION_PLAN.md`.
+1. **Un componente a la vez.** Sigue el orden de `docs/01-IMPLEMENTATION_PLAN.md`
+   (índice completo de documentación en `docs/README.md`).
    No empieces un componente si sus dependencias no están "Done".
 2. **Cada componente termina ejecutable y probado en local con Docker.**
    No se avanza con un servicio que no arranca o no pasa su smoke test.
@@ -144,7 +145,7 @@ Cada servicio incluye: `Dockerfile`, `package.json`, `tsconfig.json`,
 ## 8. Flujo en Antigravity
 
 Trabaja archivo a archivo. Para cada componente del plan:
-1. Lee la ficha del componente en `docs/IMPLEMENTATION_PLAN.md`.
+1. Lee la ficha del componente en `docs/01-IMPLEMENTATION_PLAN.md`.
 2. Crea/edita solo los archivos de ese componente.
-3. Levanta y prueba en local (ver `docs/LOCAL_DEV.md`).
+3. Levanta y prueba en local (ver `docs/02-LOCAL_DEV.md`).
 4. Marca el componente como hecho y pasa al siguiente.

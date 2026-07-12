@@ -1,8 +1,14 @@
 # Plan de refactor — Seguridad + Arquitectura MVC
 
+> **[HISTÓRICO]** Plan de una rama de refactor ya fusionada (2026-07-05). Las fases
+> marcadas "Diferido" siguen pendientes; contrástalas con el código actual antes de
+> asumir que siguen así. Ver [`docs/03-ARCHITECTURE.md`](../03-ARCHITECTURE.md) y
+> [`docs/08-AUTH.md`](../08-AUTH.md) para el estado vigente.
+
 > Rama: `refactor/security-mvc-audit`. Este documento traza el plan y su estado.
 > Verificación por fase: `tsc --noEmit` por servicio (verde) + tests en Docker en el
-> checkpoint final. Ver `SECURITY_AUDIT.md` y `ARCHITECTURE_AUDIT.md` para el detalle.
+> checkpoint final. Ver [`SECURITY_AUDIT.md`](SECURITY_AUDIT.md) y
+> [`ARCHITECTURE_AUDIT.md`](ARCHITECTURE_AUDIT.md) para el detalle.
 
 ## Nota de gobernanza
 Estos cambios son de programación. Según la política de la organización, conviene

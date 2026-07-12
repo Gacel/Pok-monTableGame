@@ -3,25 +3,31 @@
 > Documento vivo. Todas las rutas las sirve `game-service` (transición: aún hace de
 > auth/user service). Entrada por el gateway Nginx en `https://localhost`.
 >
-> **Autenticación:** un hook `onRequest` global exige **JWT** (`Authorization: Bearer
-> <token>`) en TODAS las rutas salvo la allowlist. El JWT se obtiene en signup/login/
-> Google. Ver `docs/ARCHITECTURE.md §7` y `docs/PROGRESSION.md`.
+> **Autenticación:** un hook `onRequest` global exige sesión en TODAS las rutas
+> salvo la allowlist. La sesión viaja en una **cookie `HttpOnly`+`Secure`+`SameSite`**
+> (ya no por header `Authorization` ni por query string) — ver
+> [`03-ARCHITECTURE.md` §7](03-ARCHITECTURE.md) y [`08-AUTH.md`](08-AUTH.md) para el
+> detalle del modelo de auth (contraseña + 2FA).
 >
-> **Rutas públicas (sin JWT):** `/health`, `/api/auth/signup`, `/api/auth/login`,
-> `/api/auth/google/login`, `/api/auth/google/callback`, y `/ws` (verifica el token
-> por query string, no por header).
+> **Rutas públicas (sin sesión):** `/health`, `/api/auth/signup`, `/api/auth/login`,
+> `/api/auth/google/callback`, y `/ws` (verifica la sesión dentro del handler, ya no
+> por query string tras el rewrite de seguridad).
 
 ---
 
 ## Auth (`/api/auth`)
 
-| Método | Ruta | Body | Respuesta | Notas |
+> Referencia completa (modelo, login de pruebas, migración): [`08-AUTH.md`](08-AUTH.md).
+
+| Método | Ruta | Body | Efecto | Notas |
 |---|---|---|---|---|
-| POST | `/api/auth/signup` | `{ email }` | `{ success, token, user }` | Crea cuenta (409 si ya existe). Público. |
-| POST | `/api/auth/login` | `{ email }` | `{ success, token, user }` | Solo cuentas existentes (404 si no). Público. |
-| POST | `/api/auth/register` | `{ username, avatarUrl }` | `{ success, user }` | Perfil del usuario **autenticado** (id del JWT). |
-| GET | `/api/auth/google/login` | — | redirect | OAuth2 Google (solo si hay credenciales). Público. |
-| GET | `/api/auth/google/callback` | — | redirect `/?token=<jwt>` | Público. |
+| POST | `/api/auth/signup` | `{ name, email, password, age, student42 }` | Crea cuenta, set-cookie | Público. |
+| POST | `/api/auth/login` | `{ email, password, code? }` | Inicia sesión, set-cookie | `code` requerido si el usuario tiene 2FA activo. Público. |
+| POST | `/api/auth/logout` | — | Limpia la cookie | |
+| POST | `/api/auth/register` | `{ username, avatarUrl }` | Completa perfil | Usuario **autenticado** (id de la sesión). |
+| POST | `/api/auth/2fa/setup` | — | Genera secreto TOTP | Autenticado. |
+| POST | `/api/auth/2fa/enable` | `{ code }` | Verifica y activa 2FA | Autenticado. |
+| GET | `/api/auth/google/callback` | — | set-cookie + redirect `/` | OAuth2 Google (scaffold). Público. |
 
 ## Usuarios (`/api/users`)
 
@@ -50,6 +56,19 @@
 
 | GET | `/api/shop/balls` | — | `{ balls:[{key,price,dist,goodChance}] }` |
 | POST | `/api/shop/ball` | `{ ball }` | `{ pokemon:{name,tier}, coins }` | Valida saldo (402), resta, tira tier del pool de 200, concede. |
+
+## Subastas (`/api/auctions`)
+
+> Referencia completa (modos de venta, comisiones, escrow): [`09-AUCTIONS.md`](09-AUCTIONS.md).
+
+| Método | Ruta | Body | Descripción |
+|---|---|---|---|
+| GET | `/api/auctions` | — | Subastas activas (liquida vencidas primero) |
+| GET | `/api/auctions/mine` | — | Mis subastas (historial) |
+| POST | `/api/auctions` | `{ kind, pokemonId?/itemKind?+itemKey?, startingPrice?, buyNowPrice?, durationHours }` | Publicar lote |
+| POST | `/api/auctions/:id/bid` | `{ amount }` | Pujar |
+| POST | `/api/auctions/:id/buy` | — | Comprar ya |
+| POST | `/api/auctions/:id/cancel` | — | Cancelar (solo si no tiene pujas) |
 
 ## Arena (`/api/arena`) — mundo vivo persistente
 

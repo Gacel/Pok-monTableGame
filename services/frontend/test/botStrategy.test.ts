@@ -7,7 +7,7 @@ import type { Hex, Pokemon, PokemonType } from '@transcendence/shared';
 /**
  * Tests de la IA del bot local (lógica PURA). Cubre los 3 niveles de dificultad,
  * el remate (kill), evitar combates desfavorables (DIFÍCIL) y el fallback codicioso
- * (NORMAL). Ver services/frontend/src/controllers/botStrategy.ts y docs/RESPONSIVE.md
+ * (NORMAL). Ver services/frontend/src/controllers/botStrategy.ts y docs/10-RESPONSIVE.md
  * (la IA es parte del modo un jugador).
  */
 

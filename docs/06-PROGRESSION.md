@@ -95,7 +95,7 @@ devuelve a Welcome si el token ya no corresponde a un usuario.
   (`OwnedPokemonModel.transfer`) requiere: modo/flag `survival`, inyectar el mapa
   `slot→userId` y el `ownedId` de cada Pokémon en el motor (`board.ts:Pokemon`,
   `placements`), y engancharlo en `GameService.finalizeCombat` justo antes de retirar
-  la pieza KO. Ver `docs/FRONTEND_MENU.md §4.3`.
+  la pieza KO. Ver [`05-FRONTEND_MENU.md` §4.3](05-FRONTEND_MENU.md).
 
 ---
 

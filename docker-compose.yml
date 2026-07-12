@@ -1,4 +1,4 @@
-# docker-compose.yml — orquestación total (ver docs/LOCAL_DEV.md)
+# docker-compose.yml — orquestación total (ver docs/02-LOCAL_DEV.md)
 # Fase 0: solo el servicio temporal `hello` para validar el pipeline.
 # A medida que avance el plan se añadirán: gateway, vault, auth-service, etc.
 

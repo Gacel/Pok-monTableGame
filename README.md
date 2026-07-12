@@ -12,9 +12,9 @@ Un juego de mesa táctico multijugador por turnos sobre un tablero hexagonal, in
 *   **Combate Táctico Hexagonal**: Movimientos basados en patrones (Volador, Tanque, Velocista), sistema de debilidades elementales, control de zonas y modificadores de terreno.
 *   **Gestión de Recursos**: Dinámica tipo Catan donde controlar biomas genera recursos (Candies y Berries) necesarios para evolucionar.
 *   **Tiempo Real**: Sincronización autoritativa y baja latencia a través de WebSockets (WSS).
-*   **Seguridad y Autenticación**: JWT con OAuth2 (Google Sign-In), 2FA mediante TOTP, gestión estricta de secretos (HashiCorp Vault) y proxy inverso protegido mediante WAF (ModSecurity).
+*   **Seguridad y Autenticación**: JWT + login con contraseña y 2FA (TOTP) ya implementados; OAuth2 (Google Sign-In) con scaffold; gestión de secretos vía Vault y WAF ModSecurity siguen siendo objetivo de diseño, no implementados aún.
 *   **Oponente IA**: Modo un jugador integrado con un oponente controlado por heurísticas que reacciona a los cambios en el tablero con visión limitada.
-*   **Monorepo Microservicios**: Backend modular altamente escalable, orquestado con Docker y comunicados mediante eventos asíncronos (RabbitMQ).
+*   **Monorepo Microservicios**: pensado para ser modular y comunicarse mediante eventos asíncronos (RabbitMQ); hoy la lógica de auth/usuarios/partida vive toda en un único `game-service`, y RabbitMQ/Redis/Vault aún no tienen código — ver [`docs/README.md`](./docs/README.md) para el estado real detallado.
 
 ## 🏗️ Arquitectura y Stack Tecnológico
 
@@ -55,12 +55,15 @@ Levanta la infraestructura completa mediante Make:
 make up
 ```
 
-Esto compilará y ejecutará:
+Esto compilará y ejecutará los servicios que existen hoy:
 - **API Gateway (Nginx)** en `https://localhost` (usa certificados self-signed).
-- **Vault** para gestión de secretos en local.
-- **RabbitMQ** y **Redis**.
-- Los microservicios (`auth`, `game`, `user`, etc.).
+- **`game-service`**: backend Fastify + SQLite (juego, auth y usuarios — ver nota abajo).
 - El **Frontend** servido directamente en la raíz.
+
+*Vault, RabbitMQ y Redis todavía no tienen servicio en `docker-compose.yml` — están
+reservados (volúmenes con nombre) pero sin implementar; `auth-service`, `user-service`,
+`status-service`, `mail-service` y `pokeapi-proxy` tampoco existen como código propio
+todavía, sus responsabilidades las cubre `game-service` de forma provisional.*
 
 *Nota: La primera vez puede tardar unos minutos en descargar las imágenes base.*
 
@@ -72,13 +75,13 @@ Esto compilará y ejecutará:
 
 ## 🗺️ Mapa de Ruta (Roadmap)
 
-El desarrollo está organizado en las siguientes fases detalladas en [`docs/IMPLEMENTATION_PLAN.md`](./docs/IMPLEMENTATION_PLAN.md). El estado detallado y el registro de avances está en [`docs/AUTONOMOUS_SESSION.md`](./docs/AUTONOMOUS_SESSION.md); la arquitectura (objetivo vs. real) en [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md).
+El desarrollo está organizado en las fases detalladas en [`docs/01-IMPLEMENTATION_PLAN.md`](./docs/01-IMPLEMENTATION_PLAN.md). El diseño táctico del motor de combate (con estado por fase y cita de archivo:línea) está en [`docs/11-GAME_DESIGN_ROADMAP.md`](./docs/11-GAME_DESIGN_ROADMAP.md). La arquitectura (objetivo vs. real) está en [`docs/03-ARCHITECTURE.md`](./docs/03-ARCHITECTURE.md); el índice completo de documentación en [`docs/README.md`](./docs/README.md).
 
 - [x] **FASE 0**: Cimientos del repo, Monorepo & Gateway (SSL).
-- [ ] **FASE 1**: Seguridad & Auth (Vault, JWT, OAuth2, 2FA, RabbitMQ) — *pendiente; auth mock provisional en game-service*.
-- [~] **FASE 2**: Core de juego — ✅ tablero hexagonal, patrones de movimiento, **combate por turnos**, **modificadores de terreno**, **recursos (Catan)**, backend **MVC** autoritativo con persistencia SQLite y graceful shutdown. WSS pendiente.
-- [~] **FASE 3**: Frontend — ✅ SPA (TS + Tailwind) con render del tablero, **turnos, resaltado de movimientos/ataques, combate, recursos y pantalla de victoria**. PokeAPI proxy + Redis y user-service pendientes.
-- [ ] **FASE 4**: IA & Hardening (Oponente automático, tests de carga, auditoría final).
+- [~] **FASE 1**: Seguridad & Auth — ✅ login con contraseña (scrypt), **2FA (TOTP)**, JWT endurecido en cookie HttpOnly; OAuth2 Google con scaffold. Vault y RabbitMQ siguen sin implementar; auth vive en `game-service`, no en un `auth-service` propio.
+- [x] **FASE 2**: Core de juego — tablero hexagonal, patrones de movimiento, combate por turnos, modificadores de terreno, recursos (Catan), sigilo/emboscada en hierba alta, backend **MVC** autoritativo con persistencia SQLite, graceful shutdown y **WSS** (sync de tablero + chat).
+- [~] **FASE 3**: Frontend — SPA (TS + Tailwind) con render del tablero, turnos, combate, recursos, minimapa, **draft de equipos**, **casa de subastas**, tienda/inventario, diseño **responsive**, y sync en vivo por WSS. `pokeapi-proxy` + Redis y `user-service` propios siguen pendientes (PokeAPI se llama directo desde el cliente/servidor).
+- [~] **FASE 4**: IA & Hardening — ✅ oponente IA local por heurísticas (draft + combate), auditoría de seguridad/arquitectura ya realizada (ver [`docs/archive/`](./docs/archive/)) y resuelta en [`docs/08-AUTH.md`](./docs/08-AUTH.md). Pendiente: rate limiting, tests de carga, CI, y evolución de Pokémon (no implementada todavía) — ver [`docs/13-SECURITY_CHECKLIST.md`](./docs/13-SECURITY_CHECKLIST.md).
 
 > **Arquitectura MVC** aplicada en backend (`models`/`controllers`/`routes`/`services` +
 > `engine` puro) y frontend (`models`/`views`/`controllers`). El **servidor es la única

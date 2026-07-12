@@ -192,7 +192,7 @@ function resizeGameArea() {
  * Muestra el aviso "gira el dispositivo" SOLO cuando el tablero está activo y el
  * dispositivo está en vertical y es estrecho (móvil). El tablero 16:10 no es
  * jugable en portrait; los menús sí reflowan y no necesitan aviso.
- * Ver docs/RESPONSIVE.md.
+ * Ver docs/10-RESPONSIVE.md.
  */
 function updateRotateOverlay() {
   const overlay = document.getElementById('rotate-overlay');

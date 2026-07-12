@@ -2,8 +2,10 @@
 
 > Documento vivo. Describe la **navegación del hub** (todas las pantallas fuera del
 > tablero), su **estado real** y el **árbol objetivo** que estamos construyendo.
-> Complementa `docs/ARCHITECTURE.md §2.2` (MVC frontend). Se actualiza a medida que
-> las pantallas pasan a "Done".
+> Complementa [`03-ARCHITECTURE.md` §2.2](03-ARCHITECTURE.md) (MVC frontend) y
+> [`14-FRONTEND_ARCHITECTURE.md`](14-FRONTEND_ARCHITECTURE.md) (el resto del
+> frontend, fuera del árbol de menús). Se actualiza a medida que las pantallas
+> pasan a "Done".
 >
 > **Leyenda:** ⬜ pendiente · 🟧 en curso · ✅ hecho · 🔒 bloqueado (placeholder navegable).
 

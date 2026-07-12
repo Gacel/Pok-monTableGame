@@ -20,7 +20,7 @@ export interface HubPanelOpts {
 /**
  * Marco "consola" grande y centrado. Envuelve el contenido interior.
  *
- * RESPONSIVE (ver docs/RESPONSIVE.md): la capa #hub-layer se renderiza a tamaño
+ * RESPONSIVE (ver docs/10-RESPONSIVE.md): la capa #hub-layer se renderiza a tamaño
  * REAL del dispositivo (fuera del lienzo 1600×1000 escalado), así que aquí usamos
  * medidas fluidas en lugar de px fijos:
  *   - ancho:  min(width px, 96vw)  → nunca desborda en móvil

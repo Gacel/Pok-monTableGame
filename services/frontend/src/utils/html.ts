@@ -1,7 +1,7 @@
 /**
  * Escapado de datos dinámicos antes de inyectarlos en el DOM vía innerHTML.
  * ÚNICA implementación (antes había 4 divergentes; algunas NO escapaban las
- * comillas, permitiendo romper atributos). Ver docs/audit/SECURITY_AUDIT.md #5.
+ * comillas, permitiendo romper atributos). Ver docs/archive/SECURITY_AUDIT.md #5.
  */
 const MAP: Record<string, string> = {
   '&': '&amp;',

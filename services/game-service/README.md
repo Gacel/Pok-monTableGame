@@ -74,7 +74,7 @@ desconecta en `waiting` >30 s, la sala se cierra; las salas inactivas se barren
 a los 30 min.
 
 > Las rutas `auth`/`users` son **provisionales** hasta que existan `auth-service` y
-> `user-service` como microservicios propios (ver `docs/ARCHITECTURE.md`).
+> `user-service` como microservicios propios (ver `docs/03-ARCHITECTURE.md`).
 
 ## Modelo de juego
 
@@ -87,7 +87,7 @@ a los 30 min.
 - **Ataques (moves)**: cada Pokémon lleva ≤4 ataques reales importados y curados de
   PokeAPI (tablas `moves`/`pokemon_moves`). Los especiales cuestan 1 candy del tipo
   del ataque; los físicos son gratis. La ventaja de tipo la aporta el **tipo del
-  movimiento**. Detalle en `docs/MOVES_SYSTEM.md`.
+  movimiento**. Detalle en `docs/04-MOVES_SYSTEM.md`.
 - **Recursos** (Catan): cada turno, cada Pokémon genera el "candy" de su bioma.
 - **Victoria**: quedarse sin Pokémon en el tablero.
 
@@ -108,4 +108,4 @@ npm run dev     # tsx watch src/server.ts
 npm test        # vitest (motor + integración de GameService)
 ```
 
-Sin Node en el host, usa Docker (ver `docs/LOCAL_DEV.md`).
+Sin Node en el host, usa Docker (ver `docs/02-LOCAL_DEV.md`).

@@ -1,5 +1,10 @@
 # Auditoría de arquitectura MVC — Transcendence Pokémon Edition
 
+> **[HISTÓRICO]** Auditoría puntual del 2026-07-05. Los hallazgos "Corregido" ya
+> están aplicados en el código actual; los "Diferido" siguen pendientes — ver
+> [`docs/03-ARCHITECTURE.md`](../03-ARCHITECTURE.md) para el estado vigente y
+> [`REFACTOR_PLAN.md`](REFACTOR_PLAN.md) para el plan de remediación derivado.
+
 > Fecha: 2026-07-05 · Alcance: `services/game-service/`, `services/frontend/`,
 > `packages/shared/`. Metodología: 2 agentes en paralelo (backend y frontend).
 

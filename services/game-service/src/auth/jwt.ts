@@ -5,7 +5,7 @@ import { randomBytes } from 'node:crypto';
  * Firma y verificación de JWT de sesión.
  *
  * El secreto sale de `JWT_SECRET` (en producción, inyectado desde Vault; ver
- * docs/ARCHITECTURE.md §7). Ya NO existe el antiguo fallback hardcodeado
+ * docs/03-ARCHITECTURE.md §7). Ya NO existe el antiguo fallback hardcodeado
  * (predecible → inseguro). Si falta la variable, se genera un secreto ALEATORIO
  * efímero (seguro, impredecible) y se avisa: no se aborta el arranque, pero las
  * sesiones no sobreviven a reinicios hasta configurar JWT_SECRET.

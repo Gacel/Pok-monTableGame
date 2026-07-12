@@ -1,5 +1,10 @@
 # AUTONOMOUS_SESSION.md — Registro de trabajo autónomo
 
+> **[HISTÓRICO]** Diario de una sesión puntual (2026-07-01). Documento archivado:
+> ya no refleja el estado actual del proyecto. Para arquitectura y estado vigentes
+> ver [`docs/03-ARCHITECTURE.md`](../03-ARCHITECTURE.md); para auth ver
+> [`docs/08-AUTH.md`](../08-AUTH.md).
+
 > Diario de la sesión de trabajo autónomo (sin intervención humana) solicitada el
 > **2026-07-01**. Objetivo: revisar y mejorar el proyecto siguiendo la
 > especificación técnica, aplicando **MVC**, **SQLite3**, y mejorando la

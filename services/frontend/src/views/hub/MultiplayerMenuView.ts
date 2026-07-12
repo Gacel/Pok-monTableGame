@@ -4,7 +4,7 @@ import { FONT, hubPanel, panelTitle, panelCard, menuButton, backButton } from '.
 
 type Channel = 'local' | 'online';
 
-/** Config de un modo del árbol → parámetros reales del motor. Ver docs/FRONTEND_MENU.md §4.2 */
+/** Config de un modo del árbol → parámetros reales del motor. Ver docs/05-FRONTEND_MENU.md §4.2 */
 interface ModePreset {
   key: string;
   icon: string;

@@ -18,7 +18,7 @@
 
       <!-- CAPA DE MENÚS (HUB) — a tamaño REAL del dispositivo (fuera del lienzo
            escalado) para que los breakpoints responsive de Tailwind respondan al
-           viewport real. Scroll propio en pantallas bajas. Ver docs/RESPONSIVE.md. -->
+           viewport real. Scroll propio en pantallas bajas. Ver docs/10-RESPONSIVE.md. -->
       <div id="hub-layer" class="absolute inset-0 z-[80] flex flex-col items-center bg-gray-900 overflow-y-auto overscroll-contain transition-opacity duration-500"></div>
 
       <!-- CAPA DE DRAFT (selección de equipos) — también a tamaño real. -->
@@ -40,7 +40,7 @@
 
           <!-- NOTA: #hub-layer y #draft-layer se movieron a nivel de #app (tamaño real
                del dispositivo). Aquí solo queda el TABLERO, que sí usa el lienzo
-               1600×1000 escalado. Ver docs/RESPONSIVE.md. -->
+               1600×1000 escalado. Ver docs/10-RESPONSIVE.md. -->
 
           <!-- Game Layer -->
           <div id="game-layer" class="absolute inset-0 z-10 hidden bg-black flex overflow-hidden">

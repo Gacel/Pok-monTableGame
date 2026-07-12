@@ -8,7 +8,16 @@
 en Antigravity, déjalo trabajar solo sobre los archivos de ese componente, levántalo
 en local y verifícalo con sus **Criterios de aceptación** antes de pasar al siguiente.
 
-**Leyenda de estado:** ⬜ pendiente · 🟧 en curso · ✅ hecho.
+**Leyenda de estado:** ⬜ pendiente · 🟧 en curso/parcial · ✅ hecho.
+
+> **Nota (2026-07-11):** los estados de este documento se refrescaron para reflejar
+> el código actual. Resumen rápido — ver [`docs/README.md`](README.md) para el
+> detalle completo: gran parte de Auth (C1.3–C1.6), todo el core de juego (Fase 2,
+> incluida WSS) y gran parte del frontend (Fase 3, salvo evolución) están hechos,
+> pero **todo vive dentro de `game-service` y `frontend`**, no en los
+> microservicios separados que describe el plan original (`auth-service`,
+> `user-service`, `pokeapi-proxy`, `status-service`, `mail-service` no existen como
+> código). Vault, ModSecurity, RabbitMQ y Redis tampoco están implementados.
 
 ---
 
@@ -48,7 +57,7 @@ FASE 4  IA & Hardening  (Sprint 4)
 
 # FASE 0 — Cimientos del repo
 
-### ⬜ C0.1 — Monorepo & tooling
+### ✅ C0.1 — Monorepo & tooling
 - **Objetivo:** estructura de carpetas, workspaces y configuración base compartida.
 - **Depende de:** —
 - **Entregables:**
@@ -66,7 +75,7 @@ FASE 4  IA & Hardening  (Sprint 4)
   > con targets `up/down/logs/ps`. Crea `packages/shared` con `package.json` e `index.ts`.
   > No crees servicios todavía. Verifica con `npm install` y `tsc --noEmit`.
 
-### ⬜ C0.2 — Docker base & compose
+### ✅ C0.2 — Docker base & compose
 - **Objetivo:** orquestación mínima que arranca con un comando.
 - **Depende de:** C0.1
 - **Entregables:**
@@ -101,7 +110,7 @@ FASE 4  IA & Hardening  (Sprint 4)
 
 # FASE 1 — Seguridad & Auth (Sprint 1)
 
-### ⬜ C1.1 — HashiCorp Vault (local dev)
+### ⬜ C1.1 — HashiCorp Vault (local dev) — *no implementado, solo placeholders en `.env.example`*
 - **Objetivo:** gestión central de secretos; nada sensible en `.env`.
 - **Depende de:** C0.2
 - **Entregables:**
@@ -116,7 +125,7 @@ FASE 4  IA & Hardening  (Sprint 4)
   > (placeholders para jwt, google_oauth, smtp). Implementa `packages/shared/vault.ts`
   > con `getSecret(path)`. Demuestra que un servicio lee un secreto al arrancar.
 
-### ⬜ C1.2 — ModSecurity WAF en el gateway
+### ⬜ C1.2 — ModSecurity WAF en el gateway — *no implementado; el gateway solo tiene Nginx + cabeceras de seguridad*
 - **Objetivo:** endurecer Nginx como WAF (OWASP CRS).
 - **Depende de:** C0.3
 - **Entregables:**
@@ -130,7 +139,7 @@ FASE 4  IA & Hardening  (Sprint 4)
   > Activa reglas anti-inyección con `SecRuleEngine` conmute entre `On`/`DetectionOnly`
   > por variable de entorno. Verifica con una petición maliciosa de prueba que se loguea.
 
-### ⬜ C1.3 — Auth Service (base, Fastify + SQLite)
+### 🟧 C1.3 — Auth Service (base, Fastify + SQLite) — *implementado, pero dentro de `game-service`, no como `auth-service` propio*
 - **Objetivo:** registro/login con almacenamiento seguro.
 - **Depende de:** C1.1
 - **Entregables:**
@@ -145,7 +154,7 @@ FASE 4  IA & Hardening  (Sprint 4)
   > de esquema (Fastify schema). Lee el secreto de pepper desde Vault. Enruta `/api/auth`
   > en el gateway. Verifica registrando y logueando un usuario.
 
-### ⬜ C1.4 — JWT (issue/verify) + middleware compartido
+### ✅ C1.4 — JWT (issue/verify) + middleware compartido — *hecho en `game-service/src/auth/jwt.ts`, ver [`08-AUTH.md`](08-AUTH.md)*
 - **Objetivo:** sesiones stateless y middleware de auth reutilizable.
 - **Depende de:** C1.3
 - **Entregables:**
@@ -159,7 +168,7 @@ FASE 4  IA & Hardening  (Sprint 4)
   > secreto de Vault. Crea `packages/shared/auth.ts` con `verifyJwt()` y un hook Fastify
   > `requireAuth`. Protege una ruta de ejemplo. Verifica 401/200 según token.
 
-### ⬜ C1.5 — OAuth 2.0 (Google Sign-in)
+### 🟧 C1.5 — OAuth 2.0 (Google Sign-in) — *scaffold presente (`google/callback`), no verificado end-to-end*
 - **Objetivo:** login federado con Google.
 - **Depende de:** C1.4
 - **Entregables:** flujo OAuth2 (redirect + callback), vinculación a usuario, credenciales en Vault.
@@ -170,7 +179,7 @@ FASE 4  IA & Hardening  (Sprint 4)
   > client_id/secret desde Vault, crea/vincula usuario y emite JWT. Incluye un modo mock
   > para test local sin credenciales reales. Verifica el flujo callback→JWT.
 
-### ⬜ C1.6 — 2FA (TOTP)
+### ✅ C1.6 — 2FA (TOTP) — *hecho, ver [`08-AUTH.md`](08-AUTH.md)*
 - **Objetivo:** segundo factor por TOTP/código.
 - **Depende de:** C1.4, (C1.7 para envío por correo)
 - **Entregables:** activar/desactivar 2FA, generación QR TOTP, verificación en login.
@@ -181,7 +190,7 @@ FASE 4  IA & Hardening  (Sprint 4)
   > `POST /2fa/verify`, y paso intermedio en `login` cuando esté activo. Usa una
   > librería TOTP estándar. Verifica el flujo enable→login con código.
 
-### ⬜ C1.7 — Mail Service (async vía RabbitMQ)
+### ⬜ C1.7 — Mail Service (async vía RabbitMQ) — *no implementado*
 - **Objetivo:** envío asíncrono de correos (códigos 2FA, notificaciones).
 - **Depende de:** C1.1, C2.1 (RabbitMQ) — *se puede adelantar RabbitMQ aquí*
 - **Entregables:** `services/mail-service` que consume cola `mail.send`; SMTP desde Vault; MailHog en dev.
@@ -196,7 +205,7 @@ FASE 4  IA & Hardening  (Sprint 4)
 
 # FASE 2 — Comunicación & Core de juego (Sprint 2)
 
-### ⬜ C2.1 — RabbitMQ (broker + contratos de eventos)
+### ⬜ C2.1 — RabbitMQ (broker + contratos de eventos) — *no implementado*
 - **Objetivo:** bus de eventos asíncronos entre servicios.
 - **Depende de:** C0.2
 - **Entregables:** servicio `rabbitmq` (con management UI), `packages/shared/events.ts` con tipos de eventos.
@@ -207,7 +216,7 @@ FASE 4  IA & Hardening  (Sprint 4)
   > contratos (`MailSend`, `PokemonEvolved`, …) y un helper `publish/consume`. Demuestra
   > publish→consume entre dos servicios de prueba.
 
-### ⬜ C2.2 — Game Service (base, Fastify + SQLite)
+### ✅ C2.2 — Game Service (base, Fastify + SQLite)
 - **Objetivo:** esqueleto del servicio de juego y modelo de estado.
 - **Depende de:** C1.4, C2.1
 - **Entregables:** `services/game-service`, migraciones `matches`, `match_state`; auth con JWT compartido.
@@ -218,7 +227,7 @@ FASE 4  IA & Hardening  (Sprint 4)
   > `match_state` (JSON serializado del tablero). Rutas `POST /matches`, `GET /matches/:id`
   > protegidas con `requireAuth`. Enruta `/api/game` en el gateway. Verifica crear/leer partida.
 
-### ⬜ C2.3 — Motor del tablero hexagonal (lógica pura)
+### ✅ C2.3 — Motor del tablero hexagonal (lógica pura)
 - **Objetivo:** representación del tablero hex y biomas. **Lógica pura testeable.**
 - **Depende de:** —  (puede desarrollarse en paralelo; se integra en C2.2)
 - **Entregables:**
@@ -233,7 +242,7 @@ FASE 4  IA & Hardening  (Sprint 4)
   > vecindad, distancia, y losetas con bioma (Fuego/Agua/Bosque) y ocupante. Añade
   > serializar/deserializar estado. Escribe tests unitarios de coordenadas y biomas. Sin red.
 
-### ⬜ C2.4 — Patrones de movimiento (Ajedrez)
+### ✅ C2.4 — Patrones de movimiento (Ajedrez)
 - **Objetivo:** movimiento por tipo, validado en servidor.
 - **Depende de:** C2.3
 - **Entregables:**
@@ -248,7 +257,7 @@ FASE 4  IA & Hardening  (Sprint 4)
   > Velocista (saltos tipo caballo) adaptados a la malla hex. Expón `getLegalMoves()` y
   > `isMoveLegal()`. Tests por patrón y bordes del tablero.
 
-### ⬜ C2.5 — Generación de recursos (Catan)
+### ✅ C2.5 — Generación de recursos (Catan)
 - **Objetivo:** control de loseta → recursos por turno.
 - **Depende de:** C2.3
 - **Entregables:** Candies/Berries por bioma controlado; acumulación por turno; tope/balance.
@@ -259,7 +268,7 @@ FASE 4  IA & Hardening  (Sprint 4)
   > una loseta genera el recurso del bioma (Candies/Berries). Función `collectResources(state)`.
   > Tests que simulen turnos y verifiquen totales.
 
-### ⬜ C2.6 — Modificadores ambientales
+### ✅ C2.6 — Modificadores ambientales
 - **Objetivo:** efectos de terreno sobre stats y movimiento.
 - **Depende de:** C2.3, C2.4
 - **Entregables:**
@@ -273,7 +282,7 @@ FASE 4  IA & Hardening  (Sprint 4)
   > Río (Agua ignora penalización de movimiento, Fuego no puede entrar). Integra con
   > movimiento y combate. Tests de stats efectivos y bloqueos.
 
-### ⬜ C2.7 — Combate por turnos
+### ✅ C2.7 — Combate por turnos
 - **Objetivo:** resolución de combate al coincidir en casilla / rango.
 - **Depende de:** C2.6
 - **Entregables:** máquina de turnos, cálculo de daño con tipos y entorno, fin con un derrotado.
@@ -284,7 +293,7 @@ FASE 4  IA & Hardening  (Sprint 4)
   > combate por turnos; calcula daño con stats base, ventaja de tipo y modificadores de
   > entorno; termina con un Pokémon derrotado. Tests deterministas de varios enfrentamientos.
 
-### ⬜ C2.8 — WebSockets (wss): sync autoritativa + chat
+### ✅ C2.8 — WebSockets (wss): sync autoritativa + chat
 - **Objetivo:** tiempo real con el servidor como árbitro.
 - **Depende de:** C2.2, C2.4–C2.7
 - **Entregables:**
@@ -299,7 +308,7 @@ FASE 4  IA & Hardening  (Sprint 4)
   > **antes** de actualizar y difundir `state`. Enruta `/ws` por el gateway (wss). Verifica
   > con dos clientes de prueba que comparten estado.
 
-### ⬜ C2.9 — Status Service (presencia)
+### ⬜ C2.9 — Status Service (presencia) — *no implementado; solo existe el tipo `PresenceStatus` en `packages/shared`*
 - **Objetivo:** estado online/offline/in-game de los usuarios.
 - **Depende de:** C2.1, C2.8
 - **Entregables:** `services/status-service` que escucha eventos de conexión y expone presencia.
@@ -314,7 +323,7 @@ FASE 4  IA & Hardening  (Sprint 4)
 
 # FASE 3 — Datos & Frontend (Sprint 3)
 
-### ⬜ C3.1 — PokeAPI Proxy + Redis + transform retro
+### ⬜ C3.1 — PokeAPI Proxy + Redis + transform retro — *no implementado; el cliente/servidor llaman a pokeapi.co directo, sin proxy ni caché Redis*
 - **Objetivo:** datos de Pokémon cacheados y convertidos a sprites 8-bit.
 - **Depende de:** C0.2
 - **Entregables:**
@@ -328,7 +337,7 @@ FASE 4  IA & Hardening  (Sprint 4)
   > base y sprites, los normalice a un DTO retro y los cachee en Redis con TTL largo.
   > Añade `redis` al compose. Endpoint `GET /api/poke/:name`. Verifica cache hit en la 2ª llamada.
 
-### ⬜ C3.2 — User Management
+### 🟧 C3.2 — User Management — *implementado dentro de `game-service` (`/api/users/*`), no como `user-service` propio*
 - **Objetivo:** perfiles, amigos y estadísticas.
 - **Depende de:** C1.4
 - **Entregables:** `services/user-service` (perfil, avatar, amigos, stats agregadas).
@@ -338,7 +347,7 @@ FASE 4  IA & Hardening  (Sprint 4)
   > Crea `services/user-service` (Fastify + SQLite): perfil, amigos (solicitar/aceptar) y
   > estadísticas. Rutas `/api/users/*` protegidas con JWT. Verifica el flujo perfil+amigos+stats.
 
-### ⬜ C3.3 — Frontend SPA scaffold (TS + Tailwind)
+### ✅ C3.3 — Frontend SPA scaffold (TS + Tailwind)
 - **Objetivo:** base del frontend sin frameworks de UI.
 - **Depende de:** C0.3
 - **Entregables:** Vite + TS + Tailwind, router SPA propio, build servido por Nginx en `/`.
@@ -349,7 +358,7 @@ FASE 4  IA & Hardening  (Sprint 4)
   > propio (history API) y vistas placeholder (Home, Login, Lobby, Game). Sírvelo desde
   > el gateway en `/`. Verifica navegación SPA en `https://localhost`.
 
-### ⬜ C3.4 — Auth UI
+### ✅ C3.4 — Auth UI
 - **Objetivo:** interfaz de registro/login/2FA/OAuth.
 - **Depende de:** C3.3, C1.4–C1.6
 - **Entregables:** formularios validados, manejo de JWT en memoria, flujo 2FA y botón Google.
@@ -360,7 +369,7 @@ FASE 4  IA & Hardening  (Sprint 4)
   > Guarda el access token en memoria y refresca con el refresh token vía cookie httpOnly.
   > Protege rutas del SPA. Verifica login→vista protegida.
 
-### ⬜ C3.5 — Draft UI (6 de 8)
+### ✅ C3.5 — Draft UI — *implementado como draft 3v3 de un roster mayor, no "6 de 8" literal (ver `DraftView.ts`)*
 - **Objetivo:** selección de equipo desde el proxy cacheado.
 - **Depende de:** C3.3, C3.1
 - **Entregables:** pantalla de draft que pide 8 Pokémon al proxy y deja elegir 6.
@@ -370,7 +379,7 @@ FASE 4  IA & Hardening  (Sprint 4)
   > Crea la vista Draft: pide 8 Pokémon a `/api/poke`, muestra sprites retro y permite
   > elegir 6 (valida el conteo). Envía la selección al `game-service`. Verifica con caché caliente.
 
-### ⬜ C3.6 — Render del tablero + cliente WSS
+### ✅ C3.6 — Render del tablero + cliente WSS
 - **Objetivo:** dibujar el tablero hex retro y conectar el tiempo real.
 - **Depende de:** C3.3, C2.8
 - **Entregables:** render hex con bitmaps, cliente WSS, envío de `move`, recepción de `state`.
@@ -381,7 +390,7 @@ FASE 4  IA & Hardening  (Sprint 4)
   > WSS que envíe `move` y aplique `state`/`combat` recibidos. Sin lógica de juego en cliente
   > (solo render + input). Verifica dos pestañas sincronizadas.
 
-### ⬜ C3.7 — UI de recursos/biomas
+### ✅ C3.7 — UI de recursos/biomas
 - **Objetivo:** mostrar economía y control de losetas.
 - **Depende de:** C3.6, C2.5
 - **Entregables:** panel de recursos (Candies/Berries), indicadores de bioma y control.
@@ -391,7 +400,7 @@ FASE 4  IA & Hardening  (Sprint 4)
   > Añade el panel de recursos y biomas leyendo del `state` del servidor: Candies/Berries
   > por jugador y control de losetas. Verifica que cuadra con la simulación de turnos.
 
-### ⬜ C3.8 — Flujo de evolución
+### ⬜ C3.8 — Flujo de evolución — *no implementado (sin referencias a "evolución" en el código); ver [`11-GAME_DESIGN_ROADMAP.md`](11-GAME_DESIGN_ROADMAP.md)*
 - **Objetivo:** evolucionar cumpliendo nivel + inversión de recursos.
 - **Depende de:** C3.7, C2.1
 - **Entregables:** acción de evolución (servidor valida nivel+recursos), evento `PokemonEvolved` por RabbitMQ, refresco de sprite.
@@ -406,7 +415,7 @@ FASE 4  IA & Hardening  (Sprint 4)
 
 # FASE 4 — IA & Hardening (Sprint 4)
 
-### ⬜ C4.1 — Oponente IA
+### 🟧 C4.1 — Oponente IA — *IA heurística implementada para partida local (`controllers/botStrategy.ts`, `aiDraft.ts`), sin el diseño específico de "1s de visión"*
 - **Objetivo:** IA que simula comportamiento humano.
 - **Depende de:** C2.7, C2.8
 - **Entregables:** IA con **refresco de vista de 1 segundo** (no lee el estado completo en tiempo real), heurística de movimiento/combate, dificultad configurable.
@@ -417,7 +426,7 @@ FASE 4  IA & Hardening  (Sprint 4)
   > y planifique movimientos/combate con heurísticas (control de biomas, ventaja de tipo,
   > seguridad del Pokémon). Modo dificultad. Verifica una partida completa humano vs IA.
 
-### ⬜ C4.2 — Graceful shutdown + persistencia de turno
+### ✅ C4.2 — Graceful shutdown + persistencia de turno
 - **Objetivo:** no perder partidas ante reinicios/desconexiones.
 - **Depende de:** C2.2, C2.8
 - **Entregables:** captura de **SIGTERM** → vuelca estado a SQLite antes de salir; guardado al final de cada turno; reanudación.
@@ -428,7 +437,7 @@ FASE 4  IA & Hardening  (Sprint 4)
   > partidas activas a SQLite y cierra limpio. Persiste también al final de cada turno e
   > implementa reanudación. Verifica con `docker stop`/`start` a media partida.
 
-### ⬜ C4.3 — Auditoría de seguridad + tuning WAF
+### 🟧 C4.3 — Auditoría de seguridad + tuning WAF — *auditoría de seguridad ya realizada y mayormente resuelta (ver [`archive/SECURITY_AUDIT.md`](archive/SECURITY_AUDIT.md), [`08-AUTH.md`](08-AUTH.md), [`13-SECURITY_CHECKLIST.md`](13-SECURITY_CHECKLIST.md)); ModSecurity sigue sin implementarse*
 - **Objetivo:** endurecer todo el sistema.
 - **Depende de:** C1.2, todas las rutas
 - **Entregables:** HTTPS/WSS estricto, sanitización server-side revisada, WAF en modo `On`, secretos 100% en Vault, checklist de auditoría.
@@ -436,10 +445,10 @@ FASE 4  IA & Hardening  (Sprint 4)
 - **Criterios de aceptación:** checklist completo; WAF activo sin romper flujos legítimos.
 - **Prompt para Claude:**
   > Realiza una pasada de hardening: fuerza HTTPS/WSS, revisa sanitización en cada ruta
-  > Fastify, pon ModSecurity en `On`, confirma que no hay secretos fuera de Vault y genera
-  > un `docs/SECURITY_CHECKLIST.md`. Verifica con payloads maliciosos de prueba.
+  > Fastify, pon ModSecurity en `On`, confirma que no hay secretos fuera de Vault y actualiza
+  > [`docs/13-SECURITY_CHECKLIST.md`](13-SECURITY_CHECKLIST.md). Verifica con payloads maliciosos de prueba.
 
-### ⬜ C4.4 — Pruebas de carga
+### ⬜ C4.4 — Pruebas de carga — *no realizadas todavía*
 - **Objetivo:** validar rendimiento bajo concurrencia.
 - **Depende de:** C4.1–C4.3
 - **Entregables:** scripts de carga (k6/autocannon) para auth, WSS y proxy; informe de resultados.
@@ -447,8 +456,11 @@ FASE 4  IA & Hardening  (Sprint 4)
 - **Criterios de aceptación:** sin fugas ni caídas bajo carga objetivo; informe generado.
 - **Prompt para Claude:**
   > Crea pruebas de carga con k6 (HTTP) y un cliente WSS concurrente para el `game-service`.
-  > Mide latencia y errores en login, draft (caché) y sincronización de partidas. Genera
-  > `docs/LOAD_TEST_REPORT.md` con los resultados.
+  > Mide latencia y errores en login, draft (caché) y sincronización de partidas. Documenta
+  > los resultados en un nuevo doc numerado (ver convenio en [`docs/README.md`](README.md)).
+
+> **Nota:** este componente no se ha ejecutado; no existe ningún informe de carga
+> todavía (ni fabricado ni real) — pendiente hasta que se realicen las pruebas.
 
 ---
 
@@ -474,7 +486,7 @@ FASE 4  IA & Hardening  (Sprint 4)
     1 candy del tipo del ataque; físicos gratis.
   - API: `POST /api/game/combat/action` acepta `{ action:'MOVE', moveName }`.
   - Frontend: la escena de combate muestra ≤4 botones de ataque + `OBJETO`/`HUIR`.
-- **Doc detallada:** `docs/MOVES_SYSTEM.md`.
+- **Doc detallada:** [`04-MOVES_SYSTEM.md`](04-MOVES_SYSTEM.md).
 - **Pendiente:** mover el fetch/caché a `pokeapi-proxy` + Redis (C3.1); hidratar el
   learnset completo; recalcular ataques al evolucionar (C3.8).
 
@@ -489,7 +501,9 @@ FASE 4  IA & Hardening  (Sprint 4)
 
 ## Checklist global de requisitos ft_transcendence
 
-- [ ] Fastify backend · [ ] TS + Tailwind frontend · [ ] SQLite por servicio
-- [ ] Vault (sin secretos planos) · [ ] ModSecurity WAF · [ ] Nginx gateway + SSL
-- [ ] RabbitMQ · [ ] Redis · [ ] WSS (sync + chat) · [ ] JWT + OAuth2 + 2FA
-- [ ] Graceful shutdown (SIGTERM) · [ ] IA (1s refresh) · [ ] `docker-compose up --build`
+*(refrescado 2026-07-11 contra el código real; ver [`docs/README.md`](README.md) para el detalle por documento)*
+
+- [x] Fastify backend · [x] TS + Tailwind frontend · [~] SQLite por servicio *(solo `game-service` la usa hoy; no hay más servicios)*
+- [ ] Vault (sin secretos planos) · [ ] ModSecurity WAF · [x] Nginx gateway + SSL
+- [ ] RabbitMQ · [ ] Redis · [x] WSS (sync + chat) · [~] JWT + OAuth2 + 2FA *(JWT y 2FA hechos; OAuth2 solo scaffold)*
+- [x] Graceful shutdown (SIGTERM) · [~] IA *(heurística implementada, sin el diseño de "1s refresh")* · [x] `docker-compose up --build`

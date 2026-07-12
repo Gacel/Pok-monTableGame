@@ -77,10 +77,12 @@ Recomendación: agrupa servicios con `profiles:` en `docker-compose.yml`
 
 ## 5. Orden recomendado al desarrollar
 
-Sigue `docs/IMPLEMENTATION_PLAN.md`. En la práctica, ten siempre arriba:
+Sigue [`01-IMPLEMENTATION_PLAN.md`](01-IMPLEMENTATION_PLAN.md). En la práctica, ten siempre arriba:
 
-1. `vault` (secretos) — necesario para casi todo.
-2. `rabbitmq` + `redis` cuando entres en Fase 2/3.
+1. `vault` (secretos) — necesario para casi todo. **Nota:** `vault` no existe
+   todavía en `docker-compose.yml` (ver [`03-ARCHITECTURE.md`](03-ARCHITECTURE.md)); esta
+   sección describe el flujo objetivo, no el actual.
+2. `rabbitmq` + `redis` cuando entres en Fase 2/3 (tampoco implementados hoy).
 3. El servicio en el que trabajas + `gateway`.
 4. `frontend` cuando empieces la Fase 3.
 

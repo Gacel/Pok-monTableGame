@@ -6,7 +6,7 @@
  * añade caché (evita repetir peticiones).
  *
  * NOTA: idealmente debería apuntar al `pokeapi-proxy` interno (Redis) en vez de
- * a pokeapi.co directo; ver docs/audit/ARCHITECTURE_AUDIT.md (frontend #3).
+ * a pokeapi.co directo; ver docs/archive/ARCHITECTURE_AUDIT.md (frontend #3).
  */
 export interface SpritePair {
   /** GIF animado (gen-V black-white) o estático como fallback. */
