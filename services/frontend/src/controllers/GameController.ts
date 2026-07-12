@@ -4,6 +4,7 @@ import { BoardView } from '../views/BoardView';
 import { HUDView } from '../views/HUDView';
 import { EntityView } from '../views/EntityView';
 import { MinimapView } from '../views/MinimapView';
+import { FxLayer } from '../utils/fx';
 import { WsClient } from '../net/WsClient';
 import type { WsMessage } from '../net/WsClient';
 import { apiFetch } from '../net/api';
@@ -25,7 +26,10 @@ export class GameController {
   private hudView: HUDView;
   private entityView: EntityView;
   private minimapView: MinimapView;
+  private fxLayer: FxLayer;
   private canvas: HTMLCanvasElement;
+  /** Firma del último lote de eventos despachado (dedup HTTP resp + eco WS). */
+  private lastEventsSig = '';
 
   private isDragging = false;
   private dragStartX = 0;
@@ -53,6 +57,7 @@ export class GameController {
     this.hudView = new HUDView(this.state);
     this.entityView = new EntityView(this.state, this.boardView);
     this.minimapView = new MinimapView(this.state, this.boardView, this.canvas);
+    this.fxLayer = new FxLayer(this.state, this.boardView);
 
     // Coalescido: el estado notifica en cada mutación (incluida la cámara en cada
     // mousemove del pan). En vez de repintar de forma síncrona por cada notify,
@@ -335,6 +340,12 @@ export class GameController {
 
     this.state.setMatch(newState);
 
+    // Feedback visual: reproducir los eventos de la acción (T0.1). Se omite en la
+    // carga inicial (sin `oldPlayer`) para no reproducir eventos viejos al entrar,
+    // y se deduplica por firma: online, la respuesta HTTP y el eco WS difunden el
+    // mismo estado (broadcastPersonalized incluye al actor).
+    if (oldPlayer) this.dispatchEvents(newState);
+
     // Partida online terminada: la sesión ya no debe reanudarse tras un F5.
     if (this.session && newState.status === 'finished') {
       MatchSession.clear();
@@ -364,6 +375,32 @@ export class GameController {
       this.botActionCount = 0;
     }
     this.maybeRunBot();
+  }
+
+  /**
+   * Reproduce los eventos de feedback visual del DTO (T0.1) sobre el tablero. La
+   * guarda por firma evita el doble disparo cuando el mismo estado llega dos veces
+   * (respuesta HTTP + eco WS de `broadcastPersonalized`). Cada ticket de mecánica
+   * añade su `case`; T0.4 solo cablea `damage` (prueba del pipeline).
+   */
+  private dispatchEvents(state: MatchState): void {
+    const events = state.events;
+    if (!events || events.length === 0) return;
+    const sig = `${state.turn}|${state.currentPlayer}|${JSON.stringify(events)}`;
+    if (sig === this.lastEventsSig) return;
+    this.lastEventsSig = sig;
+
+    for (const ev of events) {
+      if (!ev.hex) continue;
+      switch (ev.kind) {
+        case 'damage':
+          this.fxLayer.floatingNumber(ev.hex, String(ev.delta ?? 0), 'damage');
+          break;
+        // heal, reveal, knockback, dash, capture → sus tickets (T2.3, T1.2, T3.x, T8.5).
+        default:
+          break;
+      }
+    }
   }
 
   private async preloadSprites(state: MatchState): Promise<void> {

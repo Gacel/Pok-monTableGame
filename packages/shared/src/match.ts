@@ -9,6 +9,34 @@ import type { BallKey } from './balls.js';
 export type MatchStatus = 'deployment' | 'active' | 'finished';
 export type CombatAction = 'ATACAR' | 'HABILIDAD' | 'OBJETO' | 'HUIR' | 'MOVE';
 
+/** Tipos de evento puntual de una acción/turno (feedback visual en el cliente). */
+export type TurnEventKind =
+  | 'damage'
+  | 'heal'
+  | 'ko'
+  | 'reveal'
+  | 'knockback'
+  | 'dash'
+  | 'capture';
+
+/**
+ * Evento puntual de una acción/turno, para feedback visual (números flotantes,
+ * flashes, tweens). Efímero: se resetea al inicio de cada acción, viaja en el DTO
+ * y NO se persiste (mismo patrón que `defeats`/`rewards`).
+ */
+export interface TurnEvent {
+  kind: TurnEventKind;
+  /** Id de la pieza implicada (identidad). */
+  pokemonId?: string;
+  /** Casilla donde ocurre (posición para el número flotante / flash). */
+  hex?: Tile['hex'];
+  /** Variación de HP con signo: daño negativo, curación positiva. */
+  delta?: number;
+  /** Origen/destino de un desplazamiento (knockback/dash) — tickets posteriores. */
+  from?: Tile['hex'];
+  to?: Tile['hex'];
+}
+
 /** Estado autoritativo de la partida (DTO que difunde el servidor). */
 export interface MatchStateDTO {
   id: string;
@@ -41,6 +69,8 @@ export interface MatchStateDTO {
    * Efímero, patrón `defeats`: no se persiste, viaja en el DTO y la economía lo consume.
    */
   rewards?: { slot: string; balls: BallKey[] }[];
+  /** Eventos de la última acción para feedback visual. Efímero, no persistido. */
+  events?: TurnEvent[];
 }
 
 /** Alias histórico usado por el frontend. */

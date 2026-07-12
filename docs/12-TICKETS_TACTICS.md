@@ -31,9 +31,9 @@
   la **Épica R** antes de nada.
 - **Fase 3:** sigilo/emboscada ×1.5/niebla de guerra reales; falta revelar al oculto
   golpeado por AoE y el flash de revelado.
-- **Fase 4:** ⚠️ el **daño de pantano es código muerto** (`terrainDamage` lo calcula
-  pero `applyLavaDamage` solo se invoca con `'FIRE'`). Faltan fantasmas-atraviesan y
-  curación de Planta en hierba.
+- **Fase 4:** ✅ el daño de pantano **ya está activo** (T0.2: `applyEndOfTurnEffects`
+  usa el bioma real y el mapa genera losetas `SWAMP`). Faltan fantasmas-atraviesan (T2.1)
+  y curación de Planta en hierba (T2.2).
 - **Fase 5:** knockback/dash/carga inexistentes; `PokemonMove` no tiene esos campos.
 - **Fase 6:** tamaños con infra (`getOccupiedHexes` da 7 hexes a `large`) pero todo
   Pokémon se crea `'medium'`; no hay trazado de línea hex ni redondeo cúbico.
@@ -173,15 +173,34 @@ empujes, capturas), para poder animarlo sin adivinar diffeando estados.
 **Dudas resueltas:** feedback visual completo (D4); eventos estructurados, no diff de HP.
 
 **Criterios de aceptación:**
-- [ ] Cada respuesta/difusión de acción incluye `events` con lo ocurrido.
-- [ ] Un ataque que hace 2 daños y 1 KO emite 3 eventos coherentes.
-- [ ] `events` se reinicia entre acciones (no se acumula).
+- [x] Cada respuesta/difusión de acción incluye `events` con lo ocurrido.
+- [x] Un ataque que hace 2 daños y 1 KO emite los eventos coherentes (damage + ko).
+- [x] `events` se reinicia entre acciones (no se acumula).
 
 **Investigación:** `GameService.cast` (`GameService.ts:388-470`), fog en
 `getStateDTO` (`GameService.ts:192-226`), difusión en `GameActionService.apply`
 (`GameActionService.ts:55-74`), DTO en `packages/shared/src/match.ts`.
 
 **Dependencias:** ninguna (tras TR.1). **Paralelizable:** sí.
+
+### ✅ Resolución (lo realmente hecho)
+
+Sin desviaciones de alcance; se modeló sobre el patrón efímero `defeats`/`rewards` ya
+presente tras el merge (TR.1). Cambios:
+- `packages/shared/src/match.ts`: `TurnEventKind`, `TurnEvent` y `events?: TurnEvent[]` en el DTO.
+- `services/frontend/src/models/Types.ts`: reexport de `TurnEvent`/`TurnEventKind`.
+- `GameService.ts`: campo `events`; reset en las 5 acciones (deploy/play/cast/endTurn/abandon);
+  emite `damage` (delta negativo) + `ko` en el KO del `cast` on-map y en `applyLavaDamage`;
+  ensamblado en `getStateDTO` con **filtro de niebla** (omite eventos de un enemigo aún oculto
+  para el solicitante; conserva los `ko` de piezas ya retiradas). No se serializa.
+- Tests: `services/game-service/test/turnEvents.test.ts` (damage, ko, reset, niebla).
+
+**Nota de scope:** T0.1 solo **emite** `damage`/`ko` (lo que ya existe); `heal`/`reveal`/
+`knockback`/`dash`/`capture` los emitirán sus tickets. Doc detallado:
+[`15-TURN_EVENTS.md`](15-TURN_EVENTS.md).
+
+**Verificación:** tsc 3 workspaces limpio · game-service 13/13 · frontend 17/17 · revisión
+escéptica SAFE (sin issues). Sin cambio visual (el consumo lo hará T0.4).
 
 ## 🎟️ T0.2 — Refactor de efectos de fin de turno + curación + fix SWAMP
 
@@ -202,16 +221,42 @@ lava, para que los biomas importen de verdad.
 habilita aquí y la usa T2.2.
 
 **Criterios de aceptación:**
-- [ ] Un Pokémon (no Veneno/Acero) sobre pantano pierde HP al final del turno.
-- [ ] La lava sigue escalando (×2 por turno consecutivo, `lavaTurns`).
-- [ ] `terrainDamage` puede devolver negativo sin romper nada (HP no supera `maxHp`).
-- [ ] Tests unitarios del motor cubren lava (escalado), pantano y curación.
+- [x] Un Pokémon (no Veneno/Acero) sobre pantano pierde HP al final del turno.
+- [x] La lava sigue escalando (×2 por turno consecutivo, `lavaTurns`).
+- [x] `terrainDamage` puede devolver negativo sin romper nada (HP no supera `maxHp`).
+- [x] Tests unitarios del motor cubren lava (escalado), pantano y curación.
 
 **Investigación:** `applyLavaDamage` (`GameService.ts:518-540`), `terrainDamage`
 (`engine/environment.ts:67-85`), llamada desde `endTurn` (`GameService.ts:492`).
 
 **Dependencias:** ninguna (tras TR.1). Coordina con T0.1 para emitir eventos.
 **Paralelizable:** sí.
+
+### ✅ Resolución (lo realmente hecho) — con ampliación de alcance (mapa)
+
+El núcleo del ticket salió sin desviaciones; se **amplió** para que el pantano sea
+jugable de verdad (aparecía como código muerto pero **tampoco existía en el mapa**).
+
+- **`GameService.ts`:** `applyLavaDamage()` → **`applyEndOfTurnEffects()`**, generalizado a
+  todos los biomas: recorre ocupantes (dedup por id de cara a `large`), aplica
+  `terrainDamage(occ, tile.biome)` (fix del hardcode a `'FIRE'`), clamp
+  `hp = max(0, min(maxHp, hp - dmg))` (soporta curación negativa), emite `damage`/`heal`/`ko`
+  (canal T0.1) con logs por bioma (lava con `lavaTurns`, `☠️` pantano, `♻️` curación).
+- **`engine/environment.ts`:** sin cambios (ya calculaba 2 para `SWAMP`); el bug era del
+  consumidor. La regla de curación de Planta se deja para T2.2 (aquí solo la maquinaria).
+- **Ampliación — mapa (`engine/mapGenerator.ts`):** `classify` nunca producía `SWAMP`. Se
+  añade una regla de **humedal cálido de tierras bajas** (humedad alta + templado + poca
+  elevación) → pantanos contiguos junto al agua. Con la seed por defecto: **68** losetas en
+  el mapa normal (~10% de tierra) y **415** en arena. Los spawns ya evitan `SWAMP`.
+- **Ampliación — render (`frontend`):** `BoardView.drawHex` acepta un `tint` opcional; el
+  pantano se pinta con la textura de hierba + tinte turbio `rgba(58,74,44,0.62)` (sin asset
+  nuevo). `MinimapView` añade `SWAMP: '#4a5a34'`.
+
+**Verificación:** `tsc` limpio en los 3 workspaces · game-service **24/24** (11 nuevos en
+`test/environment.test.ts` + 13 de T0.1) · las 4 imágenes Docker compilan y arrancan sanas ·
+`make up` funcionando y comprobación visual del usuario (pantanos visibles, HP baja sobre
+pantano). Sin feedback de números flotantes (es T2.3). Doc detallado:
+[`16-TERRAIN_EFFECTS.md`](16-TERRAIN_EFFECTS.md).
 
 ## 🎟️ T0.3 — Geometría hexagonal: `hexRound` + `hexLineDraw`
 
@@ -228,14 +273,30 @@ de empuje/dash de forma correcta.
 rayo en una de 6 direcciones, no sirve para LoS punto a punto.
 
 **Criterios de aceptación:**
-- [ ] `hexLineDraw(a, b)` devuelve la secuencia contigua de hexes de A a B, ambos incluidos.
-- [ ] Tests cubren líneas en varias direcciones y longitudes.
+- [x] `hexLineDraw(a, b)` devuelve la secuencia contigua de hexes de A a B, ambos incluidos.
+- [x] Tests cubren líneas en varias direcciones y longitudes.
 
 **Investigación:** `engine/hex.ts` (exports actuales: `createHex`, `hexAdd`,
 `hexSubtract`, `hexDistance`, `hexNeighbor(s)`, `hexEqual`; sin conversión cube ni
 line-draw). Referencia de AoE existente: `packages/shared/src/combat.ts`.
 
 **Dependencias:** ninguna (tras TR.1). **Paralelizable:** sí.
+
+### ✅ Resolución (lo realmente hecho)
+
+Sin desviaciones de alcance; lógica pura del motor en `engine/hex.ts`:
+- `Cube` + `axialToCube`/`cubeToAxial` (3ª coord `s = -q-r`).
+- `hexRound(frac)`: redondeo cúbico canónico (corrige la coord de mayor error para mantener
+  `q+r+s=0`; normaliza `-0`→`0`). Misma técnica que el `axialRound` del frontend, ahora en
+  el motor.
+- `hexLineDraw(a, b)`: interpolación + `hexRound` con nudge `(ε,ε,-2ε)`; secuencia contigua
+  A→B (ambos incluidos, longitud `dist+1`), determinista y simétrica. Reutiliza el
+  `hexDistance` cúbico existente. A diferencia de `getLineArea` (encaja a 1 de 6
+  direcciones), sigue la recta punto a punto.
+
+**Verificación:** `tsc` limpio · game-service **33/33** (9 nuevos en `test/hex.test.ts` +
+24 previos) · imagen Docker compila y arranca sana. Sin runtime todavía (lo consumen T3.1
+empuje, T3.3 dash, T4.3 LoS). Doc detallado: [`17-HEX_GEOMETRY.md`](17-HEX_GEOMETRY.md).
 
 ## 🎟️ T0.4 — Primitivas de feedback visual (frontend)
 
@@ -254,15 +315,33 @@ combate de un vistazo.
 0.1s en `EntityView` y ningún sistema de números flotantes/flash/tween.
 
 **Criterios de aceptación:**
-- [ ] Existe una API frontend para "mostrar número flotante en hex", "flash en hex" y
+- [x] Existe una API frontend para "mostrar número flotante en hex", "flash en hex" y
       "tween de sprite de A a B".
-- [ ] Un evento `damage` del servidor produce un número rojo sobre el objetivo.
+- [x] Un evento `damage` del servidor produce un número rojo sobre el objetivo.
 
 **Investigación:** `EntityView.ts` (render de sprites, transición L59/96/118),
 `GameController.ts` (`applyMatchState` L322-357, `onRealtimeMessage` L239-253),
 `GameState.pokeGifs`. Nuevo util en `services/frontend/src/utils/`.
 
 **Dependencias:** →T0.1. **Paralelizable:** no (necesita el canal de eventos).
+
+### ✅ Resolución (lo realmente hecho)
+
+- **Capa `#fx-layer`** propia en `index.html` (separada de `#entities-layer`, cuyo bucle de
+  limpieza borra hijos no-ocupantes); z-30, sobre sprites y bajo el HUD.
+- **`BoardView.hexToScreen`**: se extrae la transformación hex→pantalla (antes duplicada en
+  `EntityView`) a un método público; `EntityView` se refactoriza para reutilizarlo.
+- **`FxLayer`** (`utils/fx.ts`): `floatingNumber`/`flash`/`tween` con Web Animations API,
+  auto-limpieza y contorno negro nítido de 8 direcciones (constante `OUTLINE`). El número
+  dura ~1.5s con fase de permanencia (tras iterar el estilo con el usuario: se descartó el
+  trazo blanco `-webkit-text-stroke` por emborronar; rojo `#ff5252` con contorno negro).
+- **`GameController.dispatchEvents`**: consume `state.events` en `applyMatchState`; omite la
+  carga inicial y **deduplica por firma** (`turn|player|events`) el doble disparo online
+  (respuesta HTTP + eco WS). Cablea `damage` → número rojo; el resto de `kind`, sus tickets.
+
+**Verificación:** `tsc` frontend limpio · tests frontend 17/17 · imagen Docker reconstruida
+y stack sano (frontend HTTP 200) · OK visual del usuario (número rojo con contorno, ~1.5s,
+sin duplicados). Doc detallado: [`18-VISUAL_FEEDBACK.md`](18-VISUAL_FEEDBACK.md).
 
 ---
 

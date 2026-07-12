@@ -106,6 +106,21 @@ export class BoardView {
     return { x: x + this.CENTER_X, y: y + this.CENTER_Y };
   }
 
+  /**
+   * Píxel de PANTALLA de un hex: aplica el offset de cámara y el zoom alrededor del
+   * centro (misma transformación que usan los sprites de `EntityView`). Fuente única
+   * para posicionar sprites y efectos de feedback (`FxLayer`).
+   */
+  public hexToScreen(hex: { q: number; r: number }) {
+    const { x, y } = this.hexToPixel(hex.q, hex.r);
+    const sx = x + this.state.cameraOffset.x;
+    const sy = y + this.state.cameraOffset.y;
+    return {
+      x: (sx - this.CENTER_X) * this.state.zoom + this.CENTER_X,
+      y: (sy - this.CENTER_Y) * this.state.zoom + this.CENTER_Y,
+    };
+  }
+
   public pixelToHex(x: number, y: number, offsetX: number, offsetY: number) {
     const isoScale = 0.55;
     const pX = (x - this.CENTER_X) / this.state.zoom - offsetX;
@@ -241,7 +256,7 @@ export class BoardView {
     this.ctx.restore();
   }
 
-  private drawHex(x: number, y: number, img?: HTMLImageElement) {
+  private drawHex(x: number, y: number, img?: HTMLImageElement, tint?: string) {
     const points = [];
     const isoScale = 0.55;
     for (let i = 0; i < 6; i++) {
@@ -289,7 +304,14 @@ export class BoardView {
       this.ctx.fillStyle = fallback;
       this.ctx.fill();
     }
-    
+
+    // Tinte turbio superpuesto (p. ej. SWAMP sobre la textura de hierba): oscurece
+    // el bioma base para distinguirlo sin necesidad de una textura propia.
+    if (tint) {
+      this.ctx.fillStyle = tint;
+      this.ctx.fill();
+    }
+
     this.ctx.lineWidth = 1.5;
     this.ctx.strokeStyle = 'rgba(0,0,0,0.3)';
     this.ctx.stroke();
@@ -319,7 +341,8 @@ export class BoardView {
 
     for (const { tile, x, y } of order) {
       if (x < minX || x > maxX || y < minY || y > maxY) continue;
-      this.drawHex(x, y, this.getBiomeTexture(tile.biome));
+      const tint = tile.biome === 'SWAMP' ? 'rgba(58, 74, 44, 0.62)' : undefined;
+      this.drawHex(x, y, this.getBiomeTexture(tile.biome), tint);
       this.drawBiomeTransitions(tile, x, y, tileMap);
 
       const isSelected =

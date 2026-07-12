@@ -42,3 +42,71 @@ export function hexNeighbors(hex: Hex): Hex[] {
 export function hexEqual(a: Hex, b: Hex): boolean {
   return a.q === b.q && a.r === b.r;
 }
+
+// ---------------------------------------------------------------- cube / líneas
+
+/** Coordenada cúbica (q + r + s === 0). El `Hex` de shared es axial (q, r). */
+export interface Cube {
+  q: number;
+  r: number;
+  s: number;
+}
+
+export function axialToCube(h: Hex): Cube {
+  return { q: h.q, r: h.r, s: -h.q - h.r };
+}
+
+export function cubeToAxial(c: Cube): Hex {
+  return { q: c.q, r: c.r };
+}
+
+/**
+ * Redondeo cúbico: dado un hex fraccionario (axial), devuelve el hex entero más
+ * cercano manteniendo el invariante q + r + s = 0 (corrige la coord de mayor
+ * desviación). Base de `hexLineDraw` y de la conversión píxel→hex.
+ */
+export function hexRound(frac: { q: number; r: number }): Hex {
+  const x = frac.q;
+  const z = frac.r;
+  const y = -x - z; // tercera coord cúbica
+  let rx = Math.round(x);
+  let ry = Math.round(y);
+  let rz = Math.round(z);
+  const dx = Math.abs(rx - x);
+  const dy = Math.abs(ry - y);
+  const dz = Math.abs(rz - z);
+  if (dx > dy && dx > dz) {
+    rx = -ry - rz;
+  } else if (dy > dz) {
+    ry = -rx - rz;
+  } else {
+    rz = -rx - ry;
+  }
+  // Normaliza -0 → 0 (Math.round(-0.1) === -0), para igualdad estructural limpia.
+  return { q: rx + 0, r: rz + 0 };
+}
+
+/**
+ * Traza la línea recta real entre dos hexes: interpola linealmente y redondea cada
+ * paso. Devuelve la secuencia CONTIGUA de A a B, ambos incluidos (longitud
+ * hexDistance(a,b) + 1). A diferencia de `getLineArea` (que encaja a una de 6
+ * direcciones), esto sí sigue la recta punto a punto ⇒ sirve para LoS/bodyblocking
+ * y direcciones de empuje/dash.
+ */
+export function hexLineDraw(a: Hex, b: Hex): Hex[] {
+  const n = hexDistance(a, b);
+  if (n === 0) return [{ q: a.q, r: a.r }];
+  // Nudge cúbico (ε, ε, -2ε) en ambos extremos: rompe empates cuando la recta cae
+  // justo en la frontera entre dos hexes, sin desplazar los extremos al redondear.
+  const eps = 1e-6;
+  const aq = a.q + eps;
+  const ar = a.r + eps;
+  const bq = b.q + eps;
+  const br = b.r + eps;
+  const results: Hex[] = [];
+  for (let i = 0; i <= n; i++) {
+    const t = i / n;
+    results.push(hexRound({ q: aq + (bq - aq) * t, r: ar + (br - ar) * t }));
+  }
+  return results;
+}
