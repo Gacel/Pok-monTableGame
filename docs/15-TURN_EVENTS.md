@@ -101,9 +101,16 @@ aplica **por destinatario**.
 - `npm test` en game-service: 13/13 (incluye los 4 nuevos). `tsc --noEmit` limpio en los
   3 workspaces.
 
+## Consumo en el cliente (T0.4)
+
+Ya implementado: `GameController.dispatchEvents` lee `state.events` en `applyMatchState` y
+dispara las primitivas de feedback (`FxLayer`: número flotante, flash, tween) sobre la capa
+`#fx-layer`. Omite la carga inicial y **deduplica por firma** (la respuesta HTTP y el eco
+WS difunden el mismo estado). Detalle en [`18-VISUAL_FEEDBACK.md`](18-VISUAL_FEEDBACK.md).
+T0.4 cablea `damage`; los demás `kind` los añaden sus tickets.
+
 ## Pendiente / cómo extenderlo
 
-- **Consumo en el cliente:** T0.4 añadirá las primitivas (número flotante, flash, tween)
-  que lean `state.events` en `GameController` y las animen sobre `#entities-layer`.
 - **Nuevos `kind`:** cada ticket que introduzca una mecánica emite su evento en el punto
-  del motor correspondiente (no hay que tocar el contrato, ya está definido).
+  del motor correspondiente (no hay que tocar el contrato, ya está definido) y añade su
+  `case` en `dispatchEvents`.

@@ -52,6 +52,10 @@
                    (altos, según la Y) de los sprites quedan CONTENIDOS aquí y no se
                    cuelan por encima del HUD (z-40/z-50) ni de los overlays. -->
               <div id="entities-layer" class="absolute inset-0 pointer-events-none z-30"></div>
+              <!-- Capa de efectos de feedback (números flotantes, flashes, tweens).
+                   Separada de entities-layer (que borra hijos que no son ocupantes).
+                   Va después en el DOM con z-30 → pinta sobre los sprites, bajo el HUD. -->
+              <div id="fx-layer" class="absolute inset-0 pointer-events-none z-30"></div>
 
               <!-- HUD SUPERIOR (P1 y P2) -->
               <div id="hud-container" class="absolute top-0 left-0 w-full p-4 flex justify-between items-start pointer-events-none z-50">

@@ -315,15 +315,33 @@ combate de un vistazo.
 0.1s en `EntityView` y ningún sistema de números flotantes/flash/tween.
 
 **Criterios de aceptación:**
-- [ ] Existe una API frontend para "mostrar número flotante en hex", "flash en hex" y
+- [x] Existe una API frontend para "mostrar número flotante en hex", "flash en hex" y
       "tween de sprite de A a B".
-- [ ] Un evento `damage` del servidor produce un número rojo sobre el objetivo.
+- [x] Un evento `damage` del servidor produce un número rojo sobre el objetivo.
 
 **Investigación:** `EntityView.ts` (render de sprites, transición L59/96/118),
 `GameController.ts` (`applyMatchState` L322-357, `onRealtimeMessage` L239-253),
 `GameState.pokeGifs`. Nuevo util en `services/frontend/src/utils/`.
 
 **Dependencias:** →T0.1. **Paralelizable:** no (necesita el canal de eventos).
+
+### ✅ Resolución (lo realmente hecho)
+
+- **Capa `#fx-layer`** propia en `index.html` (separada de `#entities-layer`, cuyo bucle de
+  limpieza borra hijos no-ocupantes); z-30, sobre sprites y bajo el HUD.
+- **`BoardView.hexToScreen`**: se extrae la transformación hex→pantalla (antes duplicada en
+  `EntityView`) a un método público; `EntityView` se refactoriza para reutilizarlo.
+- **`FxLayer`** (`utils/fx.ts`): `floatingNumber`/`flash`/`tween` con Web Animations API,
+  auto-limpieza y contorno negro nítido de 8 direcciones (constante `OUTLINE`). El número
+  dura ~1.5s con fase de permanencia (tras iterar el estilo con el usuario: se descartó el
+  trazo blanco `-webkit-text-stroke` por emborronar; rojo `#ff5252` con contorno negro).
+- **`GameController.dispatchEvents`**: consume `state.events` en `applyMatchState`; omite la
+  carga inicial y **deduplica por firma** (`turn|player|events`) el doble disparo online
+  (respuesta HTTP + eco WS). Cablea `damage` → número rojo; el resto de `kind`, sus tickets.
+
+**Verificación:** `tsc` frontend limpio · tests frontend 17/17 · imagen Docker reconstruida
+y stack sano (frontend HTTP 200) · OK visual del usuario (número rojo con contorno, ~1.5s,
+sin duplicados). Doc detallado: [`18-VISUAL_FEEDBACK.md`](18-VISUAL_FEEDBACK.md).
 
 ---
 

@@ -106,6 +106,21 @@ export class BoardView {
     return { x: x + this.CENTER_X, y: y + this.CENTER_Y };
   }
 
+  /**
+   * Píxel de PANTALLA de un hex: aplica el offset de cámara y el zoom alrededor del
+   * centro (misma transformación que usan los sprites de `EntityView`). Fuente única
+   * para posicionar sprites y efectos de feedback (`FxLayer`).
+   */
+  public hexToScreen(hex: { q: number; r: number }) {
+    const { x, y } = this.hexToPixel(hex.q, hex.r);
+    const sx = x + this.state.cameraOffset.x;
+    const sy = y + this.state.cameraOffset.y;
+    return {
+      x: (sx - this.CENTER_X) * this.state.zoom + this.CENTER_X,
+      y: (sy - this.CENTER_Y) * this.state.zoom + this.CENTER_Y,
+    };
+  }
+
   public pixelToHex(x: number, y: number, offsetX: number, offsetY: number) {
     const isoScale = 0.55;
     const pX = (x - this.CENTER_X) / this.state.zoom - offsetX;
