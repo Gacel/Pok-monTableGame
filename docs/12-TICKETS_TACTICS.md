@@ -31,9 +31,9 @@
   la **Épica R** antes de nada.
 - **Fase 3:** sigilo/emboscada ×1.5/niebla de guerra reales; falta revelar al oculto
   golpeado por AoE y el flash de revelado.
-- **Fase 4:** ⚠️ el **daño de pantano es código muerto** (`terrainDamage` lo calcula
-  pero `applyLavaDamage` solo se invoca con `'FIRE'`). Faltan fantasmas-atraviesan y
-  curación de Planta en hierba.
+- **Fase 4:** ✅ el daño de pantano **ya está activo** (T0.2: `applyEndOfTurnEffects`
+  usa el bioma real y el mapa genera losetas `SWAMP`). Faltan fantasmas-atraviesan (T2.1)
+  y curación de Planta en hierba (T2.2).
 - **Fase 5:** knockback/dash/carga inexistentes; `PokemonMove` no tiene esos campos.
 - **Fase 6:** tamaños con infra (`getOccupiedHexes` da 7 hexes a `large`) pero todo
   Pokémon se crea `'medium'`; no hay trazado de línea hex ni redondeo cúbico.
@@ -221,16 +221,42 @@ lava, para que los biomas importen de verdad.
 habilita aquí y la usa T2.2.
 
 **Criterios de aceptación:**
-- [ ] Un Pokémon (no Veneno/Acero) sobre pantano pierde HP al final del turno.
-- [ ] La lava sigue escalando (×2 por turno consecutivo, `lavaTurns`).
-- [ ] `terrainDamage` puede devolver negativo sin romper nada (HP no supera `maxHp`).
-- [ ] Tests unitarios del motor cubren lava (escalado), pantano y curación.
+- [x] Un Pokémon (no Veneno/Acero) sobre pantano pierde HP al final del turno.
+- [x] La lava sigue escalando (×2 por turno consecutivo, `lavaTurns`).
+- [x] `terrainDamage` puede devolver negativo sin romper nada (HP no supera `maxHp`).
+- [x] Tests unitarios del motor cubren lava (escalado), pantano y curación.
 
 **Investigación:** `applyLavaDamage` (`GameService.ts:518-540`), `terrainDamage`
 (`engine/environment.ts:67-85`), llamada desde `endTurn` (`GameService.ts:492`).
 
 **Dependencias:** ninguna (tras TR.1). Coordina con T0.1 para emitir eventos.
 **Paralelizable:** sí.
+
+### ✅ Resolución (lo realmente hecho) — con ampliación de alcance (mapa)
+
+El núcleo del ticket salió sin desviaciones; se **amplió** para que el pantano sea
+jugable de verdad (aparecía como código muerto pero **tampoco existía en el mapa**).
+
+- **`GameService.ts`:** `applyLavaDamage()` → **`applyEndOfTurnEffects()`**, generalizado a
+  todos los biomas: recorre ocupantes (dedup por id de cara a `large`), aplica
+  `terrainDamage(occ, tile.biome)` (fix del hardcode a `'FIRE'`), clamp
+  `hp = max(0, min(maxHp, hp - dmg))` (soporta curación negativa), emite `damage`/`heal`/`ko`
+  (canal T0.1) con logs por bioma (lava con `lavaTurns`, `☠️` pantano, `♻️` curación).
+- **`engine/environment.ts`:** sin cambios (ya calculaba 2 para `SWAMP`); el bug era del
+  consumidor. La regla de curación de Planta se deja para T2.2 (aquí solo la maquinaria).
+- **Ampliación — mapa (`engine/mapGenerator.ts`):** `classify` nunca producía `SWAMP`. Se
+  añade una regla de **humedal cálido de tierras bajas** (humedad alta + templado + poca
+  elevación) → pantanos contiguos junto al agua. Con la seed por defecto: **68** losetas en
+  el mapa normal (~10% de tierra) y **415** en arena. Los spawns ya evitan `SWAMP`.
+- **Ampliación — render (`frontend`):** `BoardView.drawHex` acepta un `tint` opcional; el
+  pantano se pinta con la textura de hierba + tinte turbio `rgba(58,74,44,0.62)` (sin asset
+  nuevo). `MinimapView` añade `SWAMP: '#4a5a34'`.
+
+**Verificación:** `tsc` limpio en los 3 workspaces · game-service **24/24** (11 nuevos en
+`test/environment.test.ts` + 13 de T0.1) · las 4 imágenes Docker compilan y arrancan sanas ·
+`make up` funcionando y comprobación visual del usuario (pantanos visibles, HP baja sobre
+pantano). Sin feedback de números flotantes (es T2.3). Doc detallado:
+[`16-TERRAIN_EFFECTS.md`](16-TERRAIN_EFFECTS.md).
 
 ## 🎟️ T0.3 — Geometría hexagonal: `hexRound` + `hexLineDraw`
 

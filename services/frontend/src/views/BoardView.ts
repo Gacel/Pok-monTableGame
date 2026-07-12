@@ -241,7 +241,7 @@ export class BoardView {
     this.ctx.restore();
   }
 
-  private drawHex(x: number, y: number, img?: HTMLImageElement) {
+  private drawHex(x: number, y: number, img?: HTMLImageElement, tint?: string) {
     const points = [];
     const isoScale = 0.55;
     for (let i = 0; i < 6; i++) {
@@ -289,7 +289,14 @@ export class BoardView {
       this.ctx.fillStyle = fallback;
       this.ctx.fill();
     }
-    
+
+    // Tinte turbio superpuesto (p. ej. SWAMP sobre la textura de hierba): oscurece
+    // el bioma base para distinguirlo sin necesidad de una textura propia.
+    if (tint) {
+      this.ctx.fillStyle = tint;
+      this.ctx.fill();
+    }
+
     this.ctx.lineWidth = 1.5;
     this.ctx.strokeStyle = 'rgba(0,0,0,0.3)';
     this.ctx.stroke();
@@ -319,7 +326,8 @@ export class BoardView {
 
     for (const { tile, x, y } of order) {
       if (x < minX || x > maxX || y < minY || y > maxY) continue;
-      this.drawHex(x, y, this.getBiomeTexture(tile.biome));
+      const tint = tile.biome === 'SWAMP' ? 'rgba(58, 74, 44, 0.62)' : undefined;
+      this.drawHex(x, y, this.getBiomeTexture(tile.biome), tint);
       this.drawBiomeTransitions(tile, x, y, tileMap);
 
       const isSelected =

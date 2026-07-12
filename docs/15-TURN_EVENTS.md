@@ -43,8 +43,9 @@ events?: TurnEvent[];
 El frontend lo reexporta en [`services/frontend/src/models/Types.ts`]. Como
 `MatchState = MatchStateDTO`, el campo está disponible en todo el cliente.
 
-> **Estado de los `kind`:** T0.1 solo **emite** `damage` y `ko` (los eventos que ya
-> existen en el motor). `heal` lo emitirá T2.2 (curación en hierba), `reveal` T1.1,
+> **Estado de los `kind`:** T0.1 emitió `damage` y `ko`. **T0.2** añadió la **vía de
+> emisión de `heal`** en los efectos de fin de turno (aún sin terreno que la dispare; la
+> regla concreta de curación en hierba es T2.2). `reveal` lo emitirá T1.1,
 > `knockback`/`dash` la Épica 3, `capture` la Épica 8. El union los define desde ya
 > para que el contrato sea estable.
 
@@ -67,7 +68,10 @@ existentes en `GameService`:
 - **`cast`** (combate on-map, bucle de AoE): por cada ocupante dañado
   `push({ kind:'damage', pokemonId, hex, delta:-dmg })`; si cae KO,
   `push({ kind:'ko', pokemonId, hex })` **antes** de retirar la pieza del tablero.
-- **`applyLavaDamage`** (fin de turno, daño de lava): mismo par `damage` + `ko`.
+- **`applyEndOfTurnEffects`** (fin de turno, efectos de terreno de todos los biomas;
+  renombrado desde `applyLavaDamage` en T0.2): `damage` + `ko` por lava/pantano, y la vía
+  `heal` (`delta` positivo) para curaciones de terreno. Ver
+  [`16-TERRAIN_EFFECTS.md`](16-TERRAIN_EFFECTS.md).
 
 Cualquier ticket que añada una fuente de daño/curación/estado (curación en hierba,
 empuje, captura…) debe emitir su evento aquí, con el `kind` correspondiente.
