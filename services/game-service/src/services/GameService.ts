@@ -628,7 +628,7 @@ export class GameService {
     }
 
     this.collectTurnResources();
-    this.applyLavaDamage();
+    this.applyEndOfTurnEffects();
     if (this.status === 'active') this.switchPlayer();
     this.maybeRespawnChest();
     return { ok: true, state: this.getStateDTO() };
@@ -670,28 +670,59 @@ export class GameService {
     return { ok: true, state: this.getStateDTO() };
   }
 
-  private applyLavaDamage(): void {
+  /**
+   * Aplica al final del turno los efectos de terreno de TODOS los biomas (no solo
+   * lava): daño de lava (escalado por `lavaTurns`), daño de pantano y curaciones
+   * (valores negativos de `terrainDamage`, preparado para T2.2). Emite eventos de
+   * turno (T0.1) de daño/curación/KO.
+   */
+  private applyEndOfTurnEffects(): void {
+    // Deduplicar por id: un `large` ocupa varios hexes y no debe sufrir el efecto
+    // varias veces (mismo patrón que `cast`). Hoy todos son `medium` (1 hex); esto
+    // es defensa de cara a T4.1.
+    const processed = new Set<string>();
     for (const tile of this.board.tiles.values()) {
-      if (tile.occupant) {
-        if (tile.biome === 'FIRE') {
-          if (tile.occupant.type !== 'FIRE' && tile.occupant.type !== 'FLYING') {
-            tile.occupant.lavaTurns = (tile.occupant.lavaTurns ?? 0) + 1;
-          }
-          const dmg = terrainDamage(tile.occupant, 'FIRE');
-          if (dmg > 0) {
-            tile.occupant.hp -= dmg;
-            this.log.push(`¡${nameOf(tile.occupant)} se quema en la lava (-${dmg} HP, turno ${tile.occupant.lavaTurns})!`);
-            this.events.push({ kind: 'damage', pokemonId: tile.occupant.id, hex: tile.hex, delta: -dmg });
-            if (tile.occupant.hp <= 0) {
-              this.log.push(`¡${nameOf(tile.occupant)} ha caído KO por la lava!`);
-              this.events.push({ kind: 'ko', pokemonId: tile.occupant.id, hex: tile.hex });
-              this.dropBall(tile.occupant, tile.hex);
-              this.board.setOccupant(tile.hex, null);
-            }
-          }
-        } else {
-          tile.occupant.lavaTurns = 0;
+      const occ = tile.occupant;
+      if (!occ || processed.has(occ.id)) continue;
+      processed.add(occ.id);
+
+      // `lavaTurns`: escala en FIRE consecutivo (excepto FIRE/FLYING); se reinicia
+      // en cuanto la pieza deja la lava.
+      if (tile.biome === 'FIRE') {
+        if (occ.type !== 'FIRE' && occ.type !== 'FLYING') {
+          occ.lavaTurns = (occ.lavaTurns ?? 0) + 1;
         }
+      } else {
+        occ.lavaTurns = 0;
+      }
+
+      const dmg = terrainDamage(occ, tile.biome);
+      if (dmg === 0) continue;
+
+      // Clamp a [0, maxHp]: soporta daño (dmg>0) y curación (dmg<0) sin pasar maxHp.
+      const maxHp = occ.maxHp ?? occ.hp;
+      occ.hp = Math.max(0, Math.min(maxHp, occ.hp - dmg));
+
+      if (dmg > 0) {
+        this.events.push({ kind: 'damage', pokemonId: occ.id, hex: tile.hex, delta: -dmg });
+        if (tile.biome === 'FIRE') {
+          this.log.push(`¡${nameOf(occ)} se quema en la lava (-${dmg} HP, turno ${occ.lavaTurns})!`);
+        } else if (tile.biome === 'SWAMP') {
+          this.log.push(`☠️ ${nameOf(occ)} sufre el pantano (-${dmg} HP).`);
+        } else {
+          this.log.push(`${nameOf(occ)} sufre el terreno (-${dmg} HP).`);
+        }
+        if (occ.hp <= 0) {
+          this.log.push(`¡${nameOf(occ)} ha caído KO por el terreno!`);
+          this.events.push({ kind: 'ko', pokemonId: occ.id, hex: tile.hex });
+          this.dropBall(occ, tile.hex);
+          this.board.setOccupant(tile.hex, null);
+        }
+      } else {
+        // Curación (dmg<0): la regla concreta (Planta en hierba, 8% maxHp) llega en
+        // T2.2; aquí solo se habilita la maquinaria y el evento `heal`.
+        this.events.push({ kind: 'heal', pokemonId: occ.id, hex: tile.hex, delta: -dmg });
+        this.log.push(`♻️ ${nameOf(occ)} se regenera (+${-dmg} HP).`);
       }
     }
     this.checkWinCondition();

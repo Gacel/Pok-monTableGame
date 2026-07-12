@@ -32,6 +32,7 @@ export class MinimapView {
     GRASS: '#3f9b4f',
     SAND: '#d9c27a',
     ICE: '#bfe3f5',
+    SWAMP: '#4a5a34',
   };
 
   /** Color de cada jugador (mismos que el HUD y el banner de turno). */

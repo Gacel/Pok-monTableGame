@@ -105,6 +105,10 @@ function classify(
   }
   if (temperature < 0.25) return 'ICE'; // polos
   if (humidity < 0.25 && temperature > 0.55) return 'SAND'; // desierto interior
+  // Humedal cálido de tierras bajas: mucha humedad + templado/cálido + poca elevación
+  // (justo por encima de la costa). Genera pantanos contiguos junto al agua.
+  if (humidity > 0.56 && temperature > 0.4 && elevation < o.seaLevel + o.beachWidth + 0.2)
+    return 'SWAMP';
   return 'GRASS';
 }
 
