@@ -273,14 +273,30 @@ de empuje/dash de forma correcta.
 rayo en una de 6 direcciones, no sirve para LoS punto a punto.
 
 **Criterios de aceptación:**
-- [ ] `hexLineDraw(a, b)` devuelve la secuencia contigua de hexes de A a B, ambos incluidos.
-- [ ] Tests cubren líneas en varias direcciones y longitudes.
+- [x] `hexLineDraw(a, b)` devuelve la secuencia contigua de hexes de A a B, ambos incluidos.
+- [x] Tests cubren líneas en varias direcciones y longitudes.
 
 **Investigación:** `engine/hex.ts` (exports actuales: `createHex`, `hexAdd`,
 `hexSubtract`, `hexDistance`, `hexNeighbor(s)`, `hexEqual`; sin conversión cube ni
 line-draw). Referencia de AoE existente: `packages/shared/src/combat.ts`.
 
 **Dependencias:** ninguna (tras TR.1). **Paralelizable:** sí.
+
+### ✅ Resolución (lo realmente hecho)
+
+Sin desviaciones de alcance; lógica pura del motor en `engine/hex.ts`:
+- `Cube` + `axialToCube`/`cubeToAxial` (3ª coord `s = -q-r`).
+- `hexRound(frac)`: redondeo cúbico canónico (corrige la coord de mayor error para mantener
+  `q+r+s=0`; normaliza `-0`→`0`). Misma técnica que el `axialRound` del frontend, ahora en
+  el motor.
+- `hexLineDraw(a, b)`: interpolación + `hexRound` con nudge `(ε,ε,-2ε)`; secuencia contigua
+  A→B (ambos incluidos, longitud `dist+1`), determinista y simétrica. Reutiliza el
+  `hexDistance` cúbico existente. A diferencia de `getLineArea` (encaja a 1 de 6
+  direcciones), sigue la recta punto a punto.
+
+**Verificación:** `tsc` limpio · game-service **33/33** (9 nuevos en `test/hex.test.ts` +
+24 previos) · imagen Docker compila y arranca sana. Sin runtime todavía (lo consumen T3.1
+empuje, T3.3 dash, T4.3 LoS). Doc detallado: [`17-HEX_GEOMETRY.md`](17-HEX_GEOMETRY.md).
 
 ## 🎟️ T0.4 — Primitivas de feedback visual (frontend)
 
