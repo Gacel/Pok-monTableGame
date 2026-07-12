@@ -306,7 +306,12 @@ export class MatchManager {
   /** Devuelve la ARENA global (la crea vacía y persistente si no existía). */
   async getOrCreateArena(): Promise<GameService> {
     const existing = await this.getMatch(ARENA_ID);
-    if (existing) return existing;
+    if (existing) {
+      // Mundos creados antes de la mecánica de cofres se cargan sin cofre: se
+      // siembra uno para que siempre haya botín que disputar.
+      if (existing.ensureChest()) await this.persistMatch(ARENA_ID);
+      return existing;
+    }
     const board = this.loadBoard('arena');
     const game = GameService.createArena(ARENA_ID, board);
     this.onlineMatches.set(ARENA_ID, game);

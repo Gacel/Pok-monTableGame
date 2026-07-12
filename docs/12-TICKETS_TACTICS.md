@@ -92,11 +92,11 @@ para construir el resto del roadmap sobre una base completa y sin duplicar traba
 **Dudas resueltas:** merge (no cherry-pick ni reimplementar); se trabaja sobre `tactics`.
 
 **Criterios de aceptación:**
-- [ ] `make up` levanta el stack sin errores tras el merge.
-- [ ] `npm run typecheck` limpio en todo el monorepo.
-- [ ] Conviven: combate táctico + despliegue + sigilo (de `tactics`) con
+- [x] `make up` levanta el stack sin errores tras el merge (verificado por el usuario).
+- [x] `npm run typecheck` limpio en todo el monorepo (3 workspaces).
+- [x] Conviven: combate táctico + despliegue + sigilo (de `tactics`) con
       inventario/cofres-botín/regalar/subastas/gacha (de `origin/main`).
-- [ ] Se puede jugar una partida, abrir inventario, ver un cofre en el mapa y en el
+- [x] Se puede jugar una partida, abrir inventario, ver un cofre en el mapa y en el
       minimapa, y usar el menú contextual de inventario.
 
 **Investigación:** `git log --oneline tactics..origin/main` (7 commits: `531d6f5`
@@ -106,6 +106,49 @@ arena, `a922f40`/`29c3635` fixes UI, `ca4b6cc` arena-cofre). Nuevos en main:
 `services/game-service/src/routes/inventory.routes.ts`.
 
 **Dependencias:** ninguna. **Paralelizable:** no (bloquea todo el resto).
+
+### ✅ Resolución (lo realmente hecho) — desviación importante vs. el plan
+
+El plan original asumía un **merge mecánico**. En la práctica apareció un **choque de
+modelos de combate** que convirtió TR.1 en *merge + integración*:
+
+- **`tactics`** = combate **on-map** (skillshot AoE en estado `'active'`, `GameService.cast`).
+  **`origin/main`** = combate **interactivo antiguo** (estado `'combat'` + sub-estado
+  `this.combat`, `ATACAR/HABILIDAD/OBJETO/HUIR`, `finalizeCombat`/`continueCombat`),
+  con la **economía nueva de cofres/bolas injertada encima**.
+- **Decisión (consultada con el usuario):** conservar el combate **on-map de tactics**
+  (dirección del roadmap) y **re-enganchar la economía de cofres/bolas** a ese modelo,
+  descartando el combate interactivo de main.
+
+**Cambios de la resolución (7 ficheros en conflicto + 2 fixes de higiene):**
+- `GameService.ts` (9 bloques): combate on-map de tactics; **injerto de 2 líneas** en el
+  KO del `cast` (`this.addKo(caster.playerId)` + `this.dropBall(tile.occupant, tile.hex)`
+  antes de retirar la pieza). La recogida de cofres ya estaba enganchada al movimiento
+  (`collectFromTile`), y el KO por lava y el abandono/victoria ya soltaban bola / daban
+  `rewards` (auto-merge). Constructor / `serialize` / `deserialize` **unen** ambos conjuntos
+  de campos (`deploymentDeadline`/`reserve`/`deploymentZones` + `kos`/`chestRespawnTurn`).
+- Backend `controllers/GameController.ts`: conservados `deploy`/`cast`/`forceStart`,
+  eliminados `combatAction`/`combatContinue` (modelo viejo).
+- `packages/shared/{index,match}.ts`: unión de exports/campos (`combat` + `balls`;
+  despliegue + `kos`/`rewards`).
+- Frontend `GameController.ts` y `BoardView.ts`: unión conservando la economía de bolas
+  (`BALL_SPRITE`/`BALL_LABEL`/`BALL_TOP`/`BallKey`); eliminado `CombatAction` sin usar.
+- Frontend `MinimapView.ts`: **reconstruido en 2 bucles** (sombreado de despliegue de
+  tactics + marcadores de cofres/bolas de main); el auto-merge los había fundido en uno
+  roto con la condición `if (!t.chest && !t.groundBall) continue`.
+- Fix de higiene preexistente: `packages/shared/src/combat.ts` → `import type { Hex }`
+  (bloqueaba el build del frontend bajo `verbatimModuleSyntax`; error de `tactics`, no del merge).
+
+**Verificación:** `tsc` limpio en los 3 workspaces · tests game-service 9/9 y frontend 17/17 ·
+las 4 imágenes Docker compilan (incl. build de producción del frontend) y los servicios
+arrancan sin errores · `make up` funcionando (usuario). Revisión escéptica (manual, por
+límite de sesión del agente): sin features perdidas, integridad de constructor confirmada
+(solo 3 `new GameService(` internos), economía completamente alcanzable, sin handlers WS
+huérfanos.
+
+**Limpieza pendiente (no bloqueante, vestigios preexistentes):** tipos `combat_action`/
+`combat_continue` en `packages/shared/src/ws.ts` (ya sin handler) y un comentario a
+`CombatView` en `utils/theme.ts`.
 
 ---
 

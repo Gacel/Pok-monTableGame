@@ -26,15 +26,12 @@ export class EntityView {
     }
     this.entitiesLayer.style.display = '';
 
-    const sortedTiles = [...this.state.currentTiles].sort((a, b) => {
-      const pA = this.boardView.hexToPixel(a.hex.q, a.hex.r);
-      const pB = this.boardView.hexToPixel(b.hex.q, b.hex.r);
-      return pA.y - pB.y;
-    });
-
+    // No hace falta ordenar por Y: el apilamiento lo da el z-index dinámico que se
+    // fija por sprite (según su Y de pantalla). Ordenar las ~5400 casillas de ARENA
+    // en cada frame (con 2 hexToPixel por comparación) era puro desperdicio.
     const currentOccupantIds = new Set<string>();
 
-    for (const tile of sortedTiles) {
+    for (const tile of this.state.currentTiles) {
       if (tile.occupant && tile.occupant.name && this.state.pokeGifs[tile.occupant.name]) {
           const occupantId = tile.occupant.id;
           currentOccupantIds.add(occupantId);

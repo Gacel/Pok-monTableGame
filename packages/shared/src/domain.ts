@@ -6,6 +6,7 @@
  * Convención de casing: MAYÚSCULAS para los enums de dominio (es lo que persiste
  * la BD y produce el motor). No introducir variantes en minúsculas.
  */
+import type { BallKey } from './balls.js';
 
 /** Coordenada axial de una casilla hexagonal. */
 export interface Hex {
@@ -82,12 +83,18 @@ export interface Pokemon {
   isHidden?: boolean;
   /** Ataques curados (≤4) disponibles en la fase de combate. */
   moves?: PokemonMove[];
+  /** Bola que transporta este Pokémon (recogida de un cofre/suelo). La suelta si es KO. */
+  carriedBall?: BallKey;
 }
 
 export interface Tile {
   hex: Hex;
   biome: Biome;
   occupant: Pokemon | null;
+  /** Cofre de botín en esta casilla (el primer Pokémon que llega se lleva la bola). */
+  chest?: boolean;
+  /** Bola caída en el suelo (de un portador KO); recogible al pisar la casilla. */
+  groundBall?: BallKey;
 }
 
 /** Recursos (candies) por jugador. */

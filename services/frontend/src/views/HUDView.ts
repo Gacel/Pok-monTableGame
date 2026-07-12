@@ -1,7 +1,12 @@
 import { GameState } from '../models/GameState';
-import type { Tile, PlayerResources } from '../models/Types';
+import type { Tile, PlayerResources, MatchState, BallKey } from '../models/Types';
+import { BALL_SPRITE, BALL_LABEL } from '@transcendence/shared';
 import { authState } from '../auth/AuthState';
 import { escapeHtml } from '../utils/html';
+
+/** Sprites de bolas (bitmap PokeAPI). */
+const BALL_ITEMS = 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items';
+const ballSpriteUrl = (b: BallKey): string => `${BALL_ITEMS}/${BALL_SPRITE[b]}.png`;
 
 /** Capa VISTA (frontend): pinta el HUD a partir del estado del servidor. */
 export class HUDView {
@@ -309,7 +314,14 @@ export class HUDView {
     const logEl = document.getElementById('event-log');
     if (!match || !logEl) return;
     const lines = match.log.slice(-6);
-    logEl.innerHTML = lines.map((l) => `<div>› ${this.escape(l)}</div>`).join('');
+    logEl.innerHTML = lines
+      .map((l) => `<div>› ${this.escape(this.prettifyPlayers(l))}</div>`)
+      .join('');
+  }
+
+  /** Sustituye los identificadores de slot (player1..4) por el nombre/login visible. */
+  private prettifyPlayers(line: string): string {
+    return line.replace(/player[1-4]/g, (slot) => this.state.labelFor(slot));
   }
 
   private updateWinOverlay(): void {
@@ -317,19 +329,47 @@ export class HUDView {
     const overlay = document.getElementById('win-overlay');
     const text = document.getElementById('win-text');
     if (!match || !overlay || !text) return;
+    const rewardsEl = document.getElementById('win-rewards');
     if (match.status === 'finished' && match.winner) {
       overlay.classList.remove('hidden');
       overlay.classList.add('flex');
       // El ganador puede ser un equipo ("player2 & player4") → nombres visibles.
-      const label = match.winner
-        .split(' & ')
-        .map((p) => this.state.labelFor(p).toUpperCase())
-        .join(' & ');
+      const winners = match.winner.split(' & ');
+      const label = winners.map((p) => this.state.labelFor(p).toUpperCase()).join(' & ');
       text.textContent = `${label} gana la partida`;
+      if (rewardsEl) rewardsEl.innerHTML = this.rewardSummaryHtml(match, winners);
     } else {
       overlay.classList.add('hidden');
       overlay.classList.remove('flex');
+      if (rewardsEl) rewardsEl.innerHTML = '';
     }
+  }
+
+  /** Resumen "lo que TE llevas" para el jugador local, si está entre los ganadores. */
+  private rewardSummaryHtml(match: MatchState, winners: string[]): string {
+    const slot = this.state.mySlot ?? 'player1'; // local hot-seat / vs IA: el usuario es P1
+    if (!winners.includes(slot)) return '';
+    const kos = match.kos?.[slot] ?? 0;
+    const losers = Math.max(0, match.players.length - winners.length);
+    const winShare = winners.length > 0 ? Math.floor((1000 * losers) / winners.length) : 0;
+    const koCoins = 500 * kos;
+    const balls = match.rewards?.find((r) => r.slot === slot)?.balls ?? [];
+    const ballsHtml = balls.length
+      ? balls
+          .map(
+            (b) =>
+              `<img src="${ballSpriteUrl(b)}" title="${BALL_LABEL[b]}" class="w-7 h-7 object-contain" style="image-rendering:pixelated;" />`
+          )
+          .join('')
+      : `<span class="text-gray-400" style="font-size:9px;">—</span>`;
+    const F = "font-family:'Press Start 2P',monospace;";
+    return `
+      <div class="text-left mx-auto bg-black/30 rounded p-3" style="width:min(360px,86vw);">
+        <div class="text-yellow-300 mb-2 text-center" style="${F} font-size:9px;">TE LLEVAS</div>
+        <div class="flex justify-between items-center gap-4 text-white" style="font-size:11px; white-space:nowrap;"><span>500 × ${kos} KO</span><span class="flex-shrink-0">🪙 ${koCoins}</span></div>
+        <div class="flex justify-between items-center gap-4 text-white mt-1" style="font-size:11px; white-space:nowrap;"><span>Botín de victoria</span><span class="flex-shrink-0">🪙 ${winShare}</span></div>
+        <div class="flex items-center gap-1.5 mt-2 flex-wrap"><span class="text-white" style="font-size:11px;">Bolas:</span>${ballsHtml}</div>
+      </div>`;
   }
 
   /** Muestra un mensaje efímero (errores de jugada, avisos). */

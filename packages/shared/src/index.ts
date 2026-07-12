@@ -22,6 +22,7 @@ export * from './ws.js';
 export * from './domain.js';
 export * from './match.js';
 export * from './combat.js';
+export * from './balls.js';
 
 /** Estado de presencia de un usuario (status-service). */
 export type PresenceStatus = 'online' | 'offline' | 'in-game';

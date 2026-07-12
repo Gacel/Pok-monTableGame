@@ -1,6 +1,14 @@
 import { GameState } from '../models/GameState';
-import type { Hex, Tile } from '../models/Types';
+import type { Hex, Tile, BallKey } from '../models/Types';
 import { calculateAoE } from '@transcendence/shared';
+
+/** Color de la mitad superior de la bola en el suelo, por tipo. */
+const BALL_TOP: Record<string, string> = {
+  normal: '#ee1515', // Poké
+  super: '#2f7fd0', // Great
+  ultra: '#e6b800', // Ultra
+  master: '#8a2be2', // Master
+};
 
 export class BoardView {
   private canvas: HTMLCanvasElement;
@@ -27,6 +35,32 @@ export class BoardView {
     { q: 0, r: -1 },  // top-left
     { q: 1, r: -1 },  // top-right
   ];
+
+  /**
+   * Geometría cacheada por REFERENCIA del array de tiles: orden de pintado (por Y,
+   * painter's algorithm) con sus coordenadas de píxel precalculadas, y el mapa de
+   * vecindad. Antes se reordenaba y remapeaba TODO en cada frame (con 2 hexToPixel
+   * por comparación); ahora solo se recalcula cuando cambia el estado del tablero.
+   */
+  private geomCache: {
+    tiles: Tile[];
+    order: { tile: Tile; x: number; y: number }[];
+    tileMap: Map<string, Tile>;
+  } | null = null;
+
+  private getGeom(): { order: { tile: Tile; x: number; y: number }[]; tileMap: Map<string, Tile> } {
+    const tiles = this.state.currentTiles;
+    if (this.geomCache && this.geomCache.tiles === tiles) return this.geomCache;
+    const order = tiles.map((t) => {
+      const p = this.hexToPixel(t.hex.q, t.hex.r);
+      return { tile: t, x: p.x, y: p.y };
+    });
+    order.sort((a, b) => a.y - b.y);
+    const tileMap = new Map<string, Tile>();
+    for (const t of tiles) tileMap.set(`${t.hex.q},${t.hex.r}`, t);
+    this.geomCache = { tiles, order, tileMap };
+    return this.geomCache;
+  }
 
   constructor(canvas: HTMLCanvasElement, state: GameState) {
     this.canvas = canvas;
@@ -263,12 +297,8 @@ export class BoardView {
 
   public render() {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-    
-    const sortedTiles = [...this.state.currentTiles].sort((a, b) => {
-      const pA = this.hexToPixel(a.hex.q, a.hex.r);
-      const pB = this.hexToPixel(b.hex.q, b.hex.r);
-      return pA.y - pB.y;
-    });
+
+    const { order, tileMap } = this.getGeom();
 
     this.ctx.save();
     this.ctx.translate(this.CENTER_X, this.CENTER_Y);
@@ -276,11 +306,19 @@ export class BoardView {
     this.ctx.translate(-this.CENTER_X, -this.CENTER_Y);
     this.ctx.translate(this.state.cameraOffset.x, this.state.cameraOffset.y);
 
-    const tileMap = new Map<string, Tile>();
-    for (const t of sortedTiles) tileMap.set(`${t.hex.q},${t.hex.r}`, t);
+    // Culling de viewport: solo dibujamos las casillas cuyo píxel cae dentro del
+    // canvas (con margen para el alto del hex y su relieve). En ARENA (~5400
+    // casillas) esto reduce los dibujados a las ~pocas cientos visibles.
+    const z = this.state.zoom;
+    const { x: offX, y: offY } = this.state.cameraOffset;
+    const m = this.HEX_SIZE * 2;
+    const minX = (0 - this.CENTER_X) / z + this.CENTER_X - offX - m;
+    const maxX = (this.canvas.width - this.CENTER_X) / z + this.CENTER_X - offX + m;
+    const minY = (0 - this.CENTER_Y) / z + this.CENTER_Y - offY - m;
+    const maxY = (this.canvas.height - this.CENTER_Y) / z + this.CENTER_Y - offY + m;
 
-    for (const tile of sortedTiles) {
-      const { x, y } = this.hexToPixel(tile.hex.q, tile.hex.r);
+    for (const { tile, x, y } of order) {
+      if (x < minX || x > maxX || y < minY || y > maxY) continue;
       this.drawHex(x, y, this.getBiomeTexture(tile.biome));
       this.drawBiomeTransitions(tile, x, y, tileMap);
 
@@ -324,8 +362,89 @@ export class BoardView {
       } else if (this.state.isMoveTarget(tile.hex)) {
         this.drawTileOverlay(x, y, 'rgba(34, 197, 94, 0.35)', '#86efac', 2, true);
       }
+
+      // Botín en la casilla: cofre (prioritario) o bola caída en el suelo.
+      if (tile.chest) this.drawChest(x, y);
+      else if (tile.groundBall) this.drawGroundBall(x, y, tile.groundBall);
     }
     this.ctx.restore();
+  }
+
+  /** Cofre de botín (pixel-art 8-bit, sin asset externo). */
+  private drawChest(x: number, y: number): void {
+    const w = this.HEX_SIZE * 0.9;
+    const h = this.HEX_SIZE * 0.62;
+    const left = x - w / 2;
+    const top = y - h * 0.55;
+    const ctx = this.ctx;
+    ctx.save();
+    // Sombra.
+    ctx.beginPath();
+    ctx.ellipse(x, y + h * 0.5, w * 0.55, h * 0.2, 0, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.fill();
+    // Cuerpo y tapa (madera).
+    ctx.fillStyle = '#7b4a1e';
+    ctx.fillRect(left, top + h * 0.42, w, h * 0.58);
+    ctx.fillStyle = '#8a5a24';
+    ctx.fillRect(left, top, w, h * 0.45);
+    // Herrajes dorados.
+    ctx.fillStyle = '#f5c542';
+    ctx.fillRect(left + w * 0.12, top, w * 0.08, h);
+    ctx.fillRect(left + w * 0.8, top, w * 0.08, h);
+    ctx.fillRect(left, top + h * 0.4, w, h * 0.08);
+    // Cerradura.
+    ctx.fillStyle = '#f5c542';
+    ctx.fillRect(x - w * 0.09, top + h * 0.34, w * 0.18, h * 0.22);
+    ctx.fillStyle = '#3e2410';
+    ctx.fillRect(x - w * 0.03, top + h * 0.42, w * 0.06, h * 0.09);
+    // Brillo + contorno.
+    ctx.fillStyle = 'rgba(255,255,255,0.25)';
+    ctx.fillRect(left + w * 0.1, top + h * 0.06, w * 0.5, h * 0.06);
+    ctx.lineWidth = Math.max(1.5, w * 0.05);
+    ctx.strokeStyle = '#3e2410';
+    ctx.strokeRect(left, top, w, h);
+    ctx.restore();
+  }
+
+  /** Bola caída en el suelo (dibujada; el color superior identifica el tipo). */
+  private drawGroundBall(x: number, y: number, ball: BallKey): void {
+    const r = this.HEX_SIZE * 0.28;
+    const top = BALL_TOP[ball] ?? '#ee1515';
+    const ctx = this.ctx;
+    ctx.save();
+    // Sombra.
+    ctx.beginPath();
+    ctx.ellipse(x, y + r * 0.95, r * 0.9, r * 0.35, 0, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.fill();
+    // Mitad inferior (blanca) y superior (color del tipo).
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fillStyle = '#f5f5f5';
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(x, y, r, Math.PI, 2 * Math.PI);
+    ctx.fillStyle = top;
+    ctx.fill();
+    // Banda y contorno negros.
+    ctx.strokeStyle = '#111';
+    ctx.lineWidth = Math.max(1.5, r * 0.18);
+    ctx.beginPath();
+    ctx.moveTo(x - r, y);
+    ctx.lineTo(x + r, y);
+    ctx.stroke();
+    ctx.lineWidth = Math.max(1, r * 0.12);
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.stroke();
+    // Botón central.
+    ctx.beginPath();
+    ctx.arc(x, y, r * 0.28, 0, Math.PI * 2);
+    ctx.fillStyle = '#fff';
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
   }
 
   /** Dibuja un overlay hexagonal (selección / movimiento / ataque). */

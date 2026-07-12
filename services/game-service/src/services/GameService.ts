@@ -4,11 +4,15 @@ import { getMoveOptions, MoveOptions } from '../engine/movement.js';
 import { computeMoveDamage, calculateAoE } from '../engine/combat.js';
 import { terrainDamage } from '../engine/environment.js';
 import { collectResources, PlayerResources } from '../engine/resources.js';
+import { BALL_LABEL, pickChestBall } from '@transcendence/shared';
 
 // Contratos de estado en @transcendence/shared (única fuente de verdad).
 // Se re-exportan para no romper los imports existentes `from '../services/GameService.js'`.
 export type { MatchStatus, MatchStateDTO } from '@transcendence/shared';
-import type { MatchStatus, MatchStateDTO } from '@transcendence/shared';
+import type { MatchStatus, MatchStateDTO, BallKey } from '@transcendence/shared';
+
+/** Turnos que tarda en reaparecer el cofre en ARENA tras recogerse. */
+const CHEST_RESPAWN_TURNS = 4;
 
 export interface PlayResult {
   ok: boolean;
@@ -40,7 +44,11 @@ export class GameService {
     private persistent: boolean = false,
     public deploymentDeadline?: number,
     public reserve: Record<string, Pokemon[]> = {},
-    public deploymentZones: Record<string, Hex[]> = {}
+    public deploymentZones: Record<string, Hex[]> = {},
+    /** KOs acumulados por slot (para el resumen de recompensa). Persistido. */
+    private kos: Record<string, number> = {},
+    /** ARENA: turno en el que reaparece el cofre (0 = sin respawn pendiente). */
+    private chestRespawnTurn: number = 0
   ) {}
 
   static create(
@@ -92,7 +100,7 @@ export class GameService {
         deploymentZones[owner]!.push(t.hex);
       }
     }
-    return new GameService(
+    const game = new GameService(
       id,
       board,
       players,
@@ -109,6 +117,8 @@ export class GameService {
       reserve,
       deploymentZones
     );
+    game.seedChest(true);
+    return game;
   }
 
   /**
@@ -116,7 +126,7 @@ export class GameService {
    * jugadores entran/salen en caliente (addPlayer/removePlayer).
    */
   static createArena(id: string, board: Board): GameService {
-    return new GameService(
+    const game = new GameService(
       id,
       board,
       [],
@@ -130,6 +140,8 @@ export class GameService {
       [],
       true
     );
+    game.seedChest(true);
+    return game;
   }
 
   /** Tablero vivo (para calcular spawns al entrar en caliente en la ARENA). */
@@ -182,6 +194,100 @@ export class GameService {
    */
   private defeats: { killerSlot: string; victimSlot: string }[] = [];
 
+  /**
+   * Bolas a conceder al usuario de cada slot (al ganar o abandonar en arena).
+   * Efímero como `defeats`: se resetea al inicio de cada acción y no se serializa.
+   */
+  private rewards: { slot: string; balls: BallKey[] }[] = [];
+
+  // ------------------------------------------------------ cofres y botín (bolas)
+
+  /** Distancia hex al origen (para colocar el cofre inicial cerca del centro). */
+  private hexDist0(h: Hex): number {
+    return (Math.abs(h.q) + Math.abs(h.r) + Math.abs(h.q + h.r)) / 2;
+  }
+
+  private hasChest(): boolean {
+    for (const tile of this.board.tiles.values()) if (tile.chest) return true;
+    return false;
+  }
+
+  /** Coloca un cofre en una casilla de tierra libre (central si `central`). */
+  private seedChest(central = false): void {
+    const land: Tile[] = [];
+    for (const tile of this.board.tiles.values()) {
+      if (tile.biome !== 'WATER' && !tile.occupant && !tile.chest && !tile.groundBall) land.push(tile);
+    }
+    if (!land.length) return;
+    const chosen = central
+      ? land.reduce((best, t) => (this.hexDist0(t.hex) < this.hexDist0(best.hex) ? t : best), land[0]!)
+      : land[Math.floor(Math.random() * land.length)]!;
+    chosen.chest = true;
+    this.log.push('🎁 Ha aparecido un cofre en el mapa.');
+  }
+
+  /** El Pokémon que entra en `hex` recoge el cofre o la bola del suelo (1 bola/Pokémon). */
+  private collectFromTile(pokemon: Pokemon | null, hex: Hex): void {
+    if (!pokemon || pokemon.carriedBall) return;
+    const tile = this.board.getTile(hex);
+    if (!tile) return;
+    if (tile.chest) {
+      pokemon.carriedBall = pickChestBall(Math.random());
+      tile.chest = false;
+      this.log.push(`🎁 ${nameOf(pokemon)} abre el cofre y consigue ${BALL_LABEL[pokemon.carriedBall]}.`);
+      if (this.persistent) this.chestRespawnTurn = this.turn + CHEST_RESPAWN_TURNS;
+    } else if (tile.groundBall) {
+      pokemon.carriedBall = tile.groundBall;
+      delete tile.groundBall;
+      this.log.push(`🔵 ${nameOf(pokemon)} recoge ${BALL_LABEL[pokemon.carriedBall]} del suelo.`);
+    }
+  }
+
+  /** Un Pokémon KO suelta su bola en la casilla `hex` (recogible por otros). */
+  private dropBall(pokemon: Pokemon, hex: Hex): void {
+    if (!pokemon.carriedBall) return;
+    const tile = this.board.getTile(hex);
+    if (tile) {
+      tile.groundBall = pokemon.carriedBall;
+      this.log.push(`💥 ${nameOf(pokemon)} suelta ${BALL_LABEL[pokemon.carriedBall]} al caer.`);
+    }
+    delete pokemon.carriedBall;
+  }
+
+  private addKo(slot: string): void {
+    this.kos[slot] = (this.kos[slot] ?? 0) + 1;
+  }
+
+  /** Reúne las bolas que llevan los Pokémon vivos de cada slot (recompensa). */
+  private ballsCarriedBy(slot: string): BallKey[] {
+    const balls: BallKey[] = [];
+    for (const tile of this.board.tiles.values()) {
+      const occ = tile.occupant;
+      if (occ?.playerId === slot && occ.carriedBall) balls.push(occ.carriedBall);
+    }
+    return balls;
+  }
+
+  /** ARENA: reaparece el cofre si tocaba (o si el mundo se quedó sin ninguno). */
+  private maybeRespawnChest(): void {
+    if (!this.persistent || this.hasChest()) return;
+    // Si hay respawn programado, espera al turno; si no (mundo sin cofre), siembra ya.
+    if (this.chestRespawnTurn > 0 && this.turn < this.chestRespawnTurn) return;
+    this.seedChest(false);
+    this.chestRespawnTurn = 0;
+  }
+
+  /**
+   * ARENA: garantiza que haya al menos un cofre (para mundos persistentes creados
+   * antes de esta mecánica, que se cargan sin cofre). Respeta el respawn en curso.
+   * Devuelve true si sembró (para que el caller persista).
+   */
+  ensureChest(): boolean {
+    if (!this.persistent || this.hasChest() || this.chestRespawnTurn > 0) return false;
+    this.seedChest(false);
+    return true;
+  }
+
   /** Aliados en 2v2 (incluye a uno mismo); en FFA cada jugador va solo. */
   private sameTeam = (a: string, b: string): boolean => {
     if (a === b) return true;
@@ -222,6 +328,8 @@ export class GameService {
       ...(this.deploymentDeadline !== undefined ? { deploymentDeadline: this.deploymentDeadline } : {}),
       reserve: this.reserve,
       deploymentZones: this.deploymentZones,
+      kos: this.kos,
+      rewards: this.rewards,
     };
   }
 
@@ -306,6 +414,7 @@ export class GameService {
   // ---------------------------------------------------------------- movimiento
   play(playerId: string, from: Hex, to: Hex): PlayResult {
     this.defeats = [];
+    this.rewards = [];
     if (this.status === 'finished') {
       return { ok: false, error: 'La partida ha terminado', state: this.getStateDTO() };
     }
@@ -332,7 +441,10 @@ export class GameService {
     if (isMove) {
       this.board.moveOccupant(from, to);
       const moved = this.board.getOccupant(to);
-      if (moved) moved.hasActed = true;
+      if (moved) {
+        moved.hasActed = true;
+        this.collectFromTile(moved, to);
+      }
       this.log.push(`${nameOf(mover)} se mueve.`);
       this.updateStealthVisibility();
       return { ok: true, state: this.getStateDTO() };
@@ -387,6 +499,7 @@ export class GameService {
   // ---------------------------------------------------------------- combate AoE
   cast(playerId: string, from: Hex, targetHex: Hex, moveIndex: number): PlayResult {
     this.defeats = [];
+    this.rewards = [];
     if (this.status !== 'active') {
       return { ok: false, error: 'La partida no está activa', state: this.getStateDTO() };
     }
@@ -450,6 +563,8 @@ export class GameService {
               if (tile.occupant.hp <= 0) {
                  this.log.push(`💀 ¡${nameOf(tile.occupant)} ha caído KO!`);
                  this.defeats.push({ killerSlot: caster.playerId, victimSlot: tile.occupant.playerId });
+                 this.addKo(caster.playerId);
+                 this.dropBall(tile.occupant, tile.hex);
                  this.board.setOccupant(tile.hex, null);
               }
             }
@@ -472,6 +587,7 @@ export class GameService {
   // --------------------------------------------------------------------- turnos
   public endTurn(playerId?: string): PlayResult {
     this.defeats = [];
+    this.rewards = [];
     if (this.status === 'finished') {
       return { ok: false, error: 'La partida ha terminado', state: this.getStateDTO() };
     }
@@ -491,17 +607,32 @@ export class GameService {
     this.collectTurnResources();
     this.applyLavaDamage();
     if (this.status === 'active') this.switchPlayer();
+    this.maybeRespawnChest();
     return { ok: true, state: this.getStateDTO() };
   }
 
   public abandon(playerId?: string): PlayResult {
     this.defeats = [];
+    this.rewards = [];
     if (this.status === 'finished') {
       return { ok: false, error: 'La partida ya ha terminado', state: this.getStateDTO() };
     }
     const loser = playerId ?? this.currentPlayer;
     if (!this.players.includes(loser) || this.eliminated.includes(loser)) {
       return { ok: false, error: 'Ese jugador no está en la partida', state: this.getStateDTO() };
+    }
+
+    // Bolas del que abandona: en ARENA se las lleva (recompensa al momento); en
+    // partida finita las suelta en el mapa (la partida termina, es irrelevante).
+    if (this.persistent) {
+      const balls = this.ballsCarriedBy(loser);
+      if (balls.length) this.rewards.push({ slot: loser, balls });
+    } else {
+      for (const tile of this.board.tiles.values()) {
+        if (tile.occupant?.playerId === loser && tile.occupant.carriedBall) {
+          this.dropBall(tile.occupant, tile.hex);
+        }
+      }
     }
 
     // Abandonar = eliminación: se retiran todas sus piezas y la partida sigue
@@ -528,6 +659,7 @@ export class GameService {
             this.log.push(`¡${nameOf(tile.occupant)} se quema en la lava (-${dmg} HP, turno ${tile.occupant.lavaTurns})!`);
             if (tile.occupant.hp <= 0) {
               this.log.push(`¡${nameOf(tile.occupant)} ha caído KO por la lava!`);
+              this.dropBall(tile.occupant, tile.hex);
               this.board.setOccupant(tile.hex, null);
             }
           }
@@ -584,6 +716,11 @@ export class GameService {
       this.status = 'finished';
       this.winner = alive.join(' & ');
       this.log.push(`🏆 ${this.winner} gana la partida.`);
+      // Recompensa: cada ganador se lleva las bolas de sus Pokémon supervivientes.
+      for (const slot of alive) {
+        const balls = this.ballsCarriedBy(slot);
+        if (balls.length) this.rewards.push({ slot, balls });
+      }
     }
   }
 
@@ -618,6 +755,8 @@ export class GameService {
       deploymentDeadline: this.deploymentDeadline,
       reserve: this.reserve,
       deploymentZones: this.deploymentZones,
+      kos: this.kos,
+      chestRespawnTurn: this.chestRespawnTurn,
     });
   }
 
@@ -639,7 +778,9 @@ export class GameService {
       d.persistent ?? false,
       d.deploymentDeadline,
       d.reserve ?? {},
-      d.deploymentZones ?? {}
+      d.deploymentZones ?? {},
+      d.kos ?? {},
+      d.chestRespawnTurn ?? 0
     );
   }
 

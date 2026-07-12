@@ -3,7 +3,8 @@
  * ÚNICA fuente de verdad. El servidor es autoritativo: el cliente recibe
  * `MatchStateDTO` y solo renderiza.
  */
-import type { Tile, PlayerResources, Pokemon } from './domain.js';
+import type { Pokemon, Tile, PlayerResources } from './domain.js';
+import type { BallKey } from './balls.js';
 
 export type MatchStatus = 'deployment' | 'active' | 'finished';
 export type CombatAction = 'ATACAR' | 'HABILIDAD' | 'OBJETO' | 'HUIR' | 'MOVE';
@@ -33,6 +34,13 @@ export interface MatchStateDTO {
   reserve?: Record<string, Pokemon[]>;
   /** Casillas válidas para el despliegue de cada jugador. */
   deploymentZones?: Record<string, Tile['hex'][]>;
+  /** KOs acumulados por slot durante la partida (para el resumen de recompensa). Persistido. */
+  kos?: Record<string, number>;
+  /**
+   * Bolas a conceder al usuario de cada slot (al ganar o abandonar en arena).
+   * Efímero, patrón `defeats`: no se persiste, viaja en el DTO y la economía lo consume.
+   */
+  rewards?: { slot: string; balls: BallKey[] }[];
 }
 
 /** Alias histórico usado por el frontend. */

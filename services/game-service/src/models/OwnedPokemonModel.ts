@@ -8,6 +8,8 @@ export interface OwnedPokemonRecord {
   level: number;
   is_starter: number;
   acquired_via: string;
+  /** Id de la subasta en la que está retenida (escrow); null si está libre. */
+  auction_id?: string | null;
   created_at?: string;
 }
 
@@ -69,6 +71,16 @@ export const OwnedPokemonModel = {
     const db = await getDb();
     await db.run(
       "UPDATE owned_pokemon SET user_id = ?, acquired_via = 'capture', is_starter = 0 WHERE id = ?",
+      toUserId,
+      id
+    );
+  },
+
+  /** Regala una instancia a otro usuario (transferencia directa entre amigos). */
+  async gift(id: string, toUserId: string): Promise<void> {
+    const db = await getDb();
+    await db.run(
+      "UPDATE owned_pokemon SET user_id = ?, acquired_via = 'gift', is_starter = 0 WHERE id = ?",
       toUserId,
       id
     );

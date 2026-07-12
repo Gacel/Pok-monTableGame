@@ -1,11 +1,42 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
-import type { GameMode } from '@transcendence/shared';
+import type { GameMode, MatchStateDTO } from '@transcendence/shared';
+import { BALL_SPRITE } from '@transcendence/shared';
 import { matchManager } from '../services/MatchManager.js';
 import { PokemonService } from '../services/PokemonService.js';
+import { MoveModel } from '../models/MoveModel.js';
+import { UserModel } from '../models/UserModel.js';
+import { ItemModel } from '../models/ItemModel.js';
 import { hub, LOCAL_ROOM } from '../realtime/hub.js';
 import { Hex } from '../engine/hex.js';
 import { GameActionService, GameAction } from '../services/GameActionService.js';
 import { isHex } from '../utils/hex.js';
+
+/** Slot del usuario logueado en partidas LOCAL (hot-seat / vs IA): siempre P1. */
+const LOCAL_USER_SLOT = 'player1';
+
+function reqUserId(request: FastifyRequest): string | null {
+  return (request as FastifyRequest & { userId?: string }).userId ?? null;
+}
+
+/**
+ * Recompensa LOCAL (hot-seat / vs IA): el online/arena la da EconomyService, pero
+ * el modo local no pasa por ahí. Si el usuario logueado (P1) gana, se le acreditan
+ * las monedas (500×KOs + pool de victoria) y las bolas conseguidas en el cofre.
+ */
+async function awardLocal(state: MatchStateDTO, userId: string): Promise<void> {
+  if (state.status !== 'finished' || !state.winner) return;
+  const winners = state.winner.split(' & ');
+  if (!winners.includes(LOCAL_USER_SLOT)) return;
+
+  const kos = state.kos?.[LOCAL_USER_SLOT] ?? 0;
+  const losers = Math.max(0, state.players.length - winners.length);
+  const winShare = winners.length > 0 ? Math.floor((1000 * losers) / winners.length) : 0;
+  const coins = 500 * kos + winShare;
+  if (coins > 0) await UserModel.addCoins(userId, coins);
+
+  const reward = state.rewards?.find((r) => r.slot === LOCAL_USER_SLOT);
+  for (const ball of reward?.balls ?? []) await ItemModel.add(userId, 'pokeball', BALL_SPRITE[ball], 1);
+}
 
 interface MoveBody {
   from?: Hex;
@@ -37,13 +68,15 @@ interface StartBody {
 }
 
 /** Ejecuta una acción LOCAL (hot-seat) por el pipeline único. El actor es el jugador de turno. */
-async function applyLocal(action: GameAction) {
+async function applyLocal(action: GameAction, userId?: string | null) {
   const game = matchManager.get();
   const actor = game.getStateDTO().currentPlayer;
   const result = await GameActionService.apply(
     { game, actor, isLocal: true, room: LOCAL_ROOM },
     action
   );
+  // Recompensa al usuario logueado si acaba de ganar (local no pasa por EconomyService).
+  if (result.ok && userId) await awardLocal(result.state, userId);
   return result.ok
     ? { success: true, state: result.state }
     : { success: false, error: result.error, state: result.state };
@@ -86,7 +119,15 @@ export const GameController = {
       return reply.code(400).send({ success: false, error: 'Nombre inválido' });
     }
     const tpl = await PokemonService.getTemplate(name);
-    const moves = await PokemonService.getCuratedMoves(name, tpl.type);
+    const curated = await PokemonService.getCuratedMoves(name, tpl.type);
+    // Enriquece cada ataque con su descripción corta YA cacheada en la tabla
+    // `moves` (findMove es una lectura de SQLite: NO genera llamadas a PokeAPI).
+    const moves = await Promise.all(
+      curated.map(async (m) => {
+        const row = await MoveModel.findMove(m.name);
+        return { ...m, shortEffect: row?.shortEffect ?? null };
+      })
+    );
     return {
       success: true,
       pokemon: {
@@ -154,7 +195,7 @@ export const GameController = {
     if (!isHex(from) || !isHex(to)) {
       return reply.code(400).send({ success: false, error: 'Coordenadas from/to inválidas' });
     }
-    return applyLocal({ type: 'move', from, to });
+    return applyLocal({ type: 'move', from, to }, reqUserId(request));
   },
 
   async deploy(request: FastifyRequest<{ Body: DeployBody }>, reply: FastifyReply) {
@@ -183,11 +224,11 @@ export const GameController = {
     return { success: true, state: game.getStateDTO() };
   },
 
-  async endTurn() {
-    return applyLocal({ type: 'end_turn' });
+  async endTurn(request: FastifyRequest) {
+    return applyLocal({ type: 'end_turn' }, reqUserId(request));
   },
 
-  async abandon() {
-    return applyLocal({ type: 'abandon' });
+  async abandon(request: FastifyRequest) {
+    return applyLocal({ type: 'abandon' }, reqUserId(request));
   },
 };

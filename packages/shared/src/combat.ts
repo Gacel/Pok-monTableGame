@@ -1,4 +1,4 @@
-import { Hex } from './domain.js';
+import type { Hex } from './domain.js';
 
 // Replicating basic hex logic needed for AoE
 const DIRECTIONS: Hex[] = [
