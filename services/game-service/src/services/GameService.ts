@@ -8,8 +8,8 @@ import { BALL_LABEL, pickChestBall } from '@transcendence/shared';
 
 // Contratos de estado en @transcendence/shared (única fuente de verdad).
 // Se re-exportan para no romper los imports existentes `from '../services/GameService.js'`.
-export type { MatchStatus, MatchStateDTO } from '@transcendence/shared';
-import type { MatchStatus, MatchStateDTO, BallKey } from '@transcendence/shared';
+export type { MatchStatus, MatchStateDTO, TurnEvent } from '@transcendence/shared';
+import type { MatchStatus, MatchStateDTO, BallKey, TurnEvent } from '@transcendence/shared';
 
 /** Turnos que tarda en reaparecer el cofre en ARENA tras recogerse. */
 const CHEST_RESPAWN_TURNS = 4;
@@ -200,6 +200,13 @@ export class GameService {
    */
   private rewards: { slot: string; balls: BallKey[] }[] = [];
 
+  /**
+   * Eventos de feedback visual de la ÚLTIMA acción (daño, KO, …). El frontend los
+   * consume para animar. Efímero como `defeats`: se resetea al inicio de cada acción
+   * y NO se serializa.
+   */
+  private events: TurnEvent[] = [];
+
   // ------------------------------------------------------ cofres y botín (bolas)
 
   /** Distancia hex al origen (para colocar el cofre inicial cerca del centro). */
@@ -296,6 +303,7 @@ export class GameService {
   };
 
   getStateDTO(requestingPlayerId?: string): MatchStateDTO {
+    const censoredIds = new Set<string>();
     const serializedTiles = this.board.serialize().map((tile: Tile) => {
       // Si la partida está activa, el pokemon está oculto, y no somos de su equipo, lo censuramos.
       // En fase de despliegue, la visibilidad la gestiona el frontend de forma global.
@@ -306,10 +314,18 @@ export class GameService {
         requestingPlayerId &&
         !this.sameTeam(tile.occupant.playerId, requestingPlayerId)
       ) {
+        censoredIds.add(tile.occupant.id);
         return { ...tile, occupant: null };
       }
       return tile;
     });
+
+    // Un evento que apunta a un enemigo AÚN oculto para este jugador se omite (un
+    // número flotante no debe revelar una pieza invisible). Los KO de piezas ya
+    // retiradas del tablero se conservan (su id no está entre los censurados).
+    const events = censoredIds.size
+      ? this.events.filter((e) => !e.pokemonId || !censoredIds.has(e.pokemonId))
+      : this.events;
 
     return {
       id: this.id,
@@ -330,6 +346,7 @@ export class GameService {
       deploymentZones: this.deploymentZones,
       kos: this.kos,
       rewards: this.rewards,
+      events,
     };
   }
 
@@ -343,6 +360,7 @@ export class GameService {
   // ---------------------------------------------------------------- despliegue
   public deploy(playerId: string, pokemonId: string, hex: Hex): PlayResult {
     this.defeats = [];
+    this.events = [];
     if (this.status === 'deployment' && this.deploymentDeadline && Date.now() > this.deploymentDeadline) {
       this.forceStart();
     }
@@ -415,6 +433,7 @@ export class GameService {
   play(playerId: string, from: Hex, to: Hex): PlayResult {
     this.defeats = [];
     this.rewards = [];
+    this.events = [];
     if (this.status === 'finished') {
       return { ok: false, error: 'La partida ha terminado', state: this.getStateDTO() };
     }
@@ -500,6 +519,7 @@ export class GameService {
   cast(playerId: string, from: Hex, targetHex: Hex, moveIndex: number): PlayResult {
     this.defeats = [];
     this.rewards = [];
+    this.events = [];
     if (this.status !== 'active') {
       return { ok: false, error: 'La partida no está activa', state: this.getStateDTO() };
     }
@@ -559,9 +579,11 @@ export class GameService {
               tile.occupant.hp = Math.max(0, tile.occupant.hp - dmg);
               hits++;
               this.log.push(`💥 ${nameOf(tile.occupant)} recibe ${dmg} de daño (HP: ${tile.occupant.hp}).`);
-              
+              this.events.push({ kind: 'damage', pokemonId: tile.occupant.id, hex: tile.hex, delta: -dmg });
+
               if (tile.occupant.hp <= 0) {
                  this.log.push(`💀 ¡${nameOf(tile.occupant)} ha caído KO!`);
+                 this.events.push({ kind: 'ko', pokemonId: tile.occupant.id, hex: tile.hex });
                  this.defeats.push({ killerSlot: caster.playerId, victimSlot: tile.occupant.playerId });
                  this.addKo(caster.playerId);
                  this.dropBall(tile.occupant, tile.hex);
@@ -588,6 +610,7 @@ export class GameService {
   public endTurn(playerId?: string): PlayResult {
     this.defeats = [];
     this.rewards = [];
+    this.events = [];
     if (this.status === 'finished') {
       return { ok: false, error: 'La partida ha terminado', state: this.getStateDTO() };
     }
@@ -614,6 +637,7 @@ export class GameService {
   public abandon(playerId?: string): PlayResult {
     this.defeats = [];
     this.rewards = [];
+    this.events = [];
     if (this.status === 'finished') {
       return { ok: false, error: 'La partida ya ha terminado', state: this.getStateDTO() };
     }
@@ -657,8 +681,10 @@ export class GameService {
           if (dmg > 0) {
             tile.occupant.hp -= dmg;
             this.log.push(`¡${nameOf(tile.occupant)} se quema en la lava (-${dmg} HP, turno ${tile.occupant.lavaTurns})!`);
+            this.events.push({ kind: 'damage', pokemonId: tile.occupant.id, hex: tile.hex, delta: -dmg });
             if (tile.occupant.hp <= 0) {
               this.log.push(`¡${nameOf(tile.occupant)} ha caído KO por la lava!`);
+              this.events.push({ kind: 'ko', pokemonId: tile.occupant.id, hex: tile.hex });
               this.dropBall(tile.occupant, tile.hex);
               this.board.setOccupant(tile.hex, null);
             }

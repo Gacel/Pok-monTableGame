@@ -20,4 +20,6 @@ export type {
   CombatAction,
   MatchStateDTO,
   MatchState,
+  TurnEvent,
+  TurnEventKind,
 } from '@transcendence/shared';
