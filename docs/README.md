@@ -45,7 +45,7 @@
 | 19 | [`19-TERRAIN_MAP.md`](19-TERRAIN_MAP.md) | Generación de hierba alta y montaña en el mapa procedural + gráficos únicos (texturas base y relieve/altura) y colores de minimapa. (Ticket T1.0) |
 | 20 | [`20-LOCAL_PRESENTATION.md`](20-LOCAL_PRESENTATION.md) | Presentación y control en local: ocultación desde la perspectiva del humano, control de turno vs-IA, cámara con teclado, sprites estáticos, efecto de agua y nombres de jugador/IA. (Tickets T1.3, T1.4) |
 | 21 | [`21-STEALTH_REVEAL.md`](21-STEALTH_REVEAL.md) | Revelación de un oculto al ser golpeado por un AoE (flag `revealed`, evento `reveal`, emboscada intacta). (Tickets T1.1, T1.2) |
-| 22 | [`22-PASSIVES_TERRAIN.md`](22-PASSIVES_TERRAIN.md) | Pasivas y terreno avanzado (Épica 2): fantasmas atraviesan unidades (T2.1); pendientes curación de Planta/pantano y números flotantes. |
+| 22 | [`22-PASSIVES_TERRAIN.md`](22-PASSIVES_TERRAIN.md) | Pasivas y terreno avanzado (Épica 2): fantasmas atraviesan unidades (T2.1), curación de Planta en hierba + pantano (T2.2) y números flotantes de daño/curación (T2.3). |
 
 ## Archivo (histórico, no numerado)
 
