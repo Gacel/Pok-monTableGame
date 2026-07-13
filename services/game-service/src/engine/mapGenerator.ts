@@ -98,10 +98,12 @@ function classify(
 ): Biome {
   if (elevation < o.seaLevel) return 'WATER';
   if (elevation < o.seaLevel + o.beachWidth) return 'SAND'; // costa
-  // Cordilleras/picos: cumbre helada si es fría; si no, volcánica (FIRE) salvo laderas húmedas.
+  // Cordilleras/picos: cumbre helada si es fría; volcánica (FIRE) solo si es seca;
+  // el resto, roca (MOUNTAIN).
   if (elevation > o.mountainLevel) {
     if (temperature < 0.35) return 'ICE';
-    return humidity < 0.6 ? 'FIRE' : 'GRASS';
+    if (humidity < 0.58) return 'FIRE';
+    return 'MOUNTAIN';
   }
   if (temperature < 0.25) return 'ICE'; // polos
   if (humidity < 0.25 && temperature > 0.55) return 'SAND'; // desierto interior
@@ -109,6 +111,9 @@ function classify(
   // (justo por encima de la costa). Genera pantanos contiguos junto al agua.
   if (humidity > 0.56 && temperature > 0.4 && elevation < o.seaLevel + o.beachWidth + 0.2)
     return 'SWAMP';
+  // Pradera húmeda/alta (hierba alta): tierras medias con humedad templada, por encima
+  // del pantano. Es el terreno del sigilo (Épica 1).
+  if (humidity > 0.5 && temperature > 0.35) return 'TALL_GRASS';
   return 'GRASS';
 }
 
