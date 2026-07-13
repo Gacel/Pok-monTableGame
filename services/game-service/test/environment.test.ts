@@ -65,6 +65,13 @@ describe('engine · terrainDamage (lógica pura)', () => {
     expect(terrainDamage(flying, 'FIRE')).toBe(0);
     expect(terrainDamage(flying, 'SWAMP')).toBe(0);
   });
+
+  it('hierba alta: una Planta se cura 8% maxHp (negativo); otros tipos, 0 (T2.2)', () => {
+    const grass = mk({ id: 'g', playerId: 'player1', type: 'GRASS', hp: 40, maxHp: 100 });
+    const normal = mk({ id: 'n', playerId: 'player1', type: 'NORMAL', maxHp: 100 });
+    expect(terrainDamage(grass, 'TALL_GRASS')).toBe(-8); // 8% de 100, curación
+    expect(terrainDamage(normal, 'TALL_GRASS')).toBe(0);
+  });
 });
 
 describe('GameService · efectos de fin de turno (T0.2)', () => {
@@ -162,5 +169,35 @@ describe('GameService · efectos de fin de turno (T0.2)', () => {
     game.endTurn('player1');
     expect(full.hp).toBe(50);
     expect(full.hp).toBeLessThanOrEqual(full.maxHp!);
+  });
+
+  it('hierba alta: una Planta con HP bajo se cura ~8% y emite heal (T2.2)', () => {
+    const grass = mk({ id: 'g', playerId: 'player1', type: 'GRASS', hp: 40, maxHp: 100 });
+    const game = activeOnBiome(grass, 'TALL_GRASS');
+
+    const r = game.endTurn('player1');
+    expect(grass.hp).toBe(48); // +8
+
+    const heal = (r.state.events ?? []).filter((e) => e.kind === 'heal' && e.pokemonId === 'g');
+    expect(heal).toHaveLength(1);
+    expect(heal[0]!.delta).toBe(8);
+  });
+
+  it('hierba alta: curación clamp a maxHp y sin número fantasma a HP lleno', () => {
+    // Cerca del tope: solo recupera lo que falta (2), no 8.
+    const nearFull = mk({ id: 'g', playerId: 'player1', type: 'GRASS', hp: 98, maxHp: 100 });
+    const g1 = activeOnBiome(nearFull, 'TALL_GRASS');
+    const r1 = g1.endTurn('player1');
+    expect(nearFull.hp).toBe(100);
+    const heal1 = (r1.state.events ?? []).filter((e) => e.kind === 'heal' && e.pokemonId === 'g');
+    expect(heal1).toHaveLength(1);
+    expect(heal1[0]!.delta).toBe(2); // delta REAL aplicado
+
+    // A HP lleno: sin curación efectiva → sin evento heal (nada de "+N" fantasma).
+    const full = mk({ id: 'g2', playerId: 'player1', type: 'GRASS', hp: 100, maxHp: 100 });
+    const g2 = activeOnBiome(full, 'TALL_GRASS');
+    const r2 = g2.endTurn('player1');
+    expect(full.hp).toBe(100);
+    expect((r2.state.events ?? []).some((e) => e.kind === 'heal' && e.pokemonId === 'g2')).toBe(false);
   });
 });
