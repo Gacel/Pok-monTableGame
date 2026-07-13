@@ -33,6 +33,8 @@ export class MinimapView {
     SAND: '#d9c27a',
     ICE: '#bfe3f5',
     SWAMP: '#4a5a34',
+    TALL_GRASS: '#2f7d33',
+    MOUNTAIN: '#8b857a',
   };
 
   /** Color de cada jugador (mismos que el HUD y el banner de turno). */
@@ -184,9 +186,16 @@ export class MinimapView {
     for (const t of tiles) {
       if (!t.occupant) continue;
       if (isDeployment && t.occupant.playerId !== this.state.match?.currentPlayer) continue;
+      // Misma ocultación que el tablero: no revelar en el minimapa los ocultos del
+      // enemigo (vs-IA). `hiddenAllySlots` null en online/hot-seat → sin filtro.
+      const allies = this.state.hiddenAllySlots;
+      if (t.occupant.isHidden && allies && !allies.includes(t.occupant.playerId)) continue;
       const p = this.boardView.hexToPixel(t.hex.q, t.hex.r);
       const x = offX + (p.x - b.minX) * scale;
       const y = offY + (p.y - b.minY) * scale;
+      // Los ocultos que sí se muestran (los míos en vs-IA, o ambos en hot-seat) se
+      // pintan translúcidos, como indicador de emboscada (igual que en el tablero).
+      ctx.globalAlpha = t.occupant.isHidden ? 0.45 : 1;
       ctx.beginPath();
       ctx.arc(x, y, Math.max(2, cell * 0.7), 0, Math.PI * 2);
       ctx.fillStyle = MinimapView.PLAYER_COLORS[t.occupant.playerId] ?? '#e5e7eb';
@@ -194,6 +203,7 @@ export class MinimapView {
       ctx.lineWidth = 0.5;
       ctx.fill();
       ctx.stroke();
+      ctx.globalAlpha = 1;
     }
 
     // Recuadro del viewport visible actualmente en el canvas principal.
