@@ -462,6 +462,7 @@ export class GameService {
       const moved = this.board.getOccupant(to);
       if (moved) {
         moved.hasActed = true;
+        moved.revealed = false; // reubicarse permite volver a esconderse (T1.1)
         this.collectFromTile(moved, to);
       }
       this.log.push(`${nameOf(mover)} se mueve.`);
@@ -501,8 +502,8 @@ export class GameService {
         if (enemyAdjacent) break;
       }
 
-      if (inGrass && !enemyAdjacent && !pokemon.hasActed) {
-        // Puede esconderse
+      if (inGrass && !enemyAdjacent && !pokemon.hasActed && !pokemon.revealed) {
+        // Puede esconderse (salvo si fue descubierto por daño y no se ha reubicado, T1.1)
         if (pokemon.isHidden === false || pokemon.isHidden === undefined) {
            pokemon.isHidden = true;
         }
@@ -588,6 +589,13 @@ export class GameService {
                  this.addKo(caster.playerId);
                  this.dropBall(tile.occupant, tile.hex);
                  this.board.setOccupant(tile.hex, null);
+              } else if (tile.occupant.isHidden) {
+                 // Golpeado por AoE y sobrevive: se descubre (T1.1). `revealed` evita que
+                 // updateStealthVisibility lo vuelva a ocultar estando quieto.
+                 tile.occupant.isHidden = false;
+                 tile.occupant.revealed = true;
+                 this.log.push(`👁️ ¡${nameOf(tile.occupant)} ha sido descubierto!`);
+                 this.events.push({ kind: 'reveal', pokemonId: tile.occupant.id, hex: tile.hex });
               }
             }
          }

@@ -24,7 +24,16 @@ export class BoardView {
     WATER: new Image(),
     GRASS: new Image(),
     SAND: new Image(),
-    ICE: new Image()
+    ICE: new Image(),
+    SWAMP: new Image(),
+    TALL_GRASS: new Image(),
+    MOUNTAIN: new Image()
+  };
+
+  /** Overlays de relieve (dibujo encima del tile) para terrenos con altura. */
+  private reliefs = {
+    TALL_GRASS: new Image(),
+    MOUNTAIN: new Image()
   };
 
   private EDGE_DIRS: Hex[] = [
@@ -76,10 +85,16 @@ export class BoardView {
     this.textures.GRASS.src = '/assets/grass.png';
     this.textures.SAND.src = '/assets/sand.png';
     this.textures.ICE.src = '/assets/ice.png';
+    this.textures.SWAMP.src = '/assets/swamp.png';
+    this.textures.TALL_GRASS.src = '/assets/tall_grass.png';
+    this.textures.MOUNTAIN.src = '/assets/mountain.png';
+    this.reliefs.TALL_GRASS.src = '/assets/tall_grass_relief.png';
+    this.reliefs.MOUNTAIN.src = '/assets/mountain_relief.png';
   }
 
   public async preloadImages() {
-    const promises = Object.values(this.textures).map(img => {
+    const all = [...Object.values(this.textures), ...Object.values(this.reliefs)];
+    const promises = all.map(img => {
       return new Promise((resolve) => {
         img.onload = resolve;
         img.onerror = resolve; 
@@ -95,6 +110,9 @@ export class BoardView {
       case 'GRASS': return this.textures.GRASS;
       case 'SAND': return this.textures.SAND;
       case 'ICE': return this.textures.ICE;
+      case 'SWAMP': return this.textures.SWAMP;
+      case 'TALL_GRASS': return this.textures.TALL_GRASS;
+      case 'MOUNTAIN': return this.textures.MOUNTAIN;
       default: return this.textures.GRASS;
     }
   }
@@ -256,7 +274,7 @@ export class BoardView {
     this.ctx.restore();
   }
 
-  private drawHex(x: number, y: number, img?: HTMLImageElement, tint?: string) {
+  private drawHex(x: number, y: number, img?: HTMLImageElement) {
     const points = [];
     const isoScale = 0.55;
     for (let i = 0; i < 6; i++) {
@@ -297,24 +315,44 @@ export class BoardView {
       this.ctx.drawImage(img, x - imgSize / 2, y / isoScale - imgSize / 2, imgSize, imgSize);
       this.ctx.restore();
     } else {
-      const fallback = img === this.textures.FIRE ? '#ef4444' : 
-                       img === this.textures.WATER ? '#3b82f6' : 
-                       img === this.textures.SAND ? '#eab308' : 
-                       img === this.textures.ICE ? '#93c5fd' : '#22c55e';
+      const fallback = img === this.textures.FIRE ? '#ef4444' :
+                       img === this.textures.WATER ? '#3b82f6' :
+                       img === this.textures.SAND ? '#eab308' :
+                       img === this.textures.ICE ? '#93c5fd' :
+                       img === this.textures.SWAMP ? '#3a4a24' :
+                       img === this.textures.TALL_GRASS ? '#2f7d33' :
+                       img === this.textures.MOUNTAIN ? '#8b857a' : '#22c55e';
       this.ctx.fillStyle = fallback;
-      this.ctx.fill();
-    }
-
-    // Tinte turbio superpuesto (p. ej. SWAMP sobre la textura de hierba): oscurece
-    // el bioma base para distinguirlo sin necesidad de una textura propia.
-    if (tint) {
-      this.ctx.fillStyle = tint;
       this.ctx.fill();
     }
 
     this.ctx.lineWidth = 1.5;
     this.ctx.strokeStyle = 'rgba(0,0,0,0.3)';
     this.ctx.stroke();
+  }
+
+  /**
+   * Dibuja el overlay de relieve (altura) de los terrenos que lo tienen: la imagen se
+   * ancla con su base cerca del centro del hex y se extiende hacia arriba. Como el
+   * bucle de render pinta por Y, los tiles de delante la ocluyen de forma natural.
+   */
+  private drawRelief(tile: Tile, x: number, y: number, fogged: boolean): void {
+    let img: HTMLImageElement | null = null;
+    let scale = 1;
+    if (tile.biome === 'MOUNTAIN') { img = this.reliefs.MOUNTAIN; scale = 2.3; }
+    else if (tile.biome === 'TALL_GRASS') { img = this.reliefs.TALL_GRASS; scale = 1.5; }
+    if (!img || !img.complete || img.naturalHeight === 0) return;
+
+    // Sin multiplicar por zoom: el bucle de render ya aplica ctx.scale(zoom), igual
+    // que drawHex (que usa HEX_SIZE en crudo). Multiplicarlo aquí lo escalaría al ².
+    const size = this.HEX_SIZE * scale;
+    // Base del dibujo un poco por debajo del centro del hex; el resto sube.
+    const baseY = y + this.HEX_SIZE * 0.4;
+    // Bajo niebla, oscurecer el relieve para que no asome por encima del overlay del
+    // hex (~0.65 negro ≈ brightness 0.35).
+    if (fogged) this.ctx.filter = 'brightness(0.35)';
+    this.ctx.drawImage(img, x - size / 2, baseY - size, size, size);
+    if (fogged) this.ctx.filter = 'none';
   }
 
   public render() {
@@ -341,18 +379,22 @@ export class BoardView {
 
     for (const { tile, x, y } of order) {
       if (x < minX || x > maxX || y < minY || y > maxY) continue;
-      const tint = tile.biome === 'SWAMP' ? 'rgba(58, 74, 44, 0.62)' : undefined;
-      this.drawHex(x, y, this.getBiomeTexture(tile.biome), tint);
-      this.drawBiomeTransitions(tile, x, y, tileMap);
 
       const isSelected =
         this.state.selectedHex &&
         this.state.selectedHex.q === tile.hex.q &&
         this.state.selectedHex.r === tile.hex.r;
 
-      const isDeploymentZone = 
+      const isDeploymentZone =
         this.state.match?.status === 'deployment' &&
         this.state.match?.deploymentZones?.[this.state.match.currentPlayer]?.some(z => z.q === tile.hex.q && z.r === tile.hex.r);
+
+      // Niebla de despliegue: casillas fuera de la zona (y no seleccionadas) se oscurecen.
+      const fogged = this.state.match?.status === 'deployment' && !isSelected && !isDeploymentZone;
+
+      this.drawHex(x, y, this.getBiomeTexture(tile.biome));
+      this.drawBiomeTransitions(tile, x, y, tileMap);
+      this.drawRelief(tile, x, y, !!fogged);
 
       if (isSelected) {
         this.drawTileOverlay(x, y, 'rgba(255, 255, 0, 0.4)', '#fff', 3);

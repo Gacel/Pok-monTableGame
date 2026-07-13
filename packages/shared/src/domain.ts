@@ -81,6 +81,8 @@ export interface Pokemon {
   hasActed?: boolean;
   /** Si el Pokémon está oculto en la hierba alta. */
   isHidden?: boolean;
+  /** Descubierto por daño de área: no vuelve a ocultarse hasta que se reubica (T1.1). */
+  revealed?: boolean;
   /** Ataques curados (≤4) disponibles en la fase de combate. */
   moves?: PokemonMove[];
   /** Bola que transporta este Pokémon (recogida de un cofre/suelo). La suelta si es KO. */

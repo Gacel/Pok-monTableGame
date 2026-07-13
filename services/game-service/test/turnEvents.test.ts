@@ -85,7 +85,7 @@ describe('GameService · canal de eventos de turno (TurnEvent)', () => {
     expect((after.state.events ?? []).some((e) => e.pokemonId === 'v')).toBe(false);
   });
 
-  it('niebla: el daño a un enemigo AÚN oculto se omite para el rival, no para el dueño', () => {
+  it('niebla + T1.1: un oculto golpeado por AoE se revela; sus eventos pasan a verse para el rival', () => {
     const vHex = { q: 3, r: 0 };
     const caster = mk({ id: 'c', playerId: 'player1', type: 'NORMAL', atk: 30, moves: [RANGED] });
     const victim = mk({
@@ -98,7 +98,7 @@ describe('GameService · canal de eventos de turno (TurnEvent)', () => {
       isHidden: true,
     });
     const board = Board.generateBasic(6);
-    board.getTile(vHex)!.biome = 'TALL_GRASS'; // para que siga oculto tras el ataque a distancia
+    board.getTile(vHex)!.biome = 'TALL_GRASS';
     board.setOccupant({ q: 0, r: 0 }, caster);
     board.setOccupant(vHex, victim);
     const game = new GameService(
@@ -113,13 +113,15 @@ describe('GameService · canal de eventos de turno (TurnEvent)', () => {
       []
     );
 
-    // Ataque a distancia (no adyacente) → la víctima sigue oculta tras el cast.
+    // Ataque a distancia que daña sin matar → la víctima se DESCUBRE (T1.1).
     const r = game.cast('player1', { q: 0, r: 0 }, vHex, 0);
     expect(r.ok).toBe(true);
 
     const forOwner = game.getStateDTO('player2'); // dueño del oculto
     const forEnemy = game.getStateDTO('player1'); // rival (atacante)
+    // Al revelarse, sus eventos dejan de censurarse: los ve el dueño Y el rival.
     expect((forOwner.events ?? []).some((e) => e.pokemonId === 'v')).toBe(true);
-    expect((forEnemy.events ?? []).some((e) => e.pokemonId === 'v')).toBe(false);
+    expect((forEnemy.events ?? []).some((e) => e.pokemonId === 'v')).toBe(true);
+    expect((forEnemy.events ?? []).some((e) => e.kind === 'reveal' && e.pokemonId === 'v')).toBe(true);
   });
 });

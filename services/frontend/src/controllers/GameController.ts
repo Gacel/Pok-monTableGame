@@ -40,6 +40,9 @@ export class GameController {
   private busy = false;
   private wsClient: WsClient | null = null;
   private cameraAnimId: number | null = null;
+  /** Direcciones de paneo de cámara activas (teclas mantenidas: flechas / WASD). */
+  private panKeys = new Set<string>();
+  private panAnimId: number | null = null;
   /** Sesión de partida ONLINE (matchId + slot propio); null en local hot-seat. */
   private session: OnlineSession | null = null;
   /** Slots controlados por la IA (solo local): slot → nivel (1/2/3). */
@@ -108,6 +111,14 @@ export class GameController {
   /** Configura los slots controlados por la IA (solo local). */
   public setBots(bots: Record<string, BotLevel> | null): void {
     this.bots = bots ?? {};
+    // Bautiza a los slots de IA (se llama tras setSession, que fija los nombres por
+    // defecto). El nombre representa que el oponente NO es humano; el número
+    // desambigua cuando hay varias IAs (FFA).
+    const slots = Object.keys(this.bots);
+    for (const slot of slots) {
+      const n = slot.replace('player', '');
+      this.state.playerNames[slot] = slots.length > 1 ? `IA ${n}` : 'IA';
+    }
   }
 
   private isBotSlot(slot: string): boolean {
@@ -158,7 +169,7 @@ export class GameController {
     // Tope de seguridad: evita bucles si una acción no consume la pieza.
     const ownPieces = m.tiles.filter((t) => t.occupant && t.occupant.playerId === slot);
     if (this.botActionCount > ownPieces.length + 2) {
-      await this.endTurn();
+      await this.endTurn(true);
       return;
     }
     this.botActionCount++;
@@ -183,7 +194,7 @@ export class GameController {
     }
 
     if (!pieces.length) {
-      await this.endTurn();
+      await this.endTurn(true);
       return;
     }
 
@@ -191,7 +202,7 @@ export class GameController {
     const biomeOf = (h: Hex) => m.tiles.find((t) => t.hex.q === h.q && t.hex.r === h.r)?.biome;
     const decision = decideBotAction(pieces, enemies, this.bots[slot] ?? 2, Math.random, biomeOf);
     if (decision.type === 'end') {
-      await this.endTurn();
+      await this.endTurn(true);
     } else {
       await this.performMove(decision.from, decision.to);
     }
@@ -217,8 +228,27 @@ export class GameController {
   private isMyTurn(): boolean {
     const match = this.state.match;
     if (!match) return false;
-    if (!this.session) return true; // local: el turno se comparte en pantalla
+    // Local: el turno se comparte en pantalla (hot-seat), PERO en el turno de un slot
+    // controlado por la IA el humano no debe poder actuar ni pasar turno.
+    if (!this.session) return !this.isBotSlot(match.currentPlayer);
     return match.currentPlayer === this.session.mySlot;
+  }
+
+  /**
+   * Perspectiva de ocultación en LOCAL. Online (server censura) y hot-seat (pantalla
+   * compartida) → null (sin ocultación en cliente). vs-IA → equipo humano: los
+   * ocultos de la IA no se muestran; los del humano sí (translúcidos).
+   */
+  private updateStealthPerspective(): void {
+    const match = this.state.match;
+    if (this.session || !match || Object.keys(this.bots).length === 0) {
+      this.state.hiddenAllySlots = null;
+      return;
+    }
+    const humans = match.players.filter((p) => !this.bots[p]);
+    this.state.hiddenAllySlots = match.players.filter((p) =>
+      humans.some((h) => !this.isEnemySlot(h, p))
+    );
   }
 
   private turnOwnerLabel(): string {
@@ -314,6 +344,7 @@ export class GameController {
     const startY = this.state.cameraOffset.y;
     const duration = 800;
     const startTime = performance.now();
+    this.state.cameraMoving = true; // sprites sin transición mientras dura el centrado
 
     const step = (now: number) => {
       const elapsed = now - startTime;
@@ -329,6 +360,7 @@ export class GameController {
         this.cameraAnimId = requestAnimationFrame(step);
       } else {
         this.cameraAnimId = null;
+        this.state.cameraMoving = false;
       }
     };
     this.cameraAnimId = requestAnimationFrame(step);
@@ -339,6 +371,7 @@ export class GameController {
     const oldPlayer = this.state.match?.currentPlayer;
 
     this.state.setMatch(newState);
+    this.updateStealthPerspective();
 
     // Feedback visual: reproducir los eventos de la acción (T0.1). Se omite en la
     // carga inicial (sin `oldPlayer`) para no reproducir eventos viejos al entrar,
@@ -396,7 +429,10 @@ export class GameController {
         case 'damage':
           this.fxLayer.floatingNumber(ev.hex, String(ev.delta ?? 0), 'damage');
           break;
-        // heal, reveal, knockback, dash, capture → sus tickets (T2.3, T1.2, T3.x, T8.5).
+        case 'reveal':
+          this.fxLayer.flash(ev.hex); // "!" de emboscada revelada (T1.2)
+          break;
+        // heal, knockback, dash, capture → sus tickets (T2.3, T3.x, T8.5).
         default:
           break;
       }
@@ -452,12 +488,9 @@ export class GameController {
     if (!btn) return;
     const match = this.state.match;
     const inMatch = match?.status === 'active';
-    if (this.session) {
-      const show = inMatch && this.isMyTurn();
-      btn.style.display = show ? '' : 'none';
-    } else {
-      btn.style.display = inMatch ? '' : 'none';
-    }
+    // Solo cuando este cliente puede actuar: online fuera de tu turno, y en local
+    // durante el turno de la IA, el botón se oculta (isMyTurn ya lo distingue).
+    btn.style.display = inMatch && this.isMyTurn() ? '' : 'none';
   }
 
 
@@ -497,7 +530,10 @@ export class GameController {
         this.hasDragged = true;
         this.canvas.style.cursor = 'grabbing';
       }
-      
+
+      // Arrastre de cámara: sprites sin transición para que no "bailen" (igual que el
+      // paneo con teclado).
+      this.state.cameraMoving = true;
       this.state.setCameraOffset(
         this.initialCameraOffsetX + dx * scaleX,
         this.initialCameraOffsetY + dy * scaleY
@@ -506,12 +542,14 @@ export class GameController {
 
     this.canvas.onmouseup = async (e) => {
       this.isDragging = false;
+      this.state.cameraMoving = false;
       this.canvas.style.cursor = 'default';
       if (!this.hasDragged) await this.handleCanvasClick(e);
     };
 
     this.canvas.onmouseleave = () => {
       this.isDragging = false;
+      this.state.cameraMoving = false;
       this.canvas.style.cursor = 'default';
     };
 
@@ -519,9 +557,9 @@ export class GameController {
       'wheel',
       (e) => {
         e.preventDefault();
-        // Durante el combate (o al terminar) el tablero está bajo el overlay:
-        // el zoom queda bloqueado para que no se "asome" el mapa por detrás.
-        if (this.state.match && this.state.match.status !== 'active') return;
+        // Al TERMINAR la partida el tablero queda bajo el overlay de victoria: el zoom
+        // se bloquea para que no se "asome" el mapa. En despliegue y juego sí se permite.
+        if (this.state.match && this.state.match.status === 'finished') return;
         const delta = e.deltaY > 0 ? -0.1 : 0.1;
         let newZoom = this.state.zoom + delta;
         if (newZoom < 0.3) newZoom = 0.3;
@@ -765,9 +803,10 @@ export class GameController {
     }
   }
 
-  private async endTurn(): Promise<void> {
+  private async endTurn(fromBot = false): Promise<void> {
     if (this.busy) return;
-    if (!this.isMyTurn()) {
+    // El bot pasa su propio turno (isMyTurn es falso en turno de IA); el humano no.
+    if (!fromBot && !this.isMyTurn()) {
       this.hudView.flashToast(`Turno de ${this.turnOwnerLabel()}`);
       return;
     }
@@ -859,9 +898,65 @@ export class GameController {
     document.dispatchEvent(new CustomEvent('return-to-menu'));
   }
 
+  /** Mapea una tecla a una dirección de paneo de cámara (flechas / WASD), o null. */
+  private panDirForKey(key: string): 'up' | 'down' | 'left' | 'right' | null {
+    switch (key) {
+      case 'ArrowUp': case 'w': case 'W': return 'up';
+      case 'ArrowDown': case 's': case 'S': return 'down';
+      case 'ArrowLeft': case 'a': case 'A': return 'left';
+      case 'ArrowRight': case 'd': case 'D': return 'right';
+      default: return null;
+    }
+  }
+
+  /** Aplica un paso de paneo según las teclas mantenidas. */
+  private panStep(): void {
+    if (this.panKeys.size === 0) return;
+    // Velocidad constante en pantalla: el offset se aplica en el espacio escalado,
+    // así que se divide por el zoom (px/frame de pantalla ≈ constante).
+    const step = 34 / this.state.zoom;
+    let dx = 0;
+    let dy = 0;
+    if (this.panKeys.has('left')) dx += step;
+    if (this.panKeys.has('right')) dx -= step;
+    if (this.panKeys.has('up')) dy += step;
+    if (this.panKeys.has('down')) dy -= step;
+    this.state.setCameraOffset(this.state.cameraOffset.x + dx, this.state.cameraOffset.y + dy);
+  }
+
+  /** Bucle de paneo mientras haya teclas de dirección mantenidas. */
+  private startPanLoop(): void {
+    if (this.panAnimId !== null) return;
+    // Cancela cualquier centrado animado en curso (el paneo manual manda).
+    if (this.cameraAnimId !== null) {
+      cancelAnimationFrame(this.cameraAnimId);
+      this.cameraAnimId = null;
+    }
+    this.state.cameraMoving = true;
+    // Primer paso inmediato: respuesta instantánea al pulsar (no espera al 1er frame).
+    this.panStep();
+    const loop = () => {
+      if (this.panKeys.size === 0) {
+        this.panAnimId = null;
+        this.state.cameraMoving = false;
+        return;
+      }
+      this.panStep();
+      this.panAnimId = requestAnimationFrame(loop);
+    };
+    this.panAnimId = requestAnimationFrame(loop);
+  }
+
   private setupKeyboardShortcuts(): void {
     let lastKey = '';
     let lastKeyTime = 0;
+
+    // Soltar tecla / perder foco: liberar direcciones de paneo (evita que se queden pegadas).
+    window.addEventListener('keyup', (e) => {
+      const dir = this.panDirForKey(e.key);
+      if (dir) this.panKeys.delete(dir);
+    });
+    window.addEventListener('blur', () => this.panKeys.clear());
 
     window.addEventListener('keydown', (e) => {
       if (
@@ -869,6 +964,18 @@ export class GameController {
         e.target instanceof HTMLTextAreaElement ||
         e.target instanceof HTMLSelectElement
       ) {
+        return;
+      }
+
+      // Paneo de cámara. Las flechas SIEMPRE panean. WASD panea solo cuando NO hay
+      // pieza seleccionada: con pieza, Q/W/E/R son los hotkeys de movimiento, así que
+      // WASD queda inhabilitado como bloque (coherente: si W no panea, A/S/D tampoco).
+      const dir = this.panDirForKey(e.key);
+      const isWasd = /^[wasd]$/i.test(e.key);
+      if (dir && !(isWasd && this.state.selectedHex)) {
+        e.preventDefault();
+        this.panKeys.add(dir);
+        this.startPanLoop();
         return;
       }
 

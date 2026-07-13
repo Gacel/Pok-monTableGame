@@ -15,6 +15,12 @@ export class GameState {
   private _activeMoveIndex: number | null = null;
   public selectedReserveId: string | null = null;
   public hoverHex: Hex | null = null;
+  /**
+   * True mientras la cámara se mueve (paneo con teclado o centrado animado). Los
+   * sprites se reposicionan SIN transición para que queden estáticos sobre el mapa
+   * (si no, la transición CSS de left/top los hace "bailar" al panear).
+   */
+  public cameraMoving = false;
   private _lastInteractedPokemonId: Record<string, string | null> = {};
   private listeners: Set<Listener> = new Set();
 
@@ -23,6 +29,13 @@ export class GameState {
 
   /** Slot propio en partidas ONLINE (player1..4); null en local hot-seat. */
   public mySlot: string | null = null;
+  /**
+   * Slots cuyos Pokémon OCULTOS se muestran (translúcidos) en local. `null` = sin
+   * ocultación en cliente (online —el servidor ya censura— o hot-seat —pantalla
+   * compartida—). En vs-IA contiene los slots del equipo humano: los ocultos de
+   * slots fuera de esta lista (la IA) no se renderizan.
+   */
+  public hiddenAllySlots: string[] | null = null;
   /** Nombres visibles por slot (player1 → username) en partidas online. */
   public playerNames: Record<string, string> = {};
 
