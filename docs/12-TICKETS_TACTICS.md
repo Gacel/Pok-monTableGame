@@ -347,6 +347,74 @@ sin duplicados). Doc detallado: [`18-VISUAL_FEEDBACK.md`](18-VISUAL_FEEDBACK.md)
 
 # ÉPICA 1 — Completar Sigilo (Fase 3)
 
+## 🎟️ T1.0 — Terrenos completos en el mapa + gráficos únicos (PRERREQUISITO)
+
+**Historia de usuario:** Como jugador, quiero que el mapa tenga hierba alta y montañas de
+verdad (con gráfico y relieve propios), para que el sigilo y el terreno importen.
+
+**Objetivos de desarrollo:** generar `TALL_GRASS` y `MOUNTAIN` en el generador procedural
+(nunca aparecían) y dar gráfico distintivo a hierba alta / montaña / pantano, con relieve
+(altura) en los dos primeros; colores de minimapa.
+
+**Dudas resueltas (con el usuario):** assets PNG propios (1024²); los terrenos con relieve
+llevan un dibujo adicional encima para dar altura; alcance = hierba alta + montaña + pantano.
+
+**Criterios de aceptación:**
+- [x] El mapa genera `TALL_GRASS` y `MOUNTAIN` (además de `SWAMP`) en cantidades visibles; test lo verifica.
+- [x] Hierba alta, montaña y pantano tienen gráfico propio; hierba alta y montaña muestran relieve/altura.
+- [x] El minimapa refleja los tres terrenos con color propio.
+
+### ✅ Resolución (lo realmente hecho)
+
+- **`mapGenerator.classify`**: MOUNTAIN en alta cota no-fría/no-seca; TALL_GRASS en tierras
+  medias húmedas. Los 8 biomas presentes (normal y arena); FIRE reequilibrado (umbral 0.58).
+- **Assets (usuario)**: `swamp/tall_grass/mountain.png` (base) + `*_relief.png` (relieve).
+  `BoardView`: texturas + `drawRelief` (altura, ocluido por Y, oscurecido en niebla), fin
+  del tinte-hack de SWAMP; `MinimapView`: colores nuevos.
+- **Fix**: el relieve escalaba al ² con el zoom (se quitó el `*zoom` redundante).
+- Test `mapGenerator.test.ts` (presencia de biomas). Doc: [`19-TERRAIN_MAP.md`](19-TERRAIN_MAP.md).
+
+**Dependencias:** →TR.1. **Paralelizable:** sí (prerrequisito de T1.1/T1.2).
+
+## 🎟️ T1.3 — Ocultación local desde la perspectiva del humano (frontend)
+
+**Historia de usuario:** Como jugador vs-IA, no quiero ver los Pokémon ocultos del rival
+(sí los míos, translúcidos), y en hot-seat (pantalla compartida) da igual mostrar todo.
+
+**Criterios de aceptación:**
+- [x] En vs-IA, los ocultos de la IA no se renderizan (tablero y minimapa); los míos, translúcidos.
+- [x] Hot-seat muestra todo; online sin cambios (server ya censura).
+
+### ✅ Resolución
+
+`GameState.hiddenAllySlots` (null en online/hot-seat; equipo humano en vs-IA), calculado en
+`GameController.updateStealthPerspective`; `EntityView`/`MinimapView` omiten los ocultos
+enemigos y pintan translúcidos los propios. Doc: [`20-LOCAL_PRESENTATION.md`](20-LOCAL_PRESENTATION.md).
+
+**Dependencias:** →TR.1. **Paralelizable:** sí.
+
+## 🎟️ T1.4 — Presentación y control local (cámara, agua, nombres, turno vs-IA)
+
+**Historia de usuario:** Como jugador, quiero mover la cámara con teclado, que los Pokémon
+no "bailen", ver nombres reales (y a la IA como tal), un efecto de agua, y no poder actuar
+en el turno de la IA.
+
+**Criterios de aceptación:**
+- [x] Cámara con WASD/flechas (suave), sprites estáticos sobre el mapa al mover cámara.
+- [x] En vs-IA, el humano no actúa ni ve el botón FINALIZAR TURNO en el turno de la IA.
+- [x] Etiquetas con nombre real de jugador; la IA se llama "IA".
+- [x] Pokémon en agua medio sumergido (2/3) con línea de flotación; zoom disponible en despliegue.
+
+### ✅ Resolución
+
+`GameController`: paneo `panKeys`/`startPanLoop` (WASD solo sin pieza; flechas siempre),
+`isMyTurn` local = `!isBotSlot`, `endTurn(fromBot)`, botón por `updateTurnControls`, IA
+bautizada en `setBots`, zoom bloqueado solo en `finished`. `GameState.cameraMoving` +
+`EntityView` (sin transición al mover; agua: máscara 2/3 + recentrado + línea de flotación
+`wl-`; nombre por `labelFor`). Doc: [`20-LOCAL_PRESENTATION.md`](20-LOCAL_PRESENTATION.md).
+
+**Dependencias:** →T1.0. **Paralelizable:** no (surge de probar el terreno).
+
 ## 🎟️ T1.1 — Revelación por daño AoE (backend)
 
 **Historia de usuario:** Como jugador, quiero que un Pokémon oculto en hierba alta se

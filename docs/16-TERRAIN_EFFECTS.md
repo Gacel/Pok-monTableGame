@@ -110,9 +110,12 @@ Pokémon nace encima.
 
 ## Cambio 3 — Render del pantano (frontend)
 
-Los assets de bioma son texturas 1024×1024 y no hay una de pantano. En vez de crear un
-asset nuevo, el pantano se dibuja con la **textura de hierba + un tinte turbio oscuro**
-superpuesto, que lo distingue con claridad:
+> **Actualización (T1.0):** el pantano ya tiene **textura propia** (`swamp.png`) y el
+> tinte-hack descrito aquí se **eliminó**. Ver [`19-TERRAIN_MAP.md`](19-TERRAIN_MAP.md).
+> Lo que sigue documenta la solución original de T0.2.
+
+Los assets de bioma son texturas 1024×1024 y no había una de pantano. En T0.2 el pantano
+se dibujaba con la **textura de hierba + un tinte turbio oscuro** superpuesto:
 
 - [`services/frontend/src/views/BoardView.ts`](../services/frontend/src/views/BoardView.ts):
   `drawHex(x, y, img?, tint?)` acepta un tinte opcional que rellena el hexágono tras
