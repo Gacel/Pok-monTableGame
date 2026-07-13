@@ -38,3 +38,6 @@ gateway/certs/
 .idea/
 .vscode/
 *.swp
+
+# Proyecto Next anidado ajeno (pendiente de borrar por el usuario) — no trackear
+/ft_transcendence/
