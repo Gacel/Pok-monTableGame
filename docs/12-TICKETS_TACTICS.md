@@ -465,12 +465,20 @@ un enemigo oculto aparece de golpe, para notar la emboscada revelada.
 **Dudas resueltas:** animación "!" (D4).
 
 **Criterios de aceptación:**
-- [ ] Al revelarse un enemigo, se ve el flash/"!" antes de asentar el sprite.
+- [x] Al revelarse un enemigo, se ve el flash/"!" antes de asentar el sprite.
 
 **Investigación:** `EntityView.ts` (aparición de nodos, sin animación de entrada hoy),
 util de T0.4.
 
 **Dependencias:** →T1.1, →T0.4. **Paralelizable:** no.
+
+### ✅ Resolución (lo realmente hecho)
+
+Cambio de una línea: `GameController.dispatchEvents` añade `case 'reveal'` →
+`fxLayer.flash(ev.hex)` (primitiva `flash` de T0.4). El servidor solo emite el `reveal`
+cuando la pieza ya es visible (filtro de niebla), así que el flash aparece solo para quien
+debe verlo. Verificado (usuario) en vs-IA. Doc: [`21-STEALTH_REVEAL.md`](21-STEALTH_REVEAL.md).
+**Cierra la Épica 1 (Sigilo).**
 
 ---
 

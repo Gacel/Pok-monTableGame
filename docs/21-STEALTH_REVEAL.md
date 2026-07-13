@@ -42,9 +42,15 @@ el solicitante; en cuanto la víctima se revela (`isHidden = false`), sus evento
   test de niebla de T0.1 (un oculto golpeado ahora se revela).
 - game-service **39/39**; `tsc` limpio en los 3 workspaces; imagen Docker sana.
 
+## Flash de revelado (T1.2)
+
+Ya implementado: `GameController.dispatchEvents` añade `case 'reveal'` →
+`fxLayer.flash(ev.hex)`, que reproduce el destello **"!"** amarillo sobre el hex del
+Pokémon descubierto (primitiva `flash` de [`FxLayer`](18-VISUAL_FEEDBACK.md), T0.4). El
+servidor solo emite el `reveal` cuando la pieza ya es visible (filtro de niebla), así que
+el flash solo aparece para quien debe verlo. Con T1.2 se cierra la **Épica 1 (Sigilo)**.
+
 ## Pendiente / relacionado
 
-- **T1.2 (frontend):** consumir el evento `reveal` para el flash/"!" estilo Metal Gear
-  (usa la primitiva `flash` de `FxLayer`, [T0.4](18-VISUAL_FEEDBACK.md)).
 - La censura de eventos de un oculto (niebla) volverá a tener trigger de integración con
   la curación en hierba de T2.2 (evento `heal` sobre un Pokémon que sigue oculto).
