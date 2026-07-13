@@ -80,7 +80,20 @@ export function getMoveOptions(
             attacks.push(nextHex);
           }
         }
-        continue; // No se puede atravesar a otros Pokémon (aliados o enemigos) en esta versión simple.
+        // Fantasma (D1): atraviesa a todos (aliados y enemigos). Se expande el Dijkstra
+        // a través de la casilla ocupada para explorar más allá, pero NO se añade a
+        // `moves` (no puede terminar en casilla ocupada). Sin ataque de oportunidad.
+        if (pokemon.type === 'GHOST') {
+          const stepCost = getTerrainCost(pokemon, nextTile.biome);
+          if (stepCost !== Infinity) {
+            const newCost = curr.cost + stepCost;
+            if (newCost <= speed && (!costSoFar.has(nextKey) || newCost < costSoFar.get(nextKey)!)) {
+              costSoFar.set(nextKey, newCost);
+              queue.push({ hex: nextHex, cost: newCost });
+            }
+          }
+        }
+        continue; // No se puede terminar sobre otra pieza (ni la atraviesa un no-Fantasma).
       }
 
       const stepCost = getTerrainCost(pokemon, nextTile.biome);
