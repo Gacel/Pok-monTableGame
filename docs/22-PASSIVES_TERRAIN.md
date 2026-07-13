@@ -29,6 +29,33 @@ Como los destinos válidos (`moves`) siguen siendo solo casillas vacías, `GameS
 ocupada; atraviesa aliados sin atacarlos; ninguna ocupada aparece en `moves`. game-service
 43/43, `tsc` limpio, imagen Docker sana.
 
-## T2.2 — Curación de Planta en hierba + daño de pantano *(pendiente)*
+## T2.2 — Curación de Planta en hierba alta + pantano visible
 
-## T2.3 — Números flotantes de daño/curación *(pendiente)*
+**Por qué:** T0.2 dejó la maquinaria de efectos de fin de turno (`applyEndOfTurnEffects`:
+clamp, eventos `damage`/`heal`/`ko`, logs), pero **ningún terreno curaba** todavía.
+
+**Cómo:**
+- [`engine/environment.ts`](../services/game-service/src/engine/environment.ts)
+  `terrainDamage`: si `TALL_GRASS` y tipo `GRASS`, devuelve **`-Math.round(0.08 * maxHp)`**
+  (negativo = curación de **8% maxHp/turno**, D9). Los demás tipos, 0.
+- [`GameService.applyEndOfTurnEffects`](../services/game-service/src/services/GameService.ts):
+  refinado para emitir el **delta REALMENTE aplicado** (`applied = hp - before`): curar a
+  HP lleno no emite un `heal` "+N" fantasma; si `applied === 0` se omite. El daño de
+  lava/pantano y el KO por terreno siguen igual (con la magnitud real en el log).
+
+Un Pokémon de Planta **oculto** en hierba alta se cura sin revelarse (solo el AoE revela,
+T1.1); su evento `heal` queda censurado por niebla para el rival (visible para el dueño).
+
+**Verificación:** `test/environment.test.ts` — `terrainDamage(TALL_GRASS, GRASS) = -8`;
+integración: Planta con HP bajo recupera 8% y emite `heal`; clamp a maxHp con delta real;
+a HP lleno sin evento. game-service 46/46.
+
+## T2.3 — Números flotantes de daño/curación (frontend)
+
+**Cómo:** [`GameController.dispatchEvents`](../services/frontend/src/controllers/GameController.ts)
+añade `case 'heal'` → `fxLayer.floatingNumber(hex, '+N', 'heal')` (verde). El número de
+daño (`-N` rojo) de combate **y de fin de turno** (lava/pantano) ya se pintaba desde T0.4
+(caso `damage`). `FxLayer.floatingNumber` ya soporta el `kind:'heal'`.
+
+**Verificación:** `tsc` de mi cambio limpio, tests frontend 17/17; OK visual del usuario
+(`+N` verde al curarse una Planta en hierba; `-N` rojo en pantano). **Cierra la Épica 2.**

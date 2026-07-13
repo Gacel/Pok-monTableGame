@@ -80,6 +80,11 @@ export function terrainDamage(pokemon: Pokemon, terrain: Biome): number {
     if (pokemon.type === 'POISON' || pokemon.type === 'STEEL') return 0;
     return 2; // Daño tóxico constante
   }
-  
+
+  // Curación de Planta en hierba alta (D9): negativo = curación de 8% de maxHp/turno.
+  if (terrain === 'TALL_GRASS' && pokemon.type === 'GRASS') {
+    return -Math.round(0.08 * pokemon.maxHp);
+  }
+
   return 0;
 }

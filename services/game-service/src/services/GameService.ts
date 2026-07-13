@@ -704,21 +704,26 @@ export class GameService {
         occ.lavaTurns = 0;
       }
 
-      const dmg = terrainDamage(occ, tile.biome);
-      if (dmg === 0) continue;
+      const raw = terrainDamage(occ, tile.biome);
+      if (raw === 0) continue;
 
-      // Clamp a [0, maxHp]: soporta daño (dmg>0) y curación (dmg<0) sin pasar maxHp.
+      // Clamp a [0, maxHp] (soporta daño raw>0 y curación raw<0). El evento usa el
+      // delta REALMENTE aplicado: curar a HP lleno no emite un "+N" fantasma.
       const maxHp = occ.maxHp ?? occ.hp;
-      occ.hp = Math.max(0, Math.min(maxHp, occ.hp - dmg));
+      const before = occ.hp;
+      occ.hp = Math.max(0, Math.min(maxHp, before - raw));
+      const applied = occ.hp - before; // <0 daño real · >0 curación real · 0 sin efecto
+      if (applied === 0) continue;
 
-      if (dmg > 0) {
-        this.events.push({ kind: 'damage', pokemonId: occ.id, hex: tile.hex, delta: -dmg });
+      if (applied < 0) {
+        const lost = -applied;
+        this.events.push({ kind: 'damage', pokemonId: occ.id, hex: tile.hex, delta: applied });
         if (tile.biome === 'FIRE') {
-          this.log.push(`¡${nameOf(occ)} se quema en la lava (-${dmg} HP, turno ${occ.lavaTurns})!`);
+          this.log.push(`¡${nameOf(occ)} se quema en la lava (-${lost} HP, turno ${occ.lavaTurns})!`);
         } else if (tile.biome === 'SWAMP') {
-          this.log.push(`☠️ ${nameOf(occ)} sufre el pantano (-${dmg} HP).`);
+          this.log.push(`☠️ ${nameOf(occ)} sufre el pantano (-${lost} HP).`);
         } else {
-          this.log.push(`${nameOf(occ)} sufre el terreno (-${dmg} HP).`);
+          this.log.push(`${nameOf(occ)} sufre el terreno (-${lost} HP).`);
         }
         if (occ.hp <= 0) {
           this.log.push(`¡${nameOf(occ)} ha caído KO por el terreno!`);
@@ -727,10 +732,9 @@ export class GameService {
           this.board.setOccupant(tile.hex, null);
         }
       } else {
-        // Curación (dmg<0): la regla concreta (Planta en hierba, 8% maxHp) llega en
-        // T2.2; aquí solo se habilita la maquinaria y el evento `heal`.
-        this.events.push({ kind: 'heal', pokemonId: occ.id, hex: tile.hex, delta: -dmg });
-        this.log.push(`♻️ ${nameOf(occ)} se regenera (+${-dmg} HP).`);
+        // Curación (Planta en hierba alta, 8% maxHp — D9).
+        this.events.push({ kind: 'heal', pokemonId: occ.id, hex: tile.hex, delta: applied });
+        this.log.push(`♻️ ${nameOf(occ)} se regenera (+${applied} HP).`);
       }
     }
     this.checkWinCondition();
