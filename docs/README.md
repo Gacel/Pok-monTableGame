@@ -10,7 +10,7 @@
   `SCREAMING_SNAKE_CASE`: `NN-NOMBRE.md`.
 - El número refleja el **orden de creación**, no la importancia ni un orden de
   lectura obligatorio. El siguiente documento nuevo usa el número más alto + 1
-  (el último a día de hoy es `20`, así que el próximo sería `21-*.md`).
+  (el último a día de hoy es `21`, así que el próximo sería `22-*.md`).
 - Los documentos **históricos** (diarios de sesión, auditorías puntuales, planes
   de refactor ya ejecutados) van a `docs/archive/`, sin numerar — son un
   registro de un momento concreto, no una referencia a mantener al día. Cada uno
@@ -44,6 +44,7 @@
 | 18 | [`18-VISUAL_FEEDBACK.md`](18-VISUAL_FEEDBACK.md) | Primitivas de feedback visual del cliente (`FxLayer`: número flotante, flash, tween) y consumo del canal de eventos en `GameController` (dispatch + dedup). (Ticket T0.4) |
 | 19 | [`19-TERRAIN_MAP.md`](19-TERRAIN_MAP.md) | Generación de hierba alta y montaña en el mapa procedural + gráficos únicos (texturas base y relieve/altura) y colores de minimapa. (Ticket T1.0) |
 | 20 | [`20-LOCAL_PRESENTATION.md`](20-LOCAL_PRESENTATION.md) | Presentación y control en local: ocultación desde la perspectiva del humano, control de turno vs-IA, cámara con teclado, sprites estáticos, efecto de agua y nombres de jugador/IA. (Tickets T1.3, T1.4) |
+| 21 | [`21-STEALTH_REVEAL.md`](21-STEALTH_REVEAL.md) | Revelación de un oculto al ser golpeado por un AoE (flag `revealed`, evento `reveal`, emboscada intacta). (Ticket T1.1) |
 
 ## Archivo (histórico, no numerado)
 

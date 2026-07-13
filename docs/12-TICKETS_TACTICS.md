@@ -430,16 +430,28 @@ revele si lo alcanza un ataque de área, para que el sigilo no sea inmune al fue
 **Dudas resueltas:** el flash visual va en T1.2 (feedback completo, D4).
 
 **Criterios de aceptación:**
-- [ ] Un AoE sobre hierba con un oculto enemigo en el radio lo revela (pasa a visible
+- [x] Un AoE sobre hierba con un oculto enemigo en el radio lo revela (pasa a visible
       en el DTO del rival).
-- [ ] La emboscada ×1.5 solo aplica si el **atacante** estaba oculto al lanzar.
-- [ ] Test unitario/integración del revelado por daño.
+- [x] La emboscada ×1.5 solo aplica si el **atacante** estaba oculto al lanzar.
+- [x] Test unitario/integración del revelado por daño.
 
 **Investigación:** `GameService.cast` bucle de daño (`GameService.ts:435-458`, KO en
 452), `updateStealthVisibility` (`GameService.ts:343-385`), emboscada en
 `engine/combat.ts:27`.
 
 **Dependencias:** ninguna (mejor con T0.1 para el evento). **Paralelizable:** sí.
+
+### ✅ Resolución (lo realmente hecho)
+
+- Flag **`revealed`** en `Pokemon` (`packages/shared/src/domain.ts`): un oculto golpeado por
+  AoE que sobrevive pasa a `isHidden=false`, `revealed=true`, log `👁️` y evento `reveal`.
+- **Desviación necesaria:** `updateStealthVisibility` re-ocultaba al Pokémon en la misma
+  acción (corre tras `cast`); ahora su rama de re-ocultado exige `!revealed`. El flag se
+  limpia al **moverse** (`play`) para poder re-esconderse.
+- Emboscada intacta (depende de `caster.isHidden`, aún activo durante el cálculo).
+- Tests: `stealthReveal.test.ts` (revelado persistente, emboscada, KO); actualizado el test
+  de niebla de T0.1 (un oculto golpeado ahora se revela). game-service 39/39.
+- Doc: [`21-STEALTH_REVEAL.md`](21-STEALTH_REVEAL.md).
 
 ## 🎟️ T1.2 — Flash de revelado "!" (frontend)
 
