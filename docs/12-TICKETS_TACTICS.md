@@ -499,15 +499,23 @@ otras unidades al moverse, para posicionarlos de forma etérea.
 oportunidad; solo no puede terminar en casilla ocupada.
 
 **Criterios de aceptación:**
-- [ ] Un Fantasma calcula rutas atravesando montañas y otras piezas.
-- [ ] No puede terminar su movimiento en una casilla ocupada.
-- [ ] Un no-Fantasma sigue bloqueado por ocupantes (sin regresión).
-- [ ] Tests del motor para ambos casos.
+- [x] Un Fantasma calcula rutas atravesando montañas y otras piezas.
+- [x] No puede terminar su movimiento en una casilla ocupada.
+- [x] Un no-Fantasma sigue bloqueado por ocupantes (sin regresión).
+- [x] Tests del motor para ambos casos.
 
 **Investigación:** `getMoveOptions` occupant-skip (`movement.ts:71` check, `:83`
 `continue`), tipos con coste 1 ya en `environment.ts:31` (FLYING/GHOST).
 
 **Dependencias:** ninguna (tras TR.1). **Paralelizable:** sí.
+
+### ✅ Resolución (lo realmente hecho)
+
+En `getMoveOptions`, para `GHOST` se expande el Dijkstra a través de la casilla ocupada
+(coste 1, registrada en `costSoFar`/`queue`) **sin añadirla a `moves`** (no puede terminar
+encima); se conserva el ataque a enemigos adyacentes y no se ataca a aliados. `play` ya
+rechaza terminar sobre pieza (valida contra `moves`). Test `movement.test.ts` (4 casos).
+game-service 43/43. Doc: [`22-PASSIVES_TERRAIN.md`](22-PASSIVES_TERRAIN.md).
 
 ## 🎟️ T2.2 — Curación de Planta en hierba + daño de pantano visible
 
@@ -523,14 +531,21 @@ acabar el turno sobre hierba alta, y que el pantano envenene a quien no sea Vene
 **Dudas resueltas (D9):** 8% maxHP/turno de curación.
 
 **Criterios de aceptación:**
-- [ ] Un Planta sobre hierba alta recupera ~8% maxHp al final de su turno (sin pasar maxHp).
-- [ ] Un no-Veneno/Acero pierde HP en pantano.
-- [ ] Tests del motor para curación y pantano.
+- [x] Un Planta sobre hierba alta recupera ~8% maxHp al final de su turno (sin pasar maxHp).
+- [x] Un no-Veneno/Acero pierde HP en pantano.
+- [x] Tests del motor para curación y pantano.
 
 **Investigación:** `terrainDamage` (`environment.ts:67-85`, TALL_GRASS cae a `return 0`
 en L84), fin de turno de T0.2.
 
 **Dependencias:** →T0.2. **Paralelizable:** no.
+
+### ✅ Resolución (lo realmente hecho)
+
+`terrainDamage`: `TALL_GRASS`+`GRASS` → `-Math.round(0.08*maxHp)`. `applyEndOfTurnEffects`
+emite el **delta real aplicado** (`applied = hp - before`; sin `heal` fantasma a HP lleno).
+Tests en `environment.test.ts` (curación, clamp, sin evento a tope). game-service 46/46.
+Doc: [`22-PASSIVES_TERRAIN.md`](22-PASSIVES_TERRAIN.md).
 
 ## 🎟️ T2.3 — Números flotantes de daño/curación (frontend)
 
@@ -544,12 +559,18 @@ los Pokémon, en combate y al final del turno, para seguir lo que pasa sin mirar
 **Dudas resueltas:** feedback completo (D4).
 
 **Criterios de aceptación:**
-- [ ] Al recibir daño de un ataque, aparece `-N` rojo sobre el objetivo.
-- [ ] Al curarse en hierba, aparece `+N` verde al final del turno.
+- [x] Al recibir daño de un ataque, aparece `-N` rojo sobre el objetivo.
+- [x] Al curarse en hierba, aparece `+N` verde al final del turno.
 
 **Investigación:** util de T0.4, `EntityView`/`GameController` para localizar el hex→pixel.
 
 **Dependencias:** →T0.1, →T0.2, →T0.4. **Paralelizable:** no.
+
+### ✅ Resolución (lo realmente hecho)
+
+`GameController.dispatchEvents` añade `case 'heal'` → `fxLayer.floatingNumber(hex, '+N',
+'heal')` (verde). El `-N` rojo de combate y de fin de turno ya se pintaba desde T0.4.
+Verificado (usuario). Doc: [`22-PASSIVES_TERRAIN.md`](22-PASSIVES_TERRAIN.md). **Cierra la Épica 2.**
 
 ---
 

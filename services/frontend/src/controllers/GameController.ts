@@ -429,10 +429,13 @@ export class GameController {
         case 'damage':
           this.fxLayer.floatingNumber(ev.hex, String(ev.delta ?? 0), 'damage');
           break;
+        case 'heal':
+          this.fxLayer.floatingNumber(ev.hex, `+${ev.delta ?? 0}`, 'heal'); // +N verde (T2.3)
+          break;
         case 'reveal':
           this.fxLayer.flash(ev.hex); // "!" de emboscada revelada (T1.2)
           break;
-        // heal, knockback, dash, capture → sus tickets (T2.3, T3.x, T8.5).
+        // knockback, dash, capture → sus tickets (T3.x, T8.5).
         default:
           break;
       }
