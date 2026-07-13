@@ -252,6 +252,15 @@ Los equipos por defecto (`buildDefault`) siguen formándose con 3 Pokémon por t
 
 ## 10. Pendiente / futuro
 
+> **Rango, forma (AoE) y selección — Épica A (doc 12).** La derivación actual de
+> `range`/`aoe` en `PokemonService.toMove` es **provisional** (heurística rudimentaria:
+> rangos irreales, formas sin sentido, `radius` castable en cualquier casilla). La selección
+> de los 4 moves también se rehará. Se corrige en la **Épica A — Sistema de ataques**
+> ([`12-TICKETS_TACTICS.md`](12-TICKETS_TACTICS.md)): TA.1 (catálogo híbrido de rango/forma +
+> `radius` propio + validación de rango), TA.2 (selección por heurística mejorada), TA.3
+> (previsualización en el mapa), TA.4 (tutor de movimientos, diferido).
+
+
 - **`pokeapi-proxy` + Redis (C3.1)**: hoy el `game-service` llama a `pokeapi.co`
   directamente y cachea en su propio SQLite. Según `CLAUDE.md`, el fetch/transform y
   la **caché agresiva en Redis** deben vivir en el microservicio `pokeapi-proxy`. La

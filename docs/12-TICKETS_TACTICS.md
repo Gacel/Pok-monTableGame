@@ -747,6 +747,100 @@ interceptor (flash/número) en vez de sobre el objetivo original.
 
 ---
 
+# ÉPICA A — Sistema de ataques (rango, forma y selección)
+
+> El combate on-map (skillshot AoE) usa `move.range`/`move.aoe`, pero hoy se derivan con
+> una heurística rudimentaria (`PokemonService.toMove`): rangos irreales, formas sin
+> sentido y `radius` **castable en cualquier casilla** (exento de la validación de rango en
+> `GameService.cast`). La selección de los 4 moves también se siente arbitraria. Esta épica
+> arregla **rango/forma** (para poder previsualizarlos bien) y la **selección**.
+> Decisiones (usuario): rango/forma **híbrido** (lista curada + defaults); selección por
+> **heurística mejorada**; tutor de movimientos **diferido**. Alinea con **D5**.
+
+## 🎟️ TA.1 — Catálogo de rango y forma (AoE) por movimiento (backend)
+
+**Historia de usuario:** Como jugador, quiero que cada ataque tenga un rango y una forma de
+área coherentes (melee corto, proyectil a distancia, onda radial, cono, línea), para poder
+ver dónde llega y a quién afecta antes de lanzarlo.
+
+**Objetivos de desarrollo:**
+1. Reemplazar la heurística de `toMove` (`PokemonService.ts:199-228`) por un **mapeo
+   híbrido**: fichero curado `engine/moveShapes.ts` (`nombre PokeAPI → { range, aoe,
+   radius? }`) para los moves relevantes de Gen 1 (terratemblor = `radius` con radio propio
+   y alcance real; hiperrayo = `line`; proyectiles = `single`/`line` con `range` N; melee =
+   `single` `range` 1; barridos = `cone`), + un **clasificador por defecto** sensato para el
+   resto (a partir de `target` + `damage_class` + `power`, sin rangos fijos irreales).
+2. `PokemonMove` (`packages/shared/src/domain.ts`): añadir `radius?: number` (separar el
+   radio del AoE del alcance `range`). `calculateAoE` (`combat.ts`) usa `radius` propio en
+   lugar de `floor(range/2)`.
+3. **Arreglar el "rango infinito"**: `GameService.cast` deja de eximir a `radius` de la
+   validación de rango — el **centro** del AoE debe estar dentro de `range`.
+
+**Dudas resueltas (D5):** mapeo por lista curada manual + defaults.
+
+**Criterios de aceptación:**
+- [ ] Cada move tiene `range`/forma coherente; el radio de las ondas es explícito (`radius`).
+- [ ] Ningún move es lanzable fuera de su rango (incluido `radius`).
+- [ ] Tests del motor del mapeo (radius con alcance/radio, línea, cono, melee, proyectil).
+
+**Investigación:** `toMove`/`getCuratedMoves` (`PokemonService.ts:199-249`), `calculateAoE`
+(`packages/shared/src/combat.ts:94-102`), validación de rango en `cast`
+(`GameService.ts:547-557`), `PokemonMove` (`domain.ts`).
+
+**Dependencias:** →TR.1 (recomendable →T0.3 para líneas reales). **Paralelizable:** sí.
+
+## 🎟️ TA.2 — Selección de los 4 moves representativos (backend, heurística)
+
+**Historia de usuario:** Como jugador, quiero que cada Pokémon lleve sus 4 ataques más
+representativos/útiles, no 4 casi al azar.
+
+**Objetivos de desarrollo:**
+1. Mejorar `getCuratedMoves`: puntuar candidatos por **STAB + potencia + cobertura de tipos
+   + bonus a moves emblemáticos** y elegir **4 variados** (evitar 4 del mismo tipo/forma).
+2. Mantener ≥1 físico gratuito; ampliar `CANDIDATE_CAP` si hace falta para no perder los
+   moves emblemáticos.
+
+**Dudas resueltas:** selección por **heurística mejorada** (no lista por especie); es la
+base del futuro tutor (TA.4).
+
+**Criterios de aceptación:**
+- [ ] Para varias especies, los 4 elegidos incluyen su STAB principal y variedad de forma.
+- [ ] Se conserva ≥1 físico gratuito.
+- [ ] Tests de la heurística de selección.
+
+**Investigación:** `getCuratedMoves` (`PokemonService.ts:172-249`), `CANDIDATE_CAP`/
+`CURATED_COUNT` (`PokemonService.ts:37-38`).
+
+**Dependencias:** →TR.1. **Paralelizable:** sí (con TA.1).
+
+## 🎟️ TA.3 — Previsualización de rango y forma en el mapa (frontend)
+
+**Historia de usuario:** Como jugador, quiero ver al seleccionar un ataque hasta dónde llega
+y qué forma tendrá, para apuntar bien antes de lanzarlo.
+
+**Objetivos de desarrollo:**
+1. Al seleccionar un move (`activeMoveIndex`), **resaltar los hexes de alcance legal** (según
+   `range`) y dibujar la **forma AoE** en el hover **solo dentro de rango** (atenuada/oculta
+   fuera), de modo que el preview **coincida con la validación de `cast`**.
+2. Feedback si el objetivo está fuera de rango. Reutiliza `calculateAoE` (compartido) y, si
+   aplica, `hexLineDraw` (T0.3).
+
+**Criterios de aceptación:**
+- [ ] Se ven los hexes de alcance y la forma del AoE antes de lanzar; el preview no engaña.
+- [ ] Un objetivo fuera de rango se distingue (no se resalta como válido).
+
+**Investigación:** preview de AoE (`BoardView.ts:411-419`), `isAttackTarget`/`isMoveTarget`
+(`GameState.ts`), `activeMoveIndex`.
+
+**Dependencias:** →TA.1. **Paralelizable:** no.
+
+## 🎟️ (DIFERIDO) TA.4 — Tutor de movimientos (meta/hub)
+
+**Estado:** **futuro** (pedido por el usuario). Elegir/asignar los moves de cada Pokémon en
+el hub, sobre su learnset (reutiliza `pokemon_moves` de doc 04). **Dependencias:** →TA.1, →TA.2.
+
+---
+
 # ÉPICA 5 — Scope Gen 1 (151) y catálogo de especies
 
 ## 🎟️ T5.1 — Clamp a #1-151 (fuente única de verdad)
