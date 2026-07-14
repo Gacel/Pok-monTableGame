@@ -17,25 +17,33 @@ export interface SpritePair {
 
 const cache = new Map<string, SpritePair>();
 
-async function fetchPair(name: string): Promise<SpritePair> {
+async function fetchPair(name: string, isShiny: boolean = false): Promise<SpritePair> {
   const key = name.toLowerCase();
-  const hit = cache.get(key);
+  const cacheKey = isShiny ? `${key}-shiny` : key;
+  const hit = cache.get(cacheKey);
   if (hit) return hit;
   try {
     const r = await fetch(`https://pokeapi.co/api/v2/pokemon/${key}`);
     if (!r.ok) return { gif: '', static: '' };
     const d = await r.json();
-    // Cadena de fallback: gen-V animado → estático → artwork oficial → home.
-    // Cubre Pokémon que no tienen sprite animado ni front_default (evita huecos).
-    const artwork = d.sprites?.other?.['official-artwork']?.front_default || '';
-    const home = d.sprites?.other?.home?.front_default || '';
-    const staticSprite = d.sprites?.front_default || artwork || home || '';
-    const gif =
-      d.sprites?.versions?.['generation-v']?.['black-white']?.animated?.front_default ||
-      staticSprite ||
-      '';
+    
+    // Cadena de fallback para shiny vs default
+    const official = d.sprites?.other?.['official-artwork'];
+    const home = d.sprites?.other?.home;
+    const bw = d.sprites?.versions?.['generation-v']?.['black-white']?.animated;
+    
+    const artwork = isShiny ? official?.front_shiny : official?.front_default;
+    const h = isShiny ? home?.front_shiny : home?.front_default;
+    const staticSprite = isShiny 
+      ? (d.sprites?.front_shiny || artwork || h || '') 
+      : (d.sprites?.front_default || artwork || h || '');
+      
+    const gif = isShiny
+      ? (bw?.front_shiny || staticSprite || '')
+      : (bw?.front_default || staticSprite || '');
+      
     const pair: SpritePair = { gif, static: staticSprite || gif };
-    cache.set(key, pair);
+    cache.set(cacheKey, pair);
     return pair;
   } catch {
     return { gif: '', static: '' };
@@ -43,11 +51,11 @@ async function fetchPair(name: string): Promise<SpritePair> {
 }
 
 /** Sprite animado (o estático como fallback); '' si falla. Cacheado. */
-export async function getSprite(name: string): Promise<string> {
-  return (await fetchPair(name)).gif;
+export async function getSprite(name: string, isShiny: boolean = false): Promise<string> {
+  return (await fetchPair(name, isShiny)).gif;
 }
 
 /** Par GIF + estático (para el tablero). Cacheado. */
-export async function getSpritePair(name: string): Promise<SpritePair> {
-  return fetchPair(name);
+export async function getSpritePair(name: string, isShiny: boolean = false): Promise<SpritePair> {
+  return fetchPair(name, isShiny);
 }

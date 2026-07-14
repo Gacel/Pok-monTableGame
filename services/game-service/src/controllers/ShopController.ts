@@ -45,10 +45,18 @@ export const ShopController = {
     const tier = rollTier(ball.dist, Math.random);
     const name = pickFromTier(LOOT_POOL_TIERS, tier, Math.random);
 
+    // Lógica Shiny según el precio de la Pokéball
+    let shinyChance = 0.01; // Normal: 1%
+    if (ball.price >= 10000) shinyChance = 0.20; // Master: 20%
+    else if (ball.price >= 2000) shinyChance = 0.07; // Ultra: 7%
+    else if (ball.price >= 1000) shinyChance = 0.03; // Super: 3%
+    
+    const isShiny = Math.random() < shinyChance;
+
     // Cobro + concesión (el usuario ya no puede tener saldo negativo: se validó arriba).
     await UserModel.addCoins(uid, -ball.price);
-    await OwnedPokemonModel.grantMany(uid, [name], 'shop');
+    await OwnedPokemonModel.grantMany(uid, [name], 'shop', isShiny);
 
-    return { success: true, pokemon: { name, tier }, coins: user.coins - ball.price };
+    return { success: true, pokemon: { name, tier, isShiny }, coins: user.coins - ball.price };
   },
 };

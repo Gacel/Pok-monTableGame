@@ -123,6 +123,7 @@ async function openAndMigrate(): Promise<Database> {
       name         TEXT NOT NULL,
       level        INTEGER NOT NULL DEFAULT 1,
       is_starter   INTEGER NOT NULL DEFAULT 0,
+      is_shiny     INTEGER NOT NULL DEFAULT 0,
       acquired_via TEXT NOT NULL DEFAULT 'starter',
       created_at   TEXT NOT NULL DEFAULT (datetime('now'))
     );
@@ -176,6 +177,9 @@ async function openAndMigrate(): Promise<Database> {
   const opCols = await db.all(`PRAGMA table_info(owned_pokemon)`);
   if (!opCols.some((c: { name: string }) => c.name === 'auction_id')) {
     await db.exec(`ALTER TABLE owned_pokemon ADD COLUMN auction_id TEXT`);
+  }
+  if (!opCols.some((c: { name: string }) => c.name === 'is_shiny')) {
+    await db.exec(`ALTER TABLE owned_pokemon ADD COLUMN is_shiny INTEGER NOT NULL DEFAULT 0`);
   }
 
   // Migración defensiva: columna `email` en users (si la tabla ya existía).

@@ -13,6 +13,7 @@ interface InvPokemon {
   name: string;
   level: number;
   isStarter: boolean;
+  isShiny?: boolean;
   acquiredVia: string;
   type: string;
   hp?: number;
@@ -68,8 +69,9 @@ export class InventoryView {
   private async preloadSprites(pokemon: InvPokemon[]): Promise<void> {
     await Promise.all(
       pokemon.map(async (p) => {
-        if (this.sprites[p.name]) return;
-        this.sprites[p.name] = await getSprite(p.name);
+        const key = `${p.name}-${!!p.isShiny}`;
+        if (this.sprites[key]) return;
+        this.sprites[key] = await getSprite(p.name, !!p.isShiny);
       })
     );
   }
@@ -93,14 +95,13 @@ export class InventoryView {
   }
 
   private pokemonCell(p: InvPokemon): string {
-    const color = TYPE_COLOR[p.type] ?? '#888';
-    const tag = p.isStarter ? '⭐' : p.acquiredVia === 'capture' ? '🎯' : '';
-    // Hover SIN transform (scale provocaba overflow → barra de scroll): solo borde.
+    const sprite = this.sprites[`${p.name}-${!!p.isShiny}`] || '';
     return `
-      <div class="pkmn-cell flex flex-col items-center rounded border-2 border-gray-700 bg-gray-800 cursor-pointer transition-colors hover:border-yellow-400 hover:bg-gray-700" data-id="${p.id}" role="button" tabindex="0" title="Click: ficha · Click derecho: acciones" style="padding:4px;">
-        <img src="${this.sprites[p.name] ?? ''}" alt="${p.name}" class="w-11 h-11 object-contain" style="image-rendering:pixelated;" />
-        <span class="uppercase text-white truncate" style="${FONT} font-size:6px; max-width:100%;">${tag}${p.name}</span>
-        <span style="${FONT} font-size:5px; color:${color};">Lv.${p.level}</span>
+      <div class="pkmn-cell flex flex-col items-center rounded border-2 border-gray-700 bg-gray-800 cursor-pointer transition-colors hover:border-yellow-400 hover:bg-gray-700 relative" data-id="${p.id}" role="button" tabindex="0" title="Click: ficha · Click derecho: acciones" style="padding:4px;">
+        ${p.isShiny ? '<div class="absolute top-0 right-0 text-[8px]">✨</div>' : ''}
+        <img src="${sprite}" alt="${p.name}" class="w-11 h-11 object-contain" style="image-rendering:pixelated;" />
+        <span class="uppercase text-white truncate" style="${FONT} font-size:6px; max-width:100%;">${p.name}</span>
+        <span style="${FONT} font-size:5px; color:${TYPE_COLOR[p.type] ?? '#888'};">Lv.${p.level}</span>
       </div>`;
   }
 
@@ -113,7 +114,8 @@ export class InventoryView {
       hp: p.hp,
       atk: p.atk,
       def: p.def,
-      spriteUrl: this.sprites[p.name],
+      spriteUrl: this.sprites[`${p.name}-${!!p.isShiny}`],
+      isShiny: !!p.isShiny,
     });
   }
 

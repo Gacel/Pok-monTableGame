@@ -41,6 +41,7 @@ export interface PokemonDetailSeed {
   def?: number;
   /** Sprite ya precargado por la vista (evita re-fetch). */
   spriteUrl?: string;
+  isShiny?: boolean;
 }
 
 /** Ataque curado + su descripción corta (short_effect de PokeAPI, cacheada). */
@@ -151,7 +152,9 @@ function bodyHtml(
       <div class="w-24 h-24 flex items-center justify-center rounded-lg bg-gray-950/60 border-2 border-gray-700">
         <img id="pkmn-modal-sprite" src="${escapeHtml(sprite)}" alt="${escapeHtml(name)}" class="w-20 h-20 object-contain" style="image-rendering:pixelated;" />
       </div>
-      <h3 class="text-yellow-400 uppercase mt-2" style="${FONT} font-size:13px; text-shadow:2px 2px 0 #000;">${escapeHtml(name)}</h3>
+      <h3 class="text-yellow-400 uppercase mt-2" style="${FONT} font-size:13px; text-shadow:2px 2px 0 #000;">
+        ${escapeHtml(name)} ${seed.isShiny ? '✨' : ''}
+      </h3>
       <div class="flex items-center justify-center gap-2 flex-wrap mt-1">
         ${curType ? typeBadge(curType, 7) : ''}
         ${seed.level != null ? `<span class="text-white" style="${FONT} font-size:7px;">Lv.${escapeHtml(seed.level)}</span>` : ''}
@@ -226,7 +229,7 @@ export function openPokemonDetail(seed: PokemonDetailSeed): void {
 
   // Sprite: si la vista no lo precargó, lo pedimos (cacheado en memoria por PokeSprites).
   if (!sprite) {
-    void getSprite(seed.name).then((s) => {
+    void getSprite(seed.name, !!seed.isShiny).then((s) => {
       if (activeOverlay !== overlay || !s) return;
       sprite = s;
       const img = overlay.querySelector('#pkmn-modal-sprite') as HTMLImageElement | null;

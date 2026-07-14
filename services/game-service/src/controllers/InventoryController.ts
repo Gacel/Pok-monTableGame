@@ -59,6 +59,7 @@ export const InventoryController = {
           name: p.name,
           level: p.level,
           isStarter: p.is_starter === 1,
+          isShiny: p.is_shiny === 1,
           acquiredVia: p.acquired_via,
           type,
           hp,
@@ -134,10 +135,18 @@ export const InventoryController = {
 
     const tier = rollTier(ball.dist, Math.random);
     const name = pickFromTier(LOOT_POOL_TIERS, tier, Math.random);
+    
+    // Lógica Shiny según el precio de la Pokéball
+    let shinyChance = 0.01;
+    if (ball.price >= 10000) shinyChance = 0.20;
+    else if (ball.price >= 2000) shinyChance = 0.07;
+    else if (ball.price >= 1000) shinyChance = 0.03;
+    const isShiny = Math.random() < shinyChance;
+    
     await ItemModel.add(uid, 'pokeball', itemKey, -1);
-    await OwnedPokemonModel.grantMany(uid, [name], 'chest');
+    await OwnedPokemonModel.grantMany(uid, [name], 'chest', isShiny);
 
-    return { success: true, pokemon: { name, tier } };
+    return { success: true, pokemon: { name, tier, isShiny } };
   },
 
   /** Regala un objeto (bola) a un amigo: transfiere 1 unidad. */

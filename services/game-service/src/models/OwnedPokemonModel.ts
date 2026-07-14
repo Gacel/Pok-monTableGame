@@ -7,6 +7,7 @@ export interface OwnedPokemonRecord {
   name: string;
   level: number;
   is_starter: number;
+  is_shiny: number;
   acquired_via: string;
   /** Id de la subasta en la que está retenida (escrow); null si está libre. */
   auction_id?: string | null;
@@ -51,16 +52,18 @@ export const OwnedPokemonModel = {
   },
 
   /** Concede varios Pokémon a un usuario (p.ej. los 3 starters). */
-  async grantMany(userId: string, names: string[], via = 'starter'): Promise<void> {
+  async grantMany(userId: string, names: string[], via = 'starter', isShiny = false): Promise<void> {
     const db = await getDb();
     const isStarter = via === 'starter' ? 1 : 0;
+    const isShinyInt = isShiny ? 1 : 0;
     for (const name of names) {
       await db.run(
-        'INSERT INTO owned_pokemon (id, user_id, name, level, is_starter, acquired_via) VALUES (?, ?, ?, 1, ?, ?)',
+        'INSERT INTO owned_pokemon (id, user_id, name, level, is_starter, is_shiny, acquired_via) VALUES (?, ?, ?, 1, ?, ?, ?)',
         crypto.randomUUID(),
         userId,
         name,
         isStarter,
+        isShinyInt,
         via
       );
     }
