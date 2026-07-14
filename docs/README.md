@@ -10,7 +10,7 @@
   `SCREAMING_SNAKE_CASE`: `NN-NOMBRE.md`.
 - El número refleja el **orden de creación**, no la importancia ni un orden de
   lectura obligatorio. El siguiente documento nuevo usa el número más alto + 1
-  (el último a día de hoy es `22`, así que el próximo sería `23-*.md`).
+  (el último a día de hoy es `23`, así que el próximo sería `24-*.md`).
 - Los documentos **históricos** (diarios de sesión, auditorías puntuales, planes
   de refactor ya ejecutados) van a `docs/archive/`, sin numerar — son un
   registro de un momento concreto, no una referencia a mantener al día. Cada uno
@@ -46,6 +46,7 @@
 | 20 | [`20-LOCAL_PRESENTATION.md`](20-LOCAL_PRESENTATION.md) | Presentación y control en local: ocultación desde la perspectiva del humano, control de turno vs-IA, cámara con teclado, sprites estáticos, efecto de agua y nombres de jugador/IA. (Tickets T1.3, T1.4) |
 | 21 | [`21-STEALTH_REVEAL.md`](21-STEALTH_REVEAL.md) | Revelación de un oculto al ser golpeado por un AoE (flag `revealed`, evento `reveal`, emboscada intacta). (Tickets T1.1, T1.2) |
 | 22 | [`22-PASSIVES_TERRAIN.md`](22-PASSIVES_TERRAIN.md) | Pasivas y terreno avanzado (Épica 2): fantasmas atraviesan unidades (T2.1), curación de Planta en hierba + pantano (T2.2) y números flotantes de daño/curación (T2.3). |
+| 23 | [`23-SHINY_GACHA.md`](23-SHINY_GACHA.md) | Pokémon Shiny (probabilidad por bola, sprites ✨) y apertura cinemática de gacha con audio sintetizado (Épica G, TG.1/TG.2). |
 
 ## Archivo (histórico, no numerado)
 

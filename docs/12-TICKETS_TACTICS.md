@@ -747,6 +747,48 @@ interceptor (flash/número) en vez de sobre el objetivo original.
 
 ---
 
+# ÉPICA G — Gacha y coleccionismo (features en paralelo)
+
+> Trabajo desarrollado **en paralelo** por el usuario sobre la economía/tienda venida de
+> `origin/main` (TR.1). Se documenta a posteriori como tickets **ya resueltos**. Detalle:
+> [`23-SHINY_GACHA.md`](23-SHINY_GACHA.md).
+
+## 🎟️ TG.1 — Pokémon Shiny ✅
+
+**Historia de usuario:** Como coleccionista, quiero que los Pokémon puedan salir **shiny**
+(variante rara de color), con más probabilidad cuanto mejor es la Pokéball.
+
+**Criterios de aceptación:**
+- [x] `owned_pokemon.is_shiny` persistido (con migración defensiva).
+- [x] Probabilidad shiny por precio de bola (1% / 3% ≥1000 / 7% ≥2000 / 20% ≥10000) en
+      tienda y cofres.
+- [x] Sprites shiny de PokeAPI (`front_shiny`) y distintivo ✨ en inventario y ficha.
+
+### ✅ Resolución
+Backend: `db.ts` (columna + migración), `OwnedPokemonModel.grantMany(isShiny)`,
+`ShopController`/`InventoryController` (probabilidad + `isShiny` en respuesta), listado con
+`isShiny`. Frontend: `PokeSprites.getSprite(name, isShiny)` (fallback shiny, caché
+`name-shiny`), `InventoryView`/`PokemonDetailModal` (✨ + sprite shiny). Doc:
+[`23-SHINY_GACHA.md`](23-SHINY_GACHA.md).
+
+## 🎟️ TG.2 — Apertura cinemática de gacha + audio ✅
+
+**Historia de usuario:** Como jugador, quiero una apertura de Pokéball espectacular (tensión,
+escena sideral, revelado) con sonido y dramatismo según la rareza.
+
+**Criterios de aceptación:**
+- [x] Secuencia multi-fase (temblor → explota-zoom → escena sideral con meteoritos → flash →
+      revelado a pantalla completa → ficha), con color por tier y soporte shiny.
+- [x] Audio sintetizado (Web Audio) por fase + pistas `catch.mp3`/`victory.mp3`.
+
+### ✅ Resolución
+`ShopMenuView` (máquina de estados `opening/sky_cinematic/fullscreen_reveal/reveal`,
+nebulosa/starfield/meteoritos), `GachaAudio` (síntesis: tensión/meteoro/épico/explosión/
+victoria por tier + `playTrack`), `style.css` (keyframes), sonidos nuevos. Doc:
+[`23-SHINY_GACHA.md`](23-SHINY_GACHA.md).
+
+---
+
 # ÉPICA A — Sistema de ataques (rango, forma y selección)
 
 > El combate on-map (skillshot AoE) usa `move.range`/`move.aoe`, pero hoy se derivan con
