@@ -8,6 +8,18 @@ import { escapeHtml } from '../utils/html';
 const BALL_ITEMS = 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items';
 const ballSpriteUrl = (b: BallKey): string => `${BALL_ITEMS}/${BALL_SPRITE[b]}.png`;
 
+/**
+ * Icono representativo por TIPO para los botones de ataque (barra QWER) — TA.5.
+ * Provisional con emoji; el arte definitivo (iconos estilo LoL, imagen de referencia
+ * aportada por el usuario) se dejará en `public/assets/icons/{tipo}.png` y sustituirá
+ * a estos emojis en un follow-up.
+ */
+const MOVE_TYPE_EMOJI: Record<string, string> = {
+  FIRE: '🔥', WATER: '💧', GRASS: '🌿', ELECTRIC: '⚡', ICE: '❄️', FIGHTING: '🥊',
+  POISON: '☠️', GROUND: '⛰️', FLYING: '🪽', PSYCHIC: '🔮', BUG: '🐛', ROCK: '🪨',
+  GHOST: '👻', DRAGON: '🐉', STEEL: '⚙️', FAIRY: '✨', NORMAL: '⭐',
+};
+
 /** Capa VISTA (frontend): pinta el HUD a partir del estado del servidor. */
 export class HUDView {
   private state: GameState;
@@ -86,7 +98,9 @@ export class HUDView {
       const isActive = this.state.activeMoveIndex === i;
       const borderStyle = isActive ? `border-color: #fff; box-shadow: 0 0 10px ${typeColor}; scale: 1.1;` : `border-color: ${typeColor};`;
       
-      const damageIcon = m.damageClass === 'special' ? '🔮' : m.damageClass === 'status' ? '🛡️' : '⚔️';
+      // Icono principal: representativo del TIPO; badge secundario: clase (físico/especial/estado).
+      const typeEmoji = MOVE_TYPE_EMOJI[m.type] ?? '⭐';
+      const classIcon = m.damageClass === 'special' ? '🔮' : m.damageClass === 'status' ? '🛡️' : '⚔️';
       const moveName = m.displayName ? m.displayName.toUpperCase() : m.name.toUpperCase();
       
       const typeTranslations: Record<string, string> = {
@@ -100,7 +114,7 @@ export class HUDView {
       return `
         <div class="move-btn flex flex-col items-center justify-center p-2 rounded cursor-pointer border-2 transition-transform hover:scale-105 active:scale-95 w-28 h-28" style="background-color: ${typeColor}40; ${borderStyle}" data-move-idx="${i}" title="Power: ${m.power || '-'} | Acc: ${m.accuracy || '-'} | Range: ${m.range || 1} | AoE: ${m.aoe || 'single'}">
           <span class="text-white text-[8px] font-bold mb-1" style="font-family: 'Press Start 2P', monospace;">[${keys[i]}]</span>
-          <div class="text-xl mb-1">${damageIcon}</div>
+          <div class="relative text-3xl leading-none mb-1">${typeEmoji}<span class="absolute -bottom-1 -right-2 text-[11px]">${classIcon}</span></div>
           <span class="text-white text-[10px] font-bold text-center leading-tight overflow-hidden text-ellipsis" style="font-family: 'Press Start 2P', monospace; max-width: 100%; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">${moveName}</span>
           <span class="text-gray-300 text-[8px] mt-1 text-center">${translatedType}</span>
         </div>
