@@ -855,14 +855,21 @@ representativos/útiles, no 4 casi al azar.
 base del futuro tutor (TA.4).
 
 **Criterios de aceptación:**
-- [ ] Para varias especies, los 4 elegidos incluyen su STAB principal y variedad de forma.
-- [ ] Se conserva ≥1 físico gratuito.
-- [ ] Tests de la heurística de selección.
+- [x] Para varias especies, los 4 elegidos incluyen su STAB principal y variedad de forma.
+- [x] Se conserva ≥1 físico gratuito.
+- [x] Tests de la heurística de selección.
 
 **Investigación:** `getCuratedMoves` (`PokemonService.ts:172-249`), `CANDIDATE_CAP`/
 `CURATED_COUNT` (`PokemonService.ts:37-38`).
 
 **Dependencias:** →TR.1. **Paralelizable:** sí (con TA.1).
+
+### ✅ Resolución (lo realmente hecho)
+
+`engine/moveSelection.ts` (nuevo): `scoreMove` (potencia + STAB + bonus a emblemáticos de
+`MOVE_SHAPES`) y `selectMoves` (orden por score, 1ª pasada máx 2/tipo para variedad, 2ª de
+relleno, sin duplicados). `getCuratedMoves` lo usa; `CANDIDATE_CAP` 14→18; se mantiene ≥1
+físico gratis. Tests `moveSelection.test.ts` (57/57). Doc: [`24-ATTACK_SHAPES.md`](24-ATTACK_SHAPES.md).
 
 ## 🎟️ TA.3 — Previsualización de rango y forma en el mapa (frontend)
 
