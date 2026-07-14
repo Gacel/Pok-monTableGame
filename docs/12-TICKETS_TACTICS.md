@@ -834,6 +834,37 @@ y qué forma tendrá, para apuntar bien antes de lanzarlo.
 
 **Dependencias:** →TA.1. **Paralelizable:** no.
 
+## 🎟️ TA.5 — Traducción de moves + iconos en la UI (QWER)
+
+**Historia de usuario:** Como jugador, quiero ver el nombre del ataque **en mi idioma** y un
+**icono** por cada uno en la barra QWER (estilo League of Legends), para reconocerlos de un
+vistazo.
+
+**Objetivos de desarrollo:**
+1. **Traducción:** poblar/usar `displayName` de cada move con el nombre localizado de PokeAPI
+   (`/move/{name}` trae `names[]` por idioma). Mostrarlo en la UI en vez del `name` crudo.
+2. **Iconos QWER:** mostrar un icono por move en la barra de acciones (hotkeys Q/W/E/R),
+   estilo LoL. Mapeo probable **por tipo de move (+ categoría: daño/curación/estado/forma
+   AoE)**, no uno por move. Assets generados a partir de la **imagen de referencia aportada
+   por el usuario** (estilo: iconos cuadrados, arte cartoon pulido, temáticos por elemento,
+   borde de color; ver memoria `move-ability-icons-style`). El usuario aportará el PNG de
+   referencia al repo (`services/frontend/public/assets/icons/`).
+
+**Dudas resueltas:** iconos por tipo/categoría (no por move individual); estilo del referente
+aportado; nombres localizados de PokeAPI.
+
+**Criterios de aceptación:**
+- [ ] Los moves se muestran con su nombre traducido (no el slug PokeAPI).
+- [ ] Cada botón/hotkey QWER muestra un icono coherente con el tipo/efecto del move.
+
+**Investigación:** `displayName` en `PokemonMove`/`MoveRow` (ya existe, `PokemonService.toMove`
+`:208`); `names[]` de PokeAPI en `hydrateMove` (`PokemonService.ts:143-171`); barra de
+acciones/hotkeys QWER en el frontend (`GameController` `setupKeyboardShortcuts`, panel de
+acciones); `PokemonMove.type`/`aoe`/`damageClass` para el mapeo de icono.
+
+**Dependencias:** →TR.1 (icono independiente; mejor tras TA.1 para conocer la forma AoE).
+**Paralelizable:** parcial.
+
 ## 🎟️ (DIFERIDO) TA.4 — Tutor de movimientos (meta/hub)
 
 **Estado:** **futuro** (pedido por el usuario). Elegir/asignar los moves de cada Pokémon en
