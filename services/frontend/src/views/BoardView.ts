@@ -355,6 +355,48 @@ export class BoardView {
     if (fogged) this.ctx.filter = 'none';
   }
 
+  /** Distancia hexagonal (cúbica) entre dos casillas. */
+  private hexDist(a: { q: number; r: number }, b: { q: number; r: number }): number {
+    return (Math.abs(a.q - b.q) + Math.abs(a.q + a.r - b.q - b.r) + Math.abs(a.r - b.r)) / 2;
+  }
+
+  /**
+   * Preview del move QWER activo (TA.3): alcance legal y conjunto de hexes del AoE en el
+   * hover, SOLO si el objetivo está dentro de rango (misma regla que `GameService.cast`).
+   * `null` si no hay move activo/seleccionado.
+   */
+  private buildAttackPreview(): {
+    range: number;
+    selfOk: boolean;
+    aoeSet: Set<string>;
+    hoverInRange: boolean;
+    hoverKey: string | null;
+  } | null {
+    const sel = this.state.selectedHex;
+    if (this.state.activeMoveIndex === null || !sel) return null;
+    const casterTile = this.state.currentTiles.find((t) => t.hex.q === sel.q && t.hex.r === sel.r);
+    const move = casterTile?.occupant?.moves?.[this.state.activeMoveIndex];
+    if (!move) return null;
+
+    const range = move.range ?? 1;
+    const aoe = move.aoe || 'single';
+    const selfOk = aoe === 'radius'; // las ondas radiales pueden autocentrarse (dist 0)
+    const aoeSet = new Set<string>();
+    let hoverInRange = false;
+    let hoverKey: string | null = null;
+
+    const hv = this.state.hoverHex;
+    if (hv) {
+      hoverKey = `${hv.q},${hv.r}`;
+      const d = this.hexDist(sel, hv);
+      hoverInRange = d <= range && (d >= 1 || selfOk);
+      if (hoverInRange) {
+        for (const h of calculateAoE(sel, hv, aoe, range, move.radius)) aoeSet.add(`${h.q},${h.r}`);
+      }
+    }
+    return { range, selfOk, aoeSet, hoverInRange, hoverKey };
+  }
+
   public render() {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
@@ -376,6 +418,10 @@ export class BoardView {
     const maxX = (this.canvas.width - this.CENTER_X) / z + this.CENTER_X - offX + m;
     const minY = (0 - this.CENTER_Y) / z + this.CENTER_Y - offY - m;
     const maxY = (this.canvas.height - this.CENTER_Y) / z + this.CENTER_Y - offY + m;
+
+    // Preview de ataque (TA.3): con un move QWER activo, se precalcula su alcance legal y
+    // la forma AoE en el hover — solo si el objetivo está dentro de rango (como el `cast`).
+    const atk = this.buildAttackPreview();
 
     for (const { tile, x, y } of order) {
       if (x < minX || x > maxX || y < minY || y > maxY) continue;
@@ -407,21 +453,22 @@ export class BoardView {
         }
       }
 
-      // AoE hover logic
-      let isAoEHover = false;
-      if (this.state.activeMoveIndex !== null && this.state.hoverHex && this.state.selectedHex) {
-        const casterTile = this.state.currentTiles.find(
-          (t) => t.hex.q === this.state.selectedHex!.q && t.hex.r === this.state.selectedHex!.r
-        );
-        const move = casterTile?.occupant?.moves?.[this.state.activeMoveIndex];
-        if (move) {
-          const aoeHexes = calculateAoE(this.state.selectedHex, this.state.hoverHex, move.aoe || 'single', move.range || 1, move.radius);
-          isAoEHover = aoeHexes.some(h => h.q === tile.hex.q && h.r === tile.hex.r);
+      // Overlays de ataque/movimiento.
+      if (atk) {
+        // Move QWER activo: alcance legal (cian tenue), forma AoE en el hover (naranja,
+        // solo dentro de rango) y feedback de fuera de rango (rojo) — coincide con `cast`.
+        const key = `${tile.hex.q},${tile.hex.r}`;
+        const d = this.hexDist(this.state.selectedHex!, tile.hex);
+        const inRange = d <= atk.range && (d >= 1 || atk.selfOk);
+        const isAoE = atk.hoverInRange && atk.aoeSet.has(key);
+        const isOutHover = atk.hoverKey === key && !atk.hoverInRange;
+        if (isAoE) {
+          this.drawTileOverlay(x, y, 'rgba(249, 115, 22, 0.6)', '#fb923c', 2);
+        } else if (isOutHover) {
+          this.drawTileOverlay(x, y, 'rgba(239, 68, 68, 0.35)', '#ef4444', 2);
+        } else if (inRange) {
+          this.drawTileOverlay(x, y, 'rgba(56, 189, 248, 0.18)', 'rgba(56, 189, 248, 0.55)', 1);
         }
-      }
-
-      if (isAoEHover) {
-        this.drawTileOverlay(x, y, 'rgba(249, 115, 22, 0.6)', '#fb923c', 2);
       } else if (this.state.isAttackTarget(tile.hex)) {
         this.drawTileOverlay(x, y, 'rgba(239, 68, 68, 0.45)', '#fca5a5', 2, true);
       } else if (this.state.isMoveTarget(tile.hex)) {

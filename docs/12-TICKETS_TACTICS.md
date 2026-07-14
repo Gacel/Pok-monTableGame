@@ -884,13 +884,19 @@ y qué forma tendrá, para apuntar bien antes de lanzarlo.
    aplica, `hexLineDraw` (T0.3).
 
 **Criterios de aceptación:**
-- [ ] Se ven los hexes de alcance y la forma del AoE antes de lanzar; el preview no engaña.
-- [ ] Un objetivo fuera de rango se distingue (no se resalta como válido).
+- [x] Se ven los hexes de alcance y la forma del AoE antes de lanzar; el preview no engaña.
+- [x] Un objetivo fuera de rango se distingue (no se resalta como válido).
 
 **Investigación:** preview de AoE (`BoardView.ts:411-419`), `isAttackTarget`/`isMoveTarget`
 (`GameState.ts`), `activeMoveIndex`.
 
 **Dependencias:** →TA.1. **Paralelizable:** no.
+
+### ✅ Resolución (lo realmente hecho)
+
+`BoardView.buildAttackPreview()` precalcula alcance/forma del move QWER activo; los overlays
+pintan alcance legal (cian), forma AoE en hover dentro de rango (naranja) y fuera de rango
+(rojo), coincidiendo con la validación de `cast`. Doc: [`24-ATTACK_SHAPES.md`](24-ATTACK_SHAPES.md).
 
 ## 🎟️ TA.5 — Traducción de moves + iconos en la UI (QWER)
 
