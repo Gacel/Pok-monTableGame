@@ -41,3 +41,6 @@ gateway/certs/
 
 # Proyecto Next anidado ajeno (pendiente de borrar por el usuario) — no trackear
 /ft_transcendence/
+
+# Script de depuración local (ruta absoluta hardcodeada) — no versionar
+services/game-service/db_check.mjs
