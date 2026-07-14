@@ -918,8 +918,15 @@ vistazo.
 aportado; nombres localizados de PokeAPI.
 
 **Criterios de aceptación:**
-- [ ] Los moves se muestran con su nombre traducido (no el slug PokeAPI).
-- [ ] Cada botón/hotkey QWER muestra un icono coherente con el tipo/efecto del move.
+- [x] Los moves se muestran con su nombre traducido (no el slug PokeAPI).
+- [x] Cada botón/hotkey QWER muestra un icono coherente con el tipo/efecto del move.
+
+### ✅ Resolución (lo realmente hecho)
+
+Traducción ya funcionaba (backend guarda `displayName` en español de PokeAPI; `HUDView` lo
+muestra). Iconos QWER: icono de **tipo** (`MOVE_TYPE_EMOJI`) + badge de clase, **provisional
+con emoji**; el arte definitivo (PNG estilo LoL, ref. del usuario) irá en
+`public/assets/icons/` en un follow-up. Doc: [`24-ATTACK_SHAPES.md`](24-ATTACK_SHAPES.md).
 
 **Investigación:** `displayName` en `PokemonMove`/`MoveRow` (ya existe, `PokemonService.toMove`
 `:208`); `names[]` de PokeAPI en `hydrateMove` (`PokemonService.ts:143-171`); barra de

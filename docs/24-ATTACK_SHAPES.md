@@ -75,4 +75,22 @@ Helper `hexDist` (distancia cúbica) local. Coincide con la validación autorita
 **Verificación:** `tsc` frontend limpio, tests 17/17, build OK. Smoke: al elegir un ataque
 se ven las casillas de alcance; la forma solo se dibuja dentro de rango; fuera, aviso rojo.
 
-## TA.5 — Traducción de moves + iconos QWER *(pendiente)*
+## TA.5 — Traducción de moves + iconos QWER
+
+**Traducción (ya funcionaba end-to-end):** `PokemonService.hydrateMove` guarda el nombre
+**en español** de PokeAPI (`names[]`, `language.name === 'es'`) en `MoveRow.displayName`;
+`toMove` lo propaga; [`HUDView`](../services/frontend/src/views/HUDView.ts) ya muestra
+`m.displayName` (o el slug como fallback) en la barra QWER. También traduce el tipo.
+
+**Iconos QWER:** cada botón muestra ahora un **icono representativo del tipo** (mapa
+`MOVE_TYPE_EMOJI`, p. ej. 🔥/💧/🌿/⚡/👻…) como icono principal, con un **badge de clase**
+(⚔️ físico / 🔮 especial / 🛡️ estado) en la esquina, además del nombre y tipo traducidos.
+Es **provisional con emoji**: el arte definitivo (iconos estilo LoL, imagen de referencia
+aportada por el usuario; ver memoria `move-ability-icons-style`) se dejará en
+`public/assets/icons/{tipo}.png` y sustituirá a los emojis en un follow-up (el usuario
+aporta el PNG). La `img-src` del CSP ya permite `'self'` para esos assets.
+
+**Verificación:** `tsc` frontend limpio, build OK. Smoke: los botones QWER muestran nombre
+traducido + icono de tipo + badge de clase.
+
+## TA.4 — Tutor de movimientos *(diferido — futuro)*
