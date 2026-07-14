@@ -821,15 +821,24 @@ ver dónde llega y a quién afecta antes de lanzarlo.
 **Dudas resueltas (D5):** mapeo por lista curada manual + defaults.
 
 **Criterios de aceptación:**
-- [ ] Cada move tiene `range`/forma coherente; el radio de las ondas es explícito (`radius`).
-- [ ] Ningún move es lanzable fuera de su rango (incluido `radius`).
-- [ ] Tests del motor del mapeo (radius con alcance/radio, línea, cono, melee, proyectil).
+- [x] Cada move tiene `range`/forma coherente; el radio de las ondas es explícito (`radius`).
+- [x] Ningún move es lanzable fuera de su rango (incluido `radius`).
+- [x] Tests del motor del mapeo (radius con alcance/radio, línea, cono, melee, proyectil).
 
 **Investigación:** `toMove`/`getCuratedMoves` (`PokemonService.ts:199-249`), `calculateAoE`
 (`packages/shared/src/combat.ts:94-102`), validación de rango en `cast`
 (`GameService.ts:547-557`), `PokemonMove` (`domain.ts`).
 
 **Dependencias:** →TR.1 (recomendable →T0.3 para líneas reales). **Paralelizable:** sí.
+
+### ✅ Resolución (lo realmente hecho)
+
+`engine/moveShapes.ts` (nuevo): `MOVE_SHAPES` curado + `getMoveShape` (default por
+`target`/`damageClass`); `toMove` lo usa. `PokemonMove.radius?` + `calculateAoE(…, radius?)`
+(radio explícito, no `floor(range/2)`). `cast` valida `dist > range` para todos (fin del
+"rango infinito" de `radius`; auto-cast solo autocentrado). Preview del frontend pasa
+`move.radius`. Tests `moveShapes.test.ts` (52/52). El gating visual del preview es TA.3.
+Doc: [`24-ATTACK_SHAPES.md`](24-ATTACK_SHAPES.md).
 
 ## 🎟️ TA.2 — Selección de los 4 moves representativos (backend, heurística)
 
