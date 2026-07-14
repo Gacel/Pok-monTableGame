@@ -39,7 +39,24 @@ radio dibujados y la validación autoritativa del servidor.
 y validación de rango en `cast` (melee rechaza dist 2; radius ya no es lanzable lejos, solo
 autocentrado). game-service 52/52, `tsc` limpio en los 3 workspaces.
 
-## TA.2 — Selección de los 4 moves representativos *(pendiente)*
+## TA.2 — Selección de los 4 moves representativos (heurística)
+
+**Por qué:** la selección elegía el top-potencia de ≤14 candidatos priorizados por método
+→ se sentía arbitraria y podía llevar 4 moves del mismo tipo.
+
+**Cómo** ([`engine/moveSelection.ts`](../services/game-service/src/engine/moveSelection.ts),
+puro): `scoreMove` = **potencia + STAB (25) + bonus a emblemáticos (20)** (emblemático =
+está en `MOVE_SHAPES`). `selectMoves` ordena por puntuación y hace una **1ª pasada con máx
+2 por tipo** (variedad) y una **2ª de relleno** sin límite si faltan; sin duplicados.
+`getCuratedMoves` ([`PokemonService.ts`](../services/game-service/src/services/PokemonService.ts))
+lo usa tras hidratar, mantiene la garantía de ≥1 físico gratuito, y `CANDIDATE_CAP` sube a
+**18** para no perder emblemáticos.
+
+**Verificación:** [`test/moveSelection.test.ts`](../services/game-service/test/moveSelection.test.ts)
+— STAB/emblemático puntúan sobre la potencia, se prioriza el STAB, variedad (≤2 por tipo),
+relleno hasta 4, sin duplicados. game-service 57/57.
+
+## TA.3 — Previsualización de rango y forma en el mapa *(pendiente)*
 
 ## TA.3 — Previsualización de rango y forma en el mapa *(pendiente)*
 
