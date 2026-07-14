@@ -52,10 +52,12 @@ export interface PokemonMove {
   accuracy?: number;
   /** Puntos de poder (informativo). */
   pp?: number;
-  /** Rango máximo en hexágonos para lanzar el ataque. */
+  /** Rango máximo en hexágonos para lanzar el ataque (alcance del centro del AoE). */
   range?: number;
   /** Forma del área de efecto. */
   aoe?: AreaOfEffect;
+  /** Radio del AoE radial (`aoe:'radius'`), independiente del alcance `range`. */
+  radius?: number;
 }
 
 export interface Pokemon {

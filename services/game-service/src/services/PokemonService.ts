@@ -1,6 +1,8 @@
 import { PokemonModel, PokemonTemplate } from '../models/PokemonModel.js';
 import { MoveModel, MoveRow } from '../models/MoveModel.js';
 import { PokemonMove, PokemonType } from '../engine/board.js';
+import { getMoveShape } from '../engine/moveShapes.js';
+import { selectMoves } from '../engine/moveSelection.js';
 
 interface PokeApiStat {
   base_stat: number;
@@ -33,7 +35,7 @@ interface PokeApiMove {
 }
 
 /** Nº de movimientos del learnset que consideramos para curar (acota los fetch). */
-const CANDIDATE_CAP = 14;
+const CANDIDATE_CAP = 18; // candidatos hidratados; margen para no perder moves emblemáticos (TA.2)
 /** Ataques mostrados en la fase de combate. */
 const CURATED_COUNT = 4;
 /** Timeout por petición a PokeAPI (evita colgar el arranque si la API va lenta). */
@@ -189,12 +191,9 @@ export const PokemonService = {
         .filter((m): m is MoveRow => !!m)
         .filter((m) => (m.power ?? 0) > 0);
 
-      const sorted = details.sort((a, b) => {
-        const stabA = a.type === pokeType ? 1 : 0;
-        const stabB = b.type === pokeType ? 1 : 0;
-        if (stabB !== stabA) return stabB - stabA;
-        return (b.power ?? 0) - (a.power ?? 0);
-      });
+      // Selección por heurística: STAB + potencia + bonus a emblemáticos, con variedad
+      // (máx 2 por tipo) — TA.2.
+      const chosen = selectMoves(details, pokeType, CURATED_COUNT);
 
       const toMove = (m: MoveRow): PokemonMove => {
         const mv: PokemonMove = {
@@ -208,33 +207,17 @@ export const PokemonService = {
         if (m.displayName != null) mv.displayName = m.displayName;
         if (m.accuracy != null) mv.accuracy = m.accuracy;
         if (m.pp != null) mv.pp = m.pp;
-        
-        // Mapeo rudimentario de targets de PokeAPI a geometría AoE
-        const target = m.target ?? 'selected-pokemon';
-        if (target === 'all-other-pokemon' || target === 'all-pokemon') {
-          mv.aoe = 'radius';
-          mv.range = 0; // se castea sobre uno mismo y afecta al radio
-        } else if (target === 'all-opponents') {
-          mv.aoe = 'cone';
-          mv.range = 2; // un cono de tamaño 2
-        } else if (m.damageClass === 'special') {
-          // ataques especiales (proyectiles) suelen tener rango
-          mv.range = 3;
-          // Si es muy potente, puede ser línea o cono
-          if (mv.power >= 90) mv.aoe = 'line';
-        }
-        
+
+        // Forma/alcance por catálogo híbrido (lista curada + defaults) — TA.1.
+        const shape = getMoveShape(m);
+        mv.range = shape.range;
+        mv.aoe = shape.aoe;
+        if (shape.radius != null) mv.radius = shape.radius;
+
         return mv;
       };
 
-      const picked: PokemonMove[] = [];
-      const seen = new Set<string>();
-      for (const m of sorted) {
-        if (picked.length >= CURATED_COUNT) break;
-        if (seen.has(m.name)) continue;
-        seen.add(m.name);
-        picked.push(toMove(m));
-      }
+      const picked: PokemonMove[] = chosen.map(toMove);
 
       // Garantiza al menos un ataque físico gratuito.
       if (!picked.some((m) => m.damageClass === 'physical')) {

@@ -821,15 +821,24 @@ ver dónde llega y a quién afecta antes de lanzarlo.
 **Dudas resueltas (D5):** mapeo por lista curada manual + defaults.
 
 **Criterios de aceptación:**
-- [ ] Cada move tiene `range`/forma coherente; el radio de las ondas es explícito (`radius`).
-- [ ] Ningún move es lanzable fuera de su rango (incluido `radius`).
-- [ ] Tests del motor del mapeo (radius con alcance/radio, línea, cono, melee, proyectil).
+- [x] Cada move tiene `range`/forma coherente; el radio de las ondas es explícito (`radius`).
+- [x] Ningún move es lanzable fuera de su rango (incluido `radius`).
+- [x] Tests del motor del mapeo (radius con alcance/radio, línea, cono, melee, proyectil).
 
 **Investigación:** `toMove`/`getCuratedMoves` (`PokemonService.ts:199-249`), `calculateAoE`
 (`packages/shared/src/combat.ts:94-102`), validación de rango en `cast`
 (`GameService.ts:547-557`), `PokemonMove` (`domain.ts`).
 
 **Dependencias:** →TR.1 (recomendable →T0.3 para líneas reales). **Paralelizable:** sí.
+
+### ✅ Resolución (lo realmente hecho)
+
+`engine/moveShapes.ts` (nuevo): `MOVE_SHAPES` curado + `getMoveShape` (default por
+`target`/`damageClass`); `toMove` lo usa. `PokemonMove.radius?` + `calculateAoE(…, radius?)`
+(radio explícito, no `floor(range/2)`). `cast` valida `dist > range` para todos (fin del
+"rango infinito" de `radius`; auto-cast solo autocentrado). Preview del frontend pasa
+`move.radius`. Tests `moveShapes.test.ts` (52/52). El gating visual del preview es TA.3.
+Doc: [`24-ATTACK_SHAPES.md`](24-ATTACK_SHAPES.md).
 
 ## 🎟️ TA.2 — Selección de los 4 moves representativos (backend, heurística)
 
@@ -846,14 +855,21 @@ representativos/útiles, no 4 casi al azar.
 base del futuro tutor (TA.4).
 
 **Criterios de aceptación:**
-- [ ] Para varias especies, los 4 elegidos incluyen su STAB principal y variedad de forma.
-- [ ] Se conserva ≥1 físico gratuito.
-- [ ] Tests de la heurística de selección.
+- [x] Para varias especies, los 4 elegidos incluyen su STAB principal y variedad de forma.
+- [x] Se conserva ≥1 físico gratuito.
+- [x] Tests de la heurística de selección.
 
 **Investigación:** `getCuratedMoves` (`PokemonService.ts:172-249`), `CANDIDATE_CAP`/
 `CURATED_COUNT` (`PokemonService.ts:37-38`).
 
 **Dependencias:** →TR.1. **Paralelizable:** sí (con TA.1).
+
+### ✅ Resolución (lo realmente hecho)
+
+`engine/moveSelection.ts` (nuevo): `scoreMove` (potencia + STAB + bonus a emblemáticos de
+`MOVE_SHAPES`) y `selectMoves` (orden por score, 1ª pasada máx 2/tipo para variedad, 2ª de
+relleno, sin duplicados). `getCuratedMoves` lo usa; `CANDIDATE_CAP` 14→18; se mantiene ≥1
+físico gratis. Tests `moveSelection.test.ts` (57/57). Doc: [`24-ATTACK_SHAPES.md`](24-ATTACK_SHAPES.md).
 
 ## 🎟️ TA.3 — Previsualización de rango y forma en el mapa (frontend)
 
@@ -868,13 +884,19 @@ y qué forma tendrá, para apuntar bien antes de lanzarlo.
    aplica, `hexLineDraw` (T0.3).
 
 **Criterios de aceptación:**
-- [ ] Se ven los hexes de alcance y la forma del AoE antes de lanzar; el preview no engaña.
-- [ ] Un objetivo fuera de rango se distingue (no se resalta como válido).
+- [x] Se ven los hexes de alcance y la forma del AoE antes de lanzar; el preview no engaña.
+- [x] Un objetivo fuera de rango se distingue (no se resalta como válido).
 
 **Investigación:** preview de AoE (`BoardView.ts:411-419`), `isAttackTarget`/`isMoveTarget`
 (`GameState.ts`), `activeMoveIndex`.
 
 **Dependencias:** →TA.1. **Paralelizable:** no.
+
+### ✅ Resolución (lo realmente hecho)
+
+`BoardView.buildAttackPreview()` precalcula alcance/forma del move QWER activo; los overlays
+pintan alcance legal (cian), forma AoE en hover dentro de rango (naranja) y fuera de rango
+(rojo), coincidiendo con la validación de `cast`. Doc: [`24-ATTACK_SHAPES.md`](24-ATTACK_SHAPES.md).
 
 ## 🎟️ TA.5 — Traducción de moves + iconos en la UI (QWER)
 
@@ -896,8 +918,15 @@ vistazo.
 aportado; nombres localizados de PokeAPI.
 
 **Criterios de aceptación:**
-- [ ] Los moves se muestran con su nombre traducido (no el slug PokeAPI).
-- [ ] Cada botón/hotkey QWER muestra un icono coherente con el tipo/efecto del move.
+- [x] Los moves se muestran con su nombre traducido (no el slug PokeAPI).
+- [x] Cada botón/hotkey QWER muestra un icono coherente con el tipo/efecto del move.
+
+### ✅ Resolución (lo realmente hecho)
+
+Traducción ya funcionaba (backend guarda `displayName` en español de PokeAPI; `HUDView` lo
+muestra). Iconos QWER: icono de **tipo** (`MOVE_TYPE_EMOJI`) + badge de clase, **provisional
+con emoji**; el arte definitivo (PNG estilo LoL, ref. del usuario) irá en
+`public/assets/icons/` en un follow-up. Doc: [`24-ATTACK_SHAPES.md`](24-ATTACK_SHAPES.md).
 
 **Investigación:** `displayName` en `PokemonMove`/`MoveRow` (ya existe, `PokemonService.toMove`
 `:208`); `names[]` de PokeAPI en `hydrateMove` (`PokemonService.ts:143-171`); barra de
