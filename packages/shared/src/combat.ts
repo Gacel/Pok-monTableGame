@@ -91,10 +91,17 @@ export function getConeArea(start: Hex, target: Hex, length: number): Hex[] {
   return hexes;
 }
 
-export function calculateAoE(attackerHex: Hex, targetHex: Hex, aoe: string, range: number): Hex[] {
+export function calculateAoE(
+  attackerHex: Hex,
+  targetHex: Hex,
+  aoe: string,
+  range: number,
+  radius?: number
+): Hex[] {
   switch (aoe) {
     case 'single': return getSingleArea(targetHex);
-    case 'radius': return getRadiusArea(targetHex, Math.max(1, Math.floor(range / 2)));
+    // El radio del AoE radial es explícito (`radius`), no derivado del alcance.
+    case 'radius': return getRadiusArea(targetHex, Math.max(1, radius ?? 1));
     case 'line': return getLineArea(attackerHex, targetHex, range);
     case 'cone': return getConeArea(attackerHex, targetHex, range);
     default: return getSingleArea(targetHex);

@@ -547,19 +547,21 @@ export class GameService {
     // Asumimos que los ataques siempre se pueden lanzar si el centro está dentro del range.
     const range = move.range ?? 1;
     const dist = hexDistance(from, targetHex);
-    
-    // Excepción: "radius" con target=self o all-enemies a menudo tiene range=0.
-    if (dist > range && move.aoe !== 'radius') {
+
+    // El centro del AoE debe estar dentro del alcance (también los radiales — TA.1: se
+    // acabó el "rango infinito").
+    if (dist > range) {
        return { ok: false, error: 'El objetivo está fuera de rango', state: this.getStateDTO() };
     }
-    
+
+    // Auto-cast (dist 0) solo válido para ondas radiales autocentradas.
     if (dist === 0 && move.aoe !== 'radius') {
        return { ok: false, error: 'No puedes atacarte a ti mismo con este movimiento', state: this.getStateDTO() };
     }
 
     const aoe = move.aoe || 'single';
     const moveRange = move.range || 1;
-    const aoeHexes = calculateAoE(from, targetHex, aoe, moveRange);
+    const aoeHexes = calculateAoE(from, targetHex, aoe, moveRange, move.radius);
     let hits = 0;
     
     this.log.push(`🔥 ${nameOf(caster)} lanza ${move.name.toUpperCase()}!`);

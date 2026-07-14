@@ -415,7 +415,7 @@ export class BoardView {
         );
         const move = casterTile?.occupant?.moves?.[this.state.activeMoveIndex];
         if (move) {
-          const aoeHexes = calculateAoE(this.state.selectedHex, this.state.hoverHex, move.aoe || 'single', move.range || 1);
+          const aoeHexes = calculateAoE(this.state.selectedHex, this.state.hoverHex, move.aoe || 'single', move.range || 1, move.radius);
           isAoEHover = aoeHexes.some(h => h.q === tile.hex.q && h.r === tile.hex.r);
         }
       }
