@@ -56,8 +56,23 @@ lo usa tras hidratar, mantiene la garantía de ≥1 físico gratuito, y `CANDIDA
 — STAB/emblemático puntúan sobre la potencia, se prioriza el STAB, variedad (≤2 por tipo),
 relleno hasta 4, sin duplicados. game-service 57/57.
 
-## TA.3 — Previsualización de rango y forma en el mapa *(pendiente)*
+## TA.3 — Previsualización de rango y forma en el mapa
 
-## TA.3 — Previsualización de rango y forma en el mapa *(pendiente)*
+**Por qué:** con un move activo, el preview dibujaba el AoE en **cualquier** hover (sin mirar
+el rango) y no mostraba el alcance legal → parecía que llegaba a cualquier sitio aunque el
+`cast` lo rechazara.
+
+**Cómo** ([`BoardView.ts`](../services/frontend/src/views/BoardView.ts)):
+`buildAttackPreview()` (precalculado una vez por frame) obtiene del move QWER activo su
+`range`/`aoe`/`radius`, comprueba si el hover está **dentro de rango** (misma regla que
+`GameService.cast`: `dist ≤ range` y `dist ≥ 1` salvo ondas autocentradas) y, en ese caso,
+el conjunto de hexes del AoE (`calculateAoE`). En el bucle de render:
+- **Alcance legal** → overlay cian tenue en cada hex casteable.
+- **Forma AoE** en el hover (dentro de rango) → naranja.
+- **Fuera de rango** (hover) → rojo (feedback de que no llega).
+Helper `hexDist` (distancia cúbica) local. Coincide con la validación autoritativa.
+
+**Verificación:** `tsc` frontend limpio, tests 17/17, build OK. Smoke: al elegir un ataque
+se ven las casillas de alcance; la forma solo se dibuja dentro de rango; fuera, aviso rojo.
 
 ## TA.5 — Traducción de moves + iconos QWER *(pendiente)*
