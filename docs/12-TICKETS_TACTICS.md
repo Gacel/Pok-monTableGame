@@ -702,15 +702,22 @@ se desarrolla en este lote**. Retomar tras estabilizar el resto de la Fase 5.
 **Dudas resueltas (D6):** auto por height/weight + overrides.
 
 **Criterios de aceptación:**
-- [ ] Snorlax/Lapras/Onix salen `large`; Pikachu/Clefairy/etc. `small`; el grueso `medium`.
-- [ ] Un `large` ocupa 7 hexes en partida (ya soportado por `getOccupiedHexes`).
-- [ ] Tests de la clasificación (con casos de override).
+- [x] Snorlax/Lapras/Onix salen `large`; Pikachu/Clefairy/etc. `small`; el grueso `medium`.
+- [x] Un `large` ocupa 7 hexes en partida (ya soportado por `getOccupiedHexes`).
+- [x] Tests de la clasificación (con casos de override).
 
 **Investigación:** `getTemplate` size (`PokemonService.ts:119,135`), `getOccupiedHexes`
 (`board.ts:36-41`), `canEnter` large→montaña (`environment.ts:57-59`), tipo
 `PokemonSize` (`domain.ts:29-30`).
 
 **Dependencias:** ninguna (tras TR.1). **Paralelizable:** sí.
+
+### ✅ Resolución (lo realmente hecho)
+
+`engine/sizes.ts` (`sizeForSpecies`, mapa curado LARGE/SMALL de Gen 1 — D6, más fiable que
+height/weight). `getTemplate` lo aplica al template nuevo y al **cacheado** (cache-safe, sin
+reset de BD). `build`/`buildPokemon` ya propagan el size. Test `sizes.test.ts` (68/68).
+Doc: [`26-SIZES_LOS.md`](26-SIZES_LOS.md).
 
 ## 🎟️ T4.2 — Render de Pokémon Large (frontend)
 

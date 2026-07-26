@@ -4,6 +4,7 @@ import { PokemonMove, PokemonType } from '../engine/board.js';
 import { getMoveShape } from '../engine/moveShapes.js';
 import { selectMoves } from '../engine/moveSelection.js';
 import { getKnockback, isDash } from '../engine/moveTactics.js';
+import { sizeForSpecies } from '../engine/sizes.js';
 
 interface PokeApiStat {
   base_stat: number;
@@ -99,7 +100,12 @@ function learnsetFrom(data: PokeApiResponse) {
 export const PokemonService = {
   async getTemplate(name: string): Promise<PokemonTemplate> {
     const cached = await PokemonModel.findByName(name);
-    if (cached) return cached;
+    if (cached) {
+      // Tamaño por especie (T4.1/D6): se aplica también al template cacheado (los
+      // guardados antes de esta mecánica tenían size 'medium').
+      cached.size = sizeForSpecies(name);
+      return cached;
+    }
 
     try {
       const data = await fetchJson<PokeApiResponse>(
@@ -119,7 +125,7 @@ export const PokemonService = {
         def,
         type,
         speed: Math.max(2, Math.floor(statOf(data, 'speed', 60) / 20)),
-        size: 'medium',
+        size: sizeForSpecies(name),
       };
       await PokemonModel.save(tpl, data);
       // Importa el learnset completo (barato: viene en la misma respuesta).
@@ -135,7 +141,7 @@ export const PokemonService = {
         def: 40,
         type: 'GRASS',
         speed: 3,
-        size: 'medium',
+        size: sizeForSpecies(name),
       };
       await PokemonModel.save(tpl);
       return tpl;
