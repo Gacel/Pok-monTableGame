@@ -111,8 +111,13 @@ export class HUDView {
       };
       const translatedType = typeTranslations[m.type] || m.type;
 
+      // Efecto táctico (T3.x): empuje 💨×N o dash 💫, visible en el botón y el tooltip.
+      const tacticBadge = m.knockback ? `💨${m.knockback > 1 ? '×' + m.knockback : ''}` : m.dash ? '💫' : '';
+      const tacticTip = m.knockback ? ` | Empuje: ${m.knockback}` : m.dash ? ' | Dash' : '';
+
       return `
-        <div class="move-btn flex flex-col items-center justify-center p-2 rounded cursor-pointer border-2 transition-transform hover:scale-105 active:scale-95 w-28 h-28" style="background-color: ${typeColor}40; ${borderStyle}" data-move-idx="${i}" title="Power: ${m.power || '-'} | Acc: ${m.accuracy || '-'} | Range: ${m.range || 1} | AoE: ${m.aoe || 'single'}">
+        <div class="move-btn relative flex flex-col items-center justify-center p-2 rounded cursor-pointer border-2 transition-transform hover:scale-105 active:scale-95 w-28 h-28" style="background-color: ${typeColor}40; ${borderStyle}" data-move-idx="${i}" title="Power: ${m.power || '-'} | Acc: ${m.accuracy || '-'} | Range: ${m.range || 1} | AoE: ${m.aoe || 'single'}${tacticTip}">
+          ${tacticBadge ? `<span class="absolute top-0.5 left-1 text-[11px]" title="${m.knockback ? 'Empuje' : 'Dash'}">${tacticBadge}</span>` : ''}
           <span class="text-white text-[8px] font-bold mb-1" style="font-family: 'Press Start 2P', monospace;">[${keys[i]}]</span>
           <div class="relative text-3xl leading-none mb-1">${typeEmoji}<span class="absolute -bottom-1 -right-2 text-[11px]">${classIcon}</span></div>
           <span class="text-white text-[10px] font-bold text-center leading-tight overflow-hidden text-ellipsis" style="font-family: 'Press Start 2P', monospace; max-width: 100%; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">${moveName}</span>
