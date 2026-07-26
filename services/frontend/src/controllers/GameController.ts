@@ -435,7 +435,13 @@ export class GameController {
         case 'reveal':
           this.fxLayer.flash(ev.hex); // "!" de emboscada revelada (T1.2)
           break;
-        // knockback, dash, capture → sus tickets (T3.x, T8.5).
+        case 'knockback':
+        case 'dash':
+          // Deslizamiento del sprite (T3.2/T3.4): se marca el id para que EntityView use
+          // una transición de posición larga en el render que lo mueve a su nuevo hex.
+          if (ev.pokemonId) this.state.slidingIds.add(ev.pokemonId);
+          break;
+        // capture → su ticket (T8.5).
         default:
           break;
       }
