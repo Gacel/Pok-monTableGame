@@ -47,6 +47,17 @@ export const MOVE_SHAPES: Record<string, MoveShape> = {
   'heat-wave': { aoe: 'cone', range: 2 },
   twister: { aoe: 'cone', range: 2 },
 
+  // --- Dash (T3.3): alcance del lanzamiento (single; el flag `dash` va en moveTactics) ---
+  'quick-attack': { aoe: 'single', range: 3 },
+  'extreme-speed': { aoe: 'single', range: 4 },
+  'aqua-jet': { aoe: 'single', range: 3 },
+  'mach-punch': { aoe: 'single', range: 2 },
+  'bullet-punch': { aoe: 'single', range: 2 },
+  'ice-shard': { aoe: 'single', range: 3 },
+  'shadow-sneak': { aoe: 'single', range: 3 },
+  accelerock: { aoe: 'single', range: 3 },
+  'vacuum-wave': { aoe: 'single', range: 3 },
+
   // --- Proyectiles físicos a distancia (evitan el range 1 melee por defecto) ---
   'rock-throw': { aoe: 'single', range: 2 },
   'rock-slide': { aoe: 'radius', range: 2, radius: 1 },

@@ -594,16 +594,24 @@ hacia atrás, para descolocarlo, alejarlo de un aliado o estamparlo contra un ob
 **Dudas resueltas (D2):** distancia por movimiento (1-3); Large inmunes; colisión 10%.
 
 **Criterios de aceptación:**
-- [ ] Un ataque con knockback empuja al defensor su nº de hexes en la dirección correcta.
-- [ ] Si choca con obstáculo/pieza/borde, se detiene y recibe 10% maxHp.
-- [ ] Un defensor `large` no se mueve por empuje.
-- [ ] Tests del motor: dirección, tope por colisión, inmunidad large.
+- [x] Un ataque con knockback empuja al defensor su nº de hexes en la dirección correcta.
+- [x] Si choca con obstáculo/pieza/borde, se detiene y recibe 10% maxHp.
+- [x] Un defensor `large` no se mueve por empuje.
+- [x] Tests del motor: dirección, tope por colisión, inmunidad large.
 
 **Investigación:** `PokemonMove` (`domain.ts:39-58`), `moveOccupant` (colisión atómica,
 `board.ts:70-102`), `getOccupiedHexes` (`board.ts:36-41`), `cast` (`GameService.ts:388-470`),
 `getCuratedMoves`/`toMove` (`PokemonService.ts:199-228`).
 
 **Dependencias:** →T0.1 (evento); recomendable →T0.3 (dirección). **Paralelizable:** parcial.
+
+### ✅ Resolución (lo realmente hecho)
+
+`PokemonMove.knockback?` + lista curada `engine/moveTactics.ts` (`KNOCKBACK_MOVES`/`getKnockback`,
+solo moves con daño); `toMove` la aplica. `hexDirection` en `engine/hex.ts`.
+`GameService.applyKnockback`: empuja N hexes (Large inmunes), colisión con obstáculo/pieza/borde
+= 10% maxHp (posible KO), evento `knockback` (from→to). Tests `knockback.test.ts` (61/61).
+Doc: [`25-TACTICAL_MOVES.md`](25-TACTICAL_MOVES.md).
 
 ## 🎟️ T3.2 — Deslizamiento de empuje (frontend)
 
@@ -614,11 +622,17 @@ atrás, para percibir el impacto.
 defensor de su hex origen al destino.
 
 **Criterios de aceptación:**
-- [ ] El defensor se desliza (no salta) a su nueva casilla tras el empuje.
+- [x] El defensor se desliza (no salta) a su nueva casilla tras el empuje.
 
 **Investigación:** util tween de T0.4, `EntityView`.
 
 **Dependencias:** →T3.1, →T0.4. **Paralelizable:** no.
+
+### ✅ Resolución (T3.2 + T3.4)
+
+`GameState.slidingIds` (one-shot) marcado en `dispatchEvents` al recibir `knockback`/`dash`;
+`EntityView` usa transición `left/top` de 0.28s para esos sprites → deslizan a su nuevo hex.
+Doc: [`25-TACTICAL_MOVES.md`](25-TACTICAL_MOVES.md).
 
 ## 🎟️ T3.3 — Dash / Desplazamiento-ataque (backend)
 
@@ -635,14 +649,22 @@ hacia el enemigo dañando a lo que atraviese, para cerrar distancias con estilo.
 **Dudas resueltas (D5):** dash por lista curada.
 
 **Criterios de aceptación:**
-- [ ] Un ataque dash mueve al atacante junto al objetivo y daña a los atravesados.
-- [ ] Validación de turno/propiedad/alcance como el resto de acciones.
-- [ ] Tests del motor de la trayectoria y el daño en línea.
+- [x] Un ataque dash mueve al atacante junto al objetivo y daña a los atravesados.
+- [x] Validación de turno/propiedad/alcance como el resto de acciones.
+- [x] Tests del motor de la trayectoria y el daño en línea.
 
 **Investigación:** `GameAction` union y `run` (`GameActionService.ts:7-13,30-46`),
 `cast` (`GameService.ts:388-470`), `hexLineDraw` (T0.3).
 
 **Dependencias:** →T0.3, →T0.1. **Paralelizable:** parcial.
+
+### ✅ Resolución (lo realmente hecho)
+
+`PokemonMove.dash?` + `DASH_MOVES`/`isDash` (moveTactics) con alcance en `MOVE_SHAPES`;
+`toMove` lo aplica. `GameService.castDash` (reutiliza `cast`): traza `hexLineDraw`, daña al
+primer enemigo embestido (KO/revelado incluidos), aterriza junto al objetivo (o en su
+casilla si lo mata), evento `dash`. Tests `dash.test.ts` (65/65). Doc:
+[`25-TACTICAL_MOVES.md`](25-TACTICAL_MOVES.md).
 
 ## 🎟️ T3.4 — Deslizamiento de dash (frontend)
 
@@ -651,7 +673,7 @@ hacia el enemigo dañando a lo que atraviese, para cerrar distancias con estilo.
 **Objetivos de desarrollo:** consumir evento `dash` y animar el tween del atacante.
 
 **Criterios de aceptación:**
-- [ ] El atacante se desliza por la línea hasta junto al objetivo.
+- [x] El atacante se desliza por la línea hasta junto al objetivo.
 
 **Dependencias:** →T3.3, →T0.4. **Paralelizable:** no.
 

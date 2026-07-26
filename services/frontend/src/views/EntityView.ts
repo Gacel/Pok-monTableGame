@@ -42,6 +42,11 @@ export class EntityView {
       ? 'transform 0.15s ease-in-out'
       : 'left 0.1s linear, top 0.1s linear, transform 0.15s ease-in-out';
     const lblTr = moving ? 'none' : 'left 0.1s linear, top 0.1s linear';
+    // Transiciones "slide" (empuje/dash, T3.2/T3.4): más largas para que el sprite se
+    // deslice de forma visible a su nuevo hex. No aplican mientras se mueve la cámara.
+    const slideImgTr = 'left 0.28s ease-out, top 0.28s ease-out, transform 0.15s ease-in-out';
+    const slideBaseTr = 'left 0.28s ease-out, top 0.28s ease-out, width 0.1s linear, height 0.1s linear';
+    const slideLblTr = 'left 0.28s ease-out, top 0.28s ease-out';
 
     for (const tile of this.state.currentTiles) {
       if (tile.occupant && tile.occupant.name && this.state.pokeGifs[tile.occupant.name]) {
@@ -55,7 +60,13 @@ export class EntityView {
 
           const occupantId = tile.occupant.id;
           currentOccupantIds.add(occupantId);
-          
+
+          // Transición de este sprite: "slide" larga si se está desplazando (empuje/dash).
+          const sliding = !moving && this.state.slidingIds.has(occupantId);
+          const oBaseTr = sliding ? slideBaseTr : baseTr;
+          const oImgTr = sliding ? slideImgTr : imgTr;
+          const oLblTr = sliding ? slideLblTr : lblTr;
+
           const { x: screenX, y: screenY } = this.boardView.hexToScreen(tile.hex);
 
           const sSize = this.boardView.HEX_SIZE * 1.5 * this.state.zoom;
@@ -94,7 +105,7 @@ export class EntityView {
 
           const baseW = sSize * 0.85;
           const baseH = sSize * 0.38;
-          base.style.transition = baseTr;
+          base.style.transition = oBaseTr;
           base.style.width = `${baseW}px`;
           base.style.height = `${baseH}px`;
           base.style.left = `${screenX - baseW / 2}px`;
@@ -111,7 +122,7 @@ export class EntityView {
             this.entitiesLayer.appendChild(img);
           }
 
-          img.style.transition = imgTr;
+          img.style.transition = oImgTr;
           img.style.width = `${sSize}px`;
           img.style.height = `${sSize}px`;
           img.style.left = `${screenX - sSize/2}px`;
@@ -145,7 +156,7 @@ export class EntityView {
             const wlW = sSize * 0.62;
             const wlY = screenY - sSize * 0.05; // ≈ inicio del difuminado de la máscara
             wl.style.display = 'block';
-            wl.style.transition = lblTr;
+            wl.style.transition = oLblTr;
             wl.style.width = `${wlW}px`;
             wl.style.height = `${Math.max(2, 3 * this.state.zoom)}px`;
             wl.style.left = `${screenX - wlW / 2}px`;
@@ -168,7 +179,7 @@ export class EntityView {
           // Nombre del jugador (username / "Jugador N" / "IA"), no el slot crudo.
           label.textContent = this.state.labelFor(tile.occupant.playerId);
 
-          label.style.transition = lblTr;
+          label.style.transition = oLblTr;
           label.style.fontSize = `${8 * this.state.zoom}px`;
           label.style.left = `${screenX}px`;
           label.style.top = `${screenY - sSize/1.1 - (10 * this.state.zoom) + waterSink}px`;
@@ -187,5 +198,9 @@ export class EntityView {
            child.remove();
        }
     });
+
+    // El slide es de un solo render: consumido, se limpia (los siguientes renders usan
+    // la transición normal).
+    if (this.state.slidingIds.size) this.state.slidingIds.clear();
   }
 }
