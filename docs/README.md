@@ -10,7 +10,7 @@
   `SCREAMING_SNAKE_CASE`: `NN-NOMBRE.md`.
 - El número refleja el **orden de creación**, no la importancia ni un orden de
   lectura obligatorio. El siguiente documento nuevo usa el número más alto + 1
-  (el último a día de hoy es `24`, así que el próximo sería `25-*.md`).
+  (el último a día de hoy es `25`, así que el próximo sería `26-*.md`).
 - Los documentos **históricos** (diarios de sesión, auditorías puntuales, planes
   de refactor ya ejecutados) van a `docs/archive/`, sin numerar — son un
   registro de un momento concreto, no una referencia a mantener al día. Cada uno
@@ -48,6 +48,7 @@
 | 22 | [`22-PASSIVES_TERRAIN.md`](22-PASSIVES_TERRAIN.md) | Pasivas y terreno avanzado (Épica 2): fantasmas atraviesan unidades (T2.1), curación de Planta en hierba + pantano (T2.2) y números flotantes de daño/curación (T2.3). |
 | 23 | [`23-SHINY_GACHA.md`](23-SHINY_GACHA.md) | Pokémon Shiny (probabilidad por bola, sprites ✨) y apertura cinemática de gacha con audio sintetizado (Épica G, TG.1/TG.2). |
 | 24 | [`24-ATTACK_SHAPES.md`](24-ATTACK_SHAPES.md) | Sistema de ataques (Épica A): catálogo híbrido de rango/forma AoE + radio propio y validación de rango (TA.1); selección, preview e iconos pendientes. |
+| 25 | [`25-TACTICAL_MOVES.md`](25-TACTICAL_MOVES.md) | Movimientos tácticos (Épica 3): empuje/knockback (T3.1); dash y deslizamientos pendientes. |
 
 ## Archivo (histórico, no numerado)
 

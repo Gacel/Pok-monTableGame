@@ -1,8 +1,8 @@
 import { Board, Pokemon, Tile } from '../engine/board.js';
-import { Hex, hexEqual, hexDistance, hexNeighbors } from '../engine/hex.js';
+import { Hex, hexEqual, hexDistance, hexNeighbors, hexAdd, hexDirection } from '../engine/hex.js';
 import { getMoveOptions, MoveOptions } from '../engine/movement.js';
 import { computeMoveDamage, calculateAoE } from '../engine/combat.js';
-import { terrainDamage } from '../engine/environment.js';
+import { terrainDamage, canEnter } from '../engine/environment.js';
 import { collectResources, PlayerResources } from '../engine/resources.js';
 import { BALL_LABEL, pickChestBall } from '@transcendence/shared';
 
@@ -591,13 +591,21 @@ export class GameService {
                  this.addKo(caster.playerId);
                  this.dropBall(tile.occupant, tile.hex);
                  this.board.setOccupant(tile.hex, null);
-              } else if (tile.occupant.isHidden) {
-                 // Golpeado por AoE y sobrevive: se descubre (T1.1). `revealed` evita que
-                 // updateStealthVisibility lo vuelva a ocultar estando quieto.
-                 tile.occupant.isHidden = false;
-                 tile.occupant.revealed = true;
-                 this.log.push(`👁️ ¡${nameOf(tile.occupant)} ha sido descubierto!`);
-                 this.events.push({ kind: 'reveal', pokemonId: tile.occupant.id, hex: tile.hex });
+              } else {
+                 // Sobrevive al impacto directo.
+                 if (tile.occupant.isHidden) {
+                   // Golpeado por AoE: se descubre (T1.1). `revealed` evita que
+                   // updateStealthVisibility lo vuelva a ocultar estando quieto.
+                   tile.occupant.isHidden = false;
+                   tile.occupant.revealed = true;
+                   this.log.push(`👁️ ¡${nameOf(tile.occupant)} ha sido descubierto!`);
+                   this.events.push({ kind: 'reveal', pokemonId: tile.occupant.id, hex: tile.hex });
+                 }
+                 // Empuje (knockback) desde el atacante — T3.1.
+                 if (move.knockback) {
+                   const dir = hexDirection(from, tile.hex);
+                   this.applyKnockback(tile.hex, dir, move.knockback, tile.occupant, caster.playerId);
+                 }
               }
             }
          }
@@ -614,6 +622,47 @@ export class GameService {
     this.updateStealthVisibility();
     this.checkWinCondition();
     return { ok: true, state: this.getStateDTO() };
+  }
+
+  /**
+   * Empuje (T3.1): mueve al defensor `distance` hexes en `dir`. Large inmunes (D2). Se
+   * detiene ante obstáculo/pieza/borde y, en ese caso, recibe 10% maxHp de colisión.
+   * Emite evento `knockback` (from→to) y, si procede, daño/KO de colisión.
+   */
+  private applyKnockback(startHex: Hex, dir: Hex, distance: number, occ: Pokemon, killerSlot: string): void {
+    if (occ.size === 'large') return; // Large inmunes al empuje
+    if (dir.q === 0 && dir.r === 0) return;
+
+    let cur = startHex;
+    let collided = false;
+    for (let i = 0; i < distance; i++) {
+      const next = hexAdd(cur, dir);
+      const tile = this.board.getTile(next);
+      if (!tile || this.board.getOccupant(next) || !canEnter(occ, tile.biome)) {
+        collided = true;
+        break;
+      }
+      cur = next;
+    }
+
+    if (!hexEqual(cur, startHex)) this.board.moveOccupant(startHex, cur);
+    this.log.push(`💨 ${nameOf(occ)} sale despedido.`);
+    this.events.push({ kind: 'knockback', pokemonId: occ.id, hex: startHex, from: startHex, to: cur });
+
+    if (collided) {
+      const dmg = Math.max(1, Math.round(0.1 * (occ.maxHp ?? occ.hp)));
+      occ.hp = Math.max(0, occ.hp - dmg);
+      this.log.push(`💥 ${nameOf(occ)} choca contra un obstáculo (-${dmg} HP).`);
+      this.events.push({ kind: 'damage', pokemonId: occ.id, hex: cur, delta: -dmg });
+      if (occ.hp <= 0) {
+        this.log.push(`💀 ¡${nameOf(occ)} ha caído KO por el impacto!`);
+        this.events.push({ kind: 'ko', pokemonId: occ.id, hex: cur });
+        this.defeats.push({ killerSlot, victimSlot: occ.playerId });
+        this.addKo(killerSlot);
+        this.dropBall(occ, cur);
+        this.board.setOccupant(cur, null);
+      }
+    }
   }
 
   // --------------------------------------------------------------------- turnos

@@ -594,16 +594,24 @@ hacia atrás, para descolocarlo, alejarlo de un aliado o estamparlo contra un ob
 **Dudas resueltas (D2):** distancia por movimiento (1-3); Large inmunes; colisión 10%.
 
 **Criterios de aceptación:**
-- [ ] Un ataque con knockback empuja al defensor su nº de hexes en la dirección correcta.
-- [ ] Si choca con obstáculo/pieza/borde, se detiene y recibe 10% maxHp.
-- [ ] Un defensor `large` no se mueve por empuje.
-- [ ] Tests del motor: dirección, tope por colisión, inmunidad large.
+- [x] Un ataque con knockback empuja al defensor su nº de hexes en la dirección correcta.
+- [x] Si choca con obstáculo/pieza/borde, se detiene y recibe 10% maxHp.
+- [x] Un defensor `large` no se mueve por empuje.
+- [x] Tests del motor: dirección, tope por colisión, inmunidad large.
 
 **Investigación:** `PokemonMove` (`domain.ts:39-58`), `moveOccupant` (colisión atómica,
 `board.ts:70-102`), `getOccupiedHexes` (`board.ts:36-41`), `cast` (`GameService.ts:388-470`),
 `getCuratedMoves`/`toMove` (`PokemonService.ts:199-228`).
 
 **Dependencias:** →T0.1 (evento); recomendable →T0.3 (dirección). **Paralelizable:** parcial.
+
+### ✅ Resolución (lo realmente hecho)
+
+`PokemonMove.knockback?` + lista curada `engine/moveTactics.ts` (`KNOCKBACK_MOVES`/`getKnockback`,
+solo moves con daño); `toMove` la aplica. `hexDirection` en `engine/hex.ts`.
+`GameService.applyKnockback`: empuja N hexes (Large inmunes), colisión con obstáculo/pieza/borde
+= 10% maxHp (posible KO), evento `knockback` (from→to). Tests `knockback.test.ts` (61/61).
+Doc: [`25-TACTICAL_MOVES.md`](25-TACTICAL_MOVES.md).
 
 ## 🎟️ T3.2 — Deslizamiento de empuje (frontend)
 
