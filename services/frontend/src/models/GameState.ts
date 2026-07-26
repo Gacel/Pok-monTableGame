@@ -21,6 +21,12 @@ export class GameState {
    * (si no, la transición CSS de left/top los hace "bailar" al panear).
    */
   public cameraMoving = false;
+  /**
+   * Ids de Pokémon que se están desplazando por empuje/dash (T3.2/T3.4): en el próximo
+   * render, `EntityView` usa una transición de posición más larga para que "deslicen".
+   * Se limpia tras aplicarse (one-shot).
+   */
+  public slidingIds = new Set<string>();
   private _lastInteractedPokemonId: Record<string, string | null> = {};
   private listeners: Set<Listener> = new Set();
 

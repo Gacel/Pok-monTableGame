@@ -47,4 +47,20 @@ embiste, para cerrar distancias.
 `isDash`, aterrizaje junto al objetivo + daño + evento, reposición a casilla libre, avanzar
 a la casilla del KO. game-service 65/65.
 
-## T3.2 / T3.4 — Deslizamientos de empuje y dash (frontend) *(pendiente)*
+## T3.2 / T3.4 — Deslizamientos de empuje y dash (frontend)
+
+**Qué:** que el sprite **deslice** de forma visible a su nueva casilla tras un empuje
+(`knockback`) o un dash, en vez de saltar.
+
+**Cómo:** en vez de tweens que pelean con el reposicionado de `EntityView`, se reutiliza la
+transición CSS de `left/top`, alargándola solo para el sprite que se desplaza:
+- `GameState.slidingIds: Set<string>` — ids que deslizan en el próximo render (one-shot).
+- [`GameController.dispatchEvents`](../services/frontend/src/controllers/GameController.ts):
+  al recibir `knockback`/`dash`, añade `ev.pokemonId` a `slidingIds`.
+- [`EntityView`](../services/frontend/src/views/EntityView.ts): para un sprite en
+  `slidingIds` (y sin cámara en movimiento) usa una transición `left/top` de **0.28s
+  ease-out** (sprite/base/label) → cuando `EntityView` lo coloca en su nuevo hex, se
+  desliza. Se limpia `slidingIds` al final del render (un solo desplazamiento).
+
+**Verificación:** `tsc` frontend limpio, tests 17/17. *(Smoke visual pendiente: el tooling de
+Docker Compose se cayó en el entorno; ver nota al cerrar la Épica 3.)* **Cierra la Épica 3.**

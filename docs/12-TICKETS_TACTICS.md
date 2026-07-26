@@ -622,11 +622,17 @@ atrás, para percibir el impacto.
 defensor de su hex origen al destino.
 
 **Criterios de aceptación:**
-- [ ] El defensor se desliza (no salta) a su nueva casilla tras el empuje.
+- [x] El defensor se desliza (no salta) a su nueva casilla tras el empuje.
 
 **Investigación:** util tween de T0.4, `EntityView`.
 
 **Dependencias:** →T3.1, →T0.4. **Paralelizable:** no.
+
+### ✅ Resolución (T3.2 + T3.4)
+
+`GameState.slidingIds` (one-shot) marcado en `dispatchEvents` al recibir `knockback`/`dash`;
+`EntityView` usa transición `left/top` de 0.28s para esos sprites → deslizan a su nuevo hex.
+Doc: [`25-TACTICAL_MOVES.md`](25-TACTICAL_MOVES.md).
 
 ## 🎟️ T3.3 — Dash / Desplazamiento-ataque (backend)
 
@@ -667,7 +673,7 @@ casilla si lo mata), evento `dash`. Tests `dash.test.ts` (65/65). Doc:
 **Objetivos de desarrollo:** consumir evento `dash` y animar el tween del atacante.
 
 **Criterios de aceptación:**
-- [ ] El atacante se desliza por la línea hasta junto al objetivo.
+- [x] El atacante se desliza por la línea hasta junto al objetivo.
 
 **Dependencias:** →T3.3, →T0.4. **Paralelizable:** no.
 
