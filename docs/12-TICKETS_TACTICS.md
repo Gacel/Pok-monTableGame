@@ -643,14 +643,22 @@ hacia el enemigo dañando a lo que atraviese, para cerrar distancias con estilo.
 **Dudas resueltas (D5):** dash por lista curada.
 
 **Criterios de aceptación:**
-- [ ] Un ataque dash mueve al atacante junto al objetivo y daña a los atravesados.
-- [ ] Validación de turno/propiedad/alcance como el resto de acciones.
-- [ ] Tests del motor de la trayectoria y el daño en línea.
+- [x] Un ataque dash mueve al atacante junto al objetivo y daña a los atravesados.
+- [x] Validación de turno/propiedad/alcance como el resto de acciones.
+- [x] Tests del motor de la trayectoria y el daño en línea.
 
 **Investigación:** `GameAction` union y `run` (`GameActionService.ts:7-13,30-46`),
 `cast` (`GameService.ts:388-470`), `hexLineDraw` (T0.3).
 
 **Dependencias:** →T0.3, →T0.1. **Paralelizable:** parcial.
+
+### ✅ Resolución (lo realmente hecho)
+
+`PokemonMove.dash?` + `DASH_MOVES`/`isDash` (moveTactics) con alcance en `MOVE_SHAPES`;
+`toMove` lo aplica. `GameService.castDash` (reutiliza `cast`): traza `hexLineDraw`, daña al
+primer enemigo embestido (KO/revelado incluidos), aterriza junto al objetivo (o en su
+casilla si lo mata), evento `dash`. Tests `dash.test.ts` (65/65). Doc:
+[`25-TACTICAL_MOVES.md`](25-TACTICAL_MOVES.md).
 
 ## 🎟️ T3.4 — Deslizamiento de dash (frontend)
 
