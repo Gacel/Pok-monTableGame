@@ -3,7 +3,7 @@ import { MoveModel, MoveRow } from '../models/MoveModel.js';
 import { PokemonMove, PokemonType } from '../engine/board.js';
 import { getMoveShape } from '../engine/moveShapes.js';
 import { selectMoves } from '../engine/moveSelection.js';
-import { getKnockback } from '../engine/moveTactics.js';
+import { getKnockback, isDash } from '../engine/moveTactics.js';
 
 interface PokeApiStat {
   base_stat: number;
@@ -218,6 +218,9 @@ export const PokemonService = {
         // Efecto de empuje (knockback) por lista curada — T3.1.
         const kb = getKnockback(m.name);
         if (kb != null) mv.knockback = kb;
+
+        // Dash (embestida en línea) por lista curada — T3.3.
+        if (isDash(m.name)) mv.dash = true;
 
         return mv;
       };

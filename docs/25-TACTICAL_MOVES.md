@@ -27,8 +27,24 @@
 — valores curados, empuje en la dirección correcta + evento, colisión (bloqueo + 10%),
 inmunidad Large. game-service 61/61, `tsc` limpio.
 
-## T3.2 — Deslizamiento de empuje (frontend) *(pendiente)*
+## T3.3 — Dash / desplazamiento-ataque (backend)
 
-## T3.3 — Dash / desplazamiento-ataque (backend) *(pendiente)*
+**Qué:** algunos ataques **lanzan al atacante** en línea hacia el objetivo, dañando lo que
+embiste, para cerrar distancias.
 
-## T3.4 — Deslizamiento de dash (frontend) *(pendiente)*
+**Cómo:**
+- `PokemonMove.dash?` ([`domain.ts`](../packages/shared/src/domain.ts)); lista curada
+  `DASH_MOVES`/`isDash` en [`moveTactics.ts`](../services/game-service/src/engine/moveTactics.ts)
+  (`quick-attack`, `extreme-speed`, `aqua-jet`, `mach-punch`…). Su **alcance** vive en
+  `MOVE_SHAPES` (range del dash). `toMove` fija `mv.dash`.
+- [`GameService.castDash`](../services/game-service/src/services/GameService.ts) (reutiliza
+  `cast`, que ya validó turno/propiedad/rango): traza la línea `hexLineDraw(from, target)`,
+  daña al **primer enemigo** que embiste (con KO/revelado como el AoE) y aterriza en la
+  **última casilla libre** de la trayectoria (junto al objetivo). Si mata a lo que embiste,
+  **avanza a su casilla**. Emite evento **`dash`** (`from`→`to`).
+
+**Verificación:** [`test/dash.test.ts`](../services/game-service/test/dash.test.ts) —
+`isDash`, aterrizaje junto al objetivo + daño + evento, reposición a casilla libre, avanzar
+a la casilla del KO. game-service 65/65.
+
+## T3.2 / T3.4 — Deslizamientos de empuje y dash (frontend) *(pendiente)*

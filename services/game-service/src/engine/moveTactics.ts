@@ -23,3 +23,21 @@ export const KNOCKBACK_MOVES: Record<string, number> = {
 export function getKnockback(name: string): number | undefined {
   return KNOCKBACK_MOVES[name];
 }
+
+/** Dash: el atacante se lanza en línea hasta junto al objetivo (T3.3). Su alcance de
+ *  dash vive en `MOVE_SHAPES` (range). Excluir los que ya son knockback. */
+export const DASH_MOVES = new Set<string>([
+  'quick-attack',
+  'extreme-speed',
+  'aqua-jet',
+  'mach-punch',
+  'bullet-punch',
+  'ice-shard',
+  'shadow-sneak',
+  'accelerock',
+  'vacuum-wave',
+]);
+
+export function isDash(name: string): boolean {
+  return DASH_MOVES.has(name);
+}
