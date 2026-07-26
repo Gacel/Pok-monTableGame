@@ -729,12 +729,18 @@ las 7 casillas que ocupan resaltadas, para leer el tablero.
 2. `BoardView`: highlight de los 7 hexes ocupados por un large.
 
 **Criterios de aceptación:**
-- [ ] Un large se ve claramente mayor y su huella (7 hexes) está resaltada.
+- [x] Un large se ve claramente mayor y su huella (7 hexes) está resaltada.
 
 **Investigación:** `EntityView.ts` (`sSize = HEX_SIZE*1.5*zoom`, no lee `size`),
 `BoardView.ts` (sin concepto de huella multi-hex).
 
 **Dependencias:** →T4.1. **Paralelizable:** no.
+
+### ✅ Resolución (lo realmente hecho)
+
+`EntityView` agrupa por id y dibuja el sprite una vez en el **centro** (centroide), con
+escalado por tamaño (large ×2, small ×0.75). `BoardView` resalta la huella (ámbar) de cada
+casilla de un large. Doc: [`26-SIZES_LOS.md`](26-SIZES_LOS.md).
 
 ## 🎟️ T4.3 — Línea de visión + Bodyblocking (backend)
 
