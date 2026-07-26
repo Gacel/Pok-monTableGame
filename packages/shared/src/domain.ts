@@ -58,6 +58,8 @@ export interface PokemonMove {
   aoe?: AreaOfEffect;
   /** Radio del AoE radial (`aoe:'radius'`), independiente del alcance `range`. */
   radius?: number;
+  /** Empuje: hexes que retrocede el objetivo tras el impacto (1-3). Large inmunes. */
+  knockback?: number;
 }
 
 export interface Pokemon {

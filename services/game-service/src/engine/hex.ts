@@ -93,6 +93,16 @@ export function hexRound(frac: { q: number; r: number }): Hex {
  * direcciones), esto sí sigue la recta punto a punto ⇒ sirve para LoS/bodyblocking
  * y direcciones de empuje/dash.
  */
+/**
+ * Dirección unitaria (uno de los 6 vecinos) que mejor apunta de `a` hacia `b`.
+ * Se apoya en el primer paso del trazado de línea. `{0,0}` si `a === b`.
+ */
+export function hexDirection(a: Hex, b: Hex): Hex {
+  const line = hexLineDraw(a, b);
+  if (line.length < 2) return { q: 0, r: 0 };
+  return hexSubtract(line[1]!, a);
+}
+
 export function hexLineDraw(a: Hex, b: Hex): Hex[] {
   const n = hexDistance(a, b);
   if (n === 0) return [{ q: a.q, r: a.r }];
