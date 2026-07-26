@@ -442,6 +442,11 @@ export class BoardView {
       this.drawBiomeTransitions(tile, x, y, tileMap);
       this.drawRelief(tile, x, y, !!fogged);
 
+      // Huella de un Pokémon grande (T4.2): resalta las 7 casillas que ocupa.
+      if (tile.occupant?.size === 'large') {
+        this.drawTileOverlay(x, y, 'rgba(250, 204, 21, 0.12)', 'rgba(250, 204, 21, 0.5)', 1.5);
+      }
+
       if (isSelected) {
         this.drawTileOverlay(x, y, 'rgba(255, 255, 0, 0.4)', '#fff', 3);
       } else if (this.state.match?.status === 'deployment') {

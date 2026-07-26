@@ -48,6 +48,20 @@ export class EntityView {
     const slideBaseTr = 'left 0.28s ease-out, top 0.28s ease-out, width 0.1s linear, height 0.1s linear';
     const slideLblTr = 'left 0.28s ease-out, top 0.28s ease-out';
 
+    // Un `large` ocupa 7 hexes (centro + vecinos): se renderiza UNA vez en el centro
+    // (centroide de sus casillas), no una por casilla. Precalculamos el centro por id.
+    const centers = new Map<string, { q: number; r: number }>();
+    {
+      const acc = new Map<string, { sq: number; sr: number; n: number }>();
+      for (const t of this.state.currentTiles) {
+        if (!t.occupant) continue;
+        const a = acc.get(t.occupant.id) ?? { sq: 0, sr: 0, n: 0 };
+        a.sq += t.hex.q; a.sr += t.hex.r; a.n += 1;
+        acc.set(t.occupant.id, a);
+      }
+      for (const [id, a] of acc) centers.set(id, { q: Math.round(a.sq / a.n), r: Math.round(a.sr / a.n) });
+    }
+
     for (const tile of this.state.currentTiles) {
       if (tile.occupant && tile.occupant.name && this.state.pokeGifs[tile.occupant.name]) {
           // Ocultación local desde la perspectiva del humano (vs-IA): un Pokémon oculto
@@ -59,6 +73,9 @@ export class EntityView {
           }
 
           const occupantId = tile.occupant.id;
+          // Solo se dibuja en la casilla CENTRO (evita 7 dibujos para un large).
+          const center = centers.get(occupantId);
+          if (center && (tile.hex.q !== center.q || tile.hex.r !== center.r)) continue;
           currentOccupantIds.add(occupantId);
 
           // Transición de este sprite: "slide" larga si se está desplazando (empuje/dash).
@@ -69,7 +86,9 @@ export class EntityView {
 
           const { x: screenX, y: screenY } = this.boardView.hexToScreen(tile.hex);
 
-          const sSize = this.boardView.HEX_SIZE * 1.5 * this.state.zoom;
+          // Escalado por tamaño de especie (T4.2): los grandes ~2×, los pequeños ~0.75×.
+          const sizeMult = tile.occupant.size === 'large' ? 2 : tile.occupant.size === 'small' ? 0.75 : 1;
+          const sSize = this.boardView.HEX_SIZE * 1.5 * this.state.zoom * sizeMult;
 
           // En agua el sprite se hunde: se recorta el tercio inferior, así que se baja
           // para que la parte visible quede CENTRADA en la loseta (si no, parece muy

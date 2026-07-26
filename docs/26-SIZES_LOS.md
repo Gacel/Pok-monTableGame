@@ -21,7 +21,20 @@ template **y también sobre el cacheado** (los guardados antes de esta mecánica
 **Verificación:** [`test/sizes.test.ts`](../services/game-service/test/sizes.test.ts) —
 grandes/pequeños clásicos y `medium` por defecto, insensible a mayúsculas. game-service 68/68.
 
-## T4.2 — Render de Pokémon Large (frontend) *(pendiente)*
+## T4.2 — Render de Pokémon Large (frontend)
+
+**Qué:** los grandes se ven claramente mayores y su huella (7 hexes) está resaltada.
+
+**Cómo:**
+- [`EntityView`](../services/frontend/src/views/EntityView.ts): un `large` ocupa 7 hexes, así
+  que se agrupa por id y se **dibuja una sola vez en el centro** (centroide de sus casillas),
+  no una por casilla (antes la última loseta ganaba y lo descolocaba). El sprite se escala por
+  tamaño: `large` ×2, `small` ×0.75, resto ×1.
+- [`BoardView`](../services/frontend/src/views/BoardView.ts): cada casilla ocupada por un
+  `large` recibe un **resaltado de huella** ámbar tenue.
+
+**Verificación:** `tsc` frontend limpio, tests 17/17. Smoke: un Snorlax/Onix se ve grande y
+sus 7 casillas resaltadas.
 
 ## T4.3 — Línea de visión + bodyblocking (backend) *(pendiente)*
 
