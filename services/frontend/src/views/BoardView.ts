@@ -402,6 +402,32 @@ export class BoardView {
     return { range, selfOk, aoeSet, hoverInRange, hoverKey };
   }
 
+  /**
+   * Preview de despliegue (T4.7): casillas que ocuparía el Pokémon de la reserva
+   * seleccionado colocado sobre el hover (7 si es `large`), y si el sitio es válido
+   * (todas dentro de la zona de despliegue y libres). `null` si no aplica.
+   */
+  private buildDeployPreview(): { hexes: Set<string>; valid: boolean } | null {
+    const m = this.state.match;
+    if (m?.status !== 'deployment' || !this.state.selectedReserveId || !this.state.hoverHex) return null;
+    const player = m.currentPlayer;
+    const p = m.reserve?.[player]?.find((r) => r.id === this.state.selectedReserveId);
+    if (!p) return null;
+
+    const hv = this.state.hoverHex;
+    const cells: Hex[] = p.size === 'large'
+      ? [hv, ...this.EDGE_DIRS.map((d) => ({ q: hv.q + d.q, r: hv.r + d.r }))]
+      : [hv];
+
+    const zone = m.deploymentZones?.[player] ?? [];
+    const inZone = (h: Hex) => zone.some((z) => z.q === h.q && z.r === h.r);
+    const occupied = (h: Hex) =>
+      this.state.currentTiles.some((t) => t.hex.q === h.q && t.hex.r === h.r && !!t.occupant);
+
+    const valid = cells.every((h) => inZone(h) && !occupied(h));
+    return { hexes: new Set(cells.map((h) => `${h.q},${h.r}`)), valid };
+  }
+
   public render() {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
@@ -427,6 +453,11 @@ export class BoardView {
     // Preview de ataque (TA.3): con un move QWER activo, se precalcula su alcance legal y
     // la forma AoE en el hover — solo si el objetivo está dentro de rango (como el `cast`).
     const atk = this.buildAttackPreview();
+
+    // Preview de despliegue (T4.7): al pasar el ratón con un Pokémon de la reserva
+    // seleccionado, resalta las casillas que ocuparía (7 si es large) — verde si el sitio
+    // es válido (dentro de la zona y libre), rojo si no.
+    const deploy = this.buildDeployPreview();
 
     // Ocupante seleccionado: se resalta TODA su huella (un large ocupa 7 hexes).
     const selHex = this.state.selectedHex;
@@ -473,6 +504,11 @@ export class BoardView {
         } else {
           // Niebla de guerra profunda para el resto del mapa durante el despliegue
           this.drawTileOverlay(x, y, 'rgba(0, 0, 0, 0.65)', 'rgba(0, 0, 0, 0.8)', 1);
+        }
+        // Huella del Pokémon a desplegar (sobre el hover): verde si cabe, rojo si no.
+        if (deploy && deploy.hexes.has(`${tile.hex.q},${tile.hex.r}`)) {
+          const c = deploy.valid ? '34, 197, 94' : '239, 68, 68';
+          this.drawTileOverlay(x, y, `rgba(${c}, 0.5)`, `rgba(${c}, 0.95)`, 2);
         }
       }
 

@@ -103,3 +103,12 @@ destinos donde la huella no cabe; medium sin regresión. game-service 82/82.
   Venusaur, Charizard, Blastoise, Arcanine, Aerodactyl, Exeggutor, Nidoking/queen); el resto,
   `medium`. *(Nota: una partida en curso conserva el tamaño con el que se creó; se aprecia al
   empezar una nueva.)*
+
+## T4.7 — Preview de despliegue (huella al pasar el ratón)
+
+En la fase de **despliegue**, con un Pokémon de la reserva seleccionado, al pasar el ratón
+por el mapa se resaltan las casillas que **ocuparía** (7 si es `large`, 1 si no):
+[`BoardView.buildDeployPreview`](../services/frontend/src/views/BoardView.ts) calcula la
+huella sobre el hover (centro + vecinos con `EDGE_DIRS`) y si el sitio es **válido** (todas
+dentro de la zona de despliegue y libres) → **verde**; si no → **rojo**. Actualiza en cada
+`mousemove` (el hover ya dispara render).
