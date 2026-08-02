@@ -669,8 +669,11 @@ export class GameController {
     if (clickedTile.occupant) {
       this.state.setLastInteractedPokemon(clickedTile.occupant.playerId, clickedTile.occupant.id);
       if (clickedTile.occupant.playerId === match.currentPlayer) {
-        this.state.selectedHex = hex;
-        await this.loadMoveOptions(hex);
+        // Normaliza al CENTRO del ocupante: un large ocupa 7 hexes y debe seleccionarse
+        // igual se clique donde se clique (T4.5).
+        const center = this.occupantCenter(clickedTile.occupant.id) ?? hex;
+        this.state.selectedHex = center;
+        await this.loadMoveOptions(center);
       } else {
         this.hudView.flashToast('No es el turno de esa pieza');
         this.state.selectedHex = null;
@@ -678,6 +681,16 @@ export class GameController {
     } else {
       this.state.selectedHex = null;
     }
+  }
+
+  /** Centro (centroide) de las casillas que ocupa un Pokémon (para grandes = su centro). */
+  private occupantCenter(id: string): Hex | null {
+    const hexes = (this.state.match?.tiles ?? []).filter((t) => t.occupant?.id === id).map((t) => t.hex);
+    if (hexes.length === 0) return null;
+    return {
+      q: Math.round(hexes.reduce((a, h) => a + h.q, 0) / hexes.length),
+      r: Math.round(hexes.reduce((a, h) => a + h.r, 0) / hexes.length),
+    };
   }
 
   private async loadMoveOptions(hex: Hex): Promise<void> {

@@ -47,12 +47,36 @@ export function getMoveOptions(
 
   const speed = pokemon.speed ?? 3;
 
+  // Los `large` ocupan 7 hexes: se rutea desde su CENTRO (centroide de su cuerpo) y un
+  // destino solo es válido si su HUELLA cabe ahí. `hex` puede ser cualquier casilla suya.
+  const ownHexes: Hex[] = [];
+  for (const t of board.tiles.values()) if (t.occupant?.id === pokemon.id) ownHexes.push(t.hex);
+  const isLarge = pokemon.size === 'large' && ownHexes.length > 1;
+  const center: Hex = isLarge
+    ? {
+        q: Math.round(ownHexes.reduce((a, h) => a + h.q, 0) / ownHexes.length),
+        r: Math.round(ownHexes.reduce((a, h) => a + h.r, 0) / ownHexes.length),
+      }
+    : hex;
+
+  /** ¿Cabe la huella del Pokémon con el centro en `c`? (para `large`; medium siempre sí). */
+  const fits = (c: Hex): boolean => {
+    if (!isLarge) return true;
+    for (const oh of board.getOccupiedHexes(pokemon, c)) {
+      const t = board.getTile(oh);
+      if (!t) return false;
+      if (getTerrainCost(pokemon, t.biome) === Infinity) return false;
+      if (t.occupant && t.occupant.id !== pokemon.id) return false;
+    }
+    return true;
+  };
+
   // Dijkstra para encontrar celdas alcanzables según el coste del terreno (PM)
   // key -> coste mínimo acumulado
   const costSoFar = new Map<string, number>();
   // queue priorizada rudimentaria (el grid es pequeño)
-  const queue: { hex: Hex; cost: number }[] = [{ hex, cost: 0 }];
-  costSoFar.set(`${hex.q},${hex.r}`, 0);
+  const queue: { hex: Hex; cost: number }[] = [{ hex: center, cost: 0 }];
+  costSoFar.set(`${center.q},${center.r}`, 0);
 
   while (queue.length > 0) {
     // Extraer el de menor coste
@@ -69,6 +93,22 @@ export function getMoveOptions(
       if (!nextTile) continue;
 
       if (nextTile.occupant) {
+        // Cuerpo PROPIO de un large: tránsito libre; destino válido si la huella cabe.
+        if (nextTile.occupant.id === pokemon.id) {
+          const stepCost = getTerrainCost(pokemon, nextTile.biome);
+          if (stepCost !== Infinity) {
+            const newCost = curr.cost + stepCost;
+            if (newCost <= speed && (!costSoFar.has(nextKey) || newCost < costSoFar.get(nextKey)!)) {
+              costSoFar.set(nextKey, newCost);
+              queue.push({ hex: nextHex, cost: newCost });
+              if (fits(nextHex) && !moveSet.has(nextKey)) {
+                moveSet.add(nextKey);
+                moves.push(nextHex);
+              }
+            }
+          }
+          continue;
+        }
         if (!sameTeam(nextTile.occupant.playerId, pokemon.playerId)) {
           // Es un enemigo, podemos atacarle si está a rango 1 del inicio o de un paso legal.
           // Wait, los ataques en un juego tactics suelen poder hacerse desde CUALQUIER
@@ -104,7 +144,7 @@ export function getMoveOptions(
         if (!costSoFar.has(nextKey) || newCost < costSoFar.get(nextKey)!) {
           costSoFar.set(nextKey, newCost);
           queue.push({ hex: nextHex, cost: newCost });
-          if (!moveSet.has(nextKey)) {
+          if (fits(nextHex) && !moveSet.has(nextKey)) {
             moveSet.add(nextKey);
             moves.push(nextHex);
           }

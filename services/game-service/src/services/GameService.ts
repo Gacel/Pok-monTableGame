@@ -458,7 +458,11 @@ export class GameService {
     const isMove = opts.moves.some((h) => hexEqual(h, to));
 
     if (isMove) {
-      this.board.moveOccupant(from, to);
+      // Honrar el resultado: un `large` puede no caber en el destino (huella) — no mentir
+      // con "se mueve" si no ocurrió (T4.5).
+      if (!this.board.moveOccupant(from, to)) {
+        return { ok: false, error: 'No cabe en esa casilla', state: this.getStateDTO() };
+      }
       const moved = this.board.getOccupant(to);
       if (moved) {
         moved.hasActed = true;

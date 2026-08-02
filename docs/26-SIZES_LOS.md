@@ -66,3 +66,26 @@ número. **Cierra la Épica 4.**
 
 **Verificación:** `tsc` limpio en los 3 workspaces, game-service 71/71. (Smoke visual
 pendiente por el tooling de Docker en el entorno.)
+
+## T4.5 — Fix de selección y movimiento de grandes
+
+**Problemas (reportados en smoke):** (1) no se veían bien las casillas que ocupa un grande;
+(2) según en qué casilla del grande clicabas salía un rango de movimiento distinto; (3)
+decía "se mueve" pero no se movía si por su tamaño no cabía.
+
+**Cómo:**
+- [`engine/movement.ts`](../services/game-service/src/engine/movement.ts) `getMoveOptions`
+  ahora es **consciente del tamaño**: rutea desde el **centro** (centroide del cuerpo,
+  se derive de cualquier casilla clicada), trata el **cuerpo propio como transitable** (antes
+  el large se bloqueaba a sí mismo) y solo ofrece destinos donde la **huella (7 hexes) cabe**.
+- [`GameService.play`](../services/game-service/src/services/GameService.ts) **honra** el
+  resultado de `moveOccupant`: si el grande no cabe, devuelve error en vez de mentir con
+  "se mueve".
+- Frontend: la selección **normaliza al centro** del ocupante
+  ([`GameController.occupantCenter`](../services/frontend/src/controllers/GameController.ts)),
+  y [`BoardView`](../services/frontend/src/views/BoardView.ts) resalta **toda la huella** de
+  la pieza seleccionada (no solo el hex clicado).
+
+**Verificación:** [`test/largeMovement.test.ts`](../services/game-service/test/largeMovement.test.ts)
+— un large se mueve en abierto e igual se consulte por el centro o por el borde; no ofrece
+destinos donde la huella no cabe; medium sin regresión. game-service 82/82.
