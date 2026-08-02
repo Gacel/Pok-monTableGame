@@ -837,6 +837,24 @@ victoria por tier + `playTrack`), `style.css` (keyframes), sonidos nuevos. Doc:
 
 ---
 
+## 🎟️ T4.5 — Fix de selección y movimiento de grandes ✅
+
+**Historia:** Como jugador, quiero seleccionar y mover a mis Pokémon grandes de forma
+consistente y real (ver su huella, mismo rango se clique donde se clique, y que se muevan
+solo si caben).
+
+**Criterios de aceptación:**
+- [x] Selección consistente por cualquier casilla del grande (se normaliza al centro).
+- [x] La huella (7 hexes) del seleccionado se resalta.
+- [x] `getMoveOptions` rutea desde el centro, no bloquea con el cuerpo propio y solo ofrece
+      destinos donde la huella cabe.
+- [x] `play` no dice "se mueve" si `moveOccupant` falla (no cabe).
+- [x] Tests del motor (`largeMovement.test.ts`); medium sin regresión.
+
+**Resolución:** ver [`26-SIZES_LOS.md`](26-SIZES_LOS.md) §T4.5. game-service 82/82.
+
+---
+
 # ÉPICA A — Sistema de ataques (rango, forma y selección)
 
 > El combate on-map (skillshot AoE) usa `move.range`/`move.aoe`, pero hoy se derivan con

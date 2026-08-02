@@ -423,13 +423,18 @@ export class BoardView {
     // la forma AoE en el hover — solo si el objetivo está dentro de rango (como el `cast`).
     const atk = this.buildAttackPreview();
 
+    // Ocupante seleccionado: se resalta TODA su huella (un large ocupa 7 hexes).
+    const selHex = this.state.selectedHex;
+    const selOccId = selHex
+      ? this.state.currentTiles.find((t) => t.hex.q === selHex.q && t.hex.r === selHex.r)?.occupant?.id ?? null
+      : null;
+
     for (const { tile, x, y } of order) {
       if (x < minX || x > maxX || y < minY || y > maxY) continue;
 
-      const isSelected =
-        this.state.selectedHex &&
-        this.state.selectedHex.q === tile.hex.q &&
-        this.state.selectedHex.r === tile.hex.r;
+      const isSelected = selOccId
+        ? tile.occupant?.id === selOccId
+        : !!(selHex && selHex.q === tile.hex.q && selHex.r === tile.hex.r);
 
       const isDeploymentZone =
         this.state.match?.status === 'deployment' &&
