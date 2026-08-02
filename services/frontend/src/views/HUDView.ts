@@ -253,10 +253,13 @@ export class HUDView {
       const occ = tile.occupant;
 
       const nameEl = document.getElementById(`hud-${slot}-name`);
-      if (nameEl)
-        nameEl.textContent = occ.name
+      if (nameEl) {
+        const base = occ.name
           ? occ.name.toUpperCase()
           : this.state.labelFor(playerId).toUpperCase() || slot.toUpperCase();
+        // Nivel de la pieza en partida (T6.4): informativo junto al nombre.
+        nameEl.textContent = `${base} · Lv.${occ.level ?? 1}`;
+      }
 
       const avatarEl = document.getElementById(`hud-${slot}-avatar`) as HTMLImageElement | null;
       if (avatarEl && occ.name) avatarEl.src = this.state.pokeGifs[occ.name] ?? '';
@@ -315,10 +318,13 @@ export class HUDView {
             const barBg = pPct > 50 ? 'bg-green-500' : pPct > 20 ? 'bg-yellow-500' : 'bg-red-500';
             const spriteUrl = this.state.pokeGifs[p.name ?? ''] ?? '';
             return `
-              <div data-poke-id="${p.id}" class="flex items-center gap-1.5 flex-1 min-w-0 bg-gray-800 border border-gray-600 rounded px-1.5 py-1 shadow transition-transform hover:scale-105 cursor-pointer ${rightSide ? 'flex-row-reverse' : ''}" title="${p.name ?? 'Pokémon'} (${p.hp}/${p.maxHp})">
+              <div data-poke-id="${p.id}" class="flex items-center gap-1.5 flex-1 min-w-0 bg-gray-800 border border-gray-600 rounded px-1.5 py-1 shadow transition-transform hover:scale-105 cursor-pointer ${rightSide ? 'flex-row-reverse' : ''}" title="${p.name ?? 'Pokémon'} · Lv.${p.level ?? 1} (${p.hp}/${p.maxHp})">
                 <img src="${spriteUrl}" class="w-8 h-8 object-contain flex-shrink-0" style="image-rendering: pixelated;" />
-                <div class="flex-1 min-w-0 h-2 bg-gray-900 rounded overflow-hidden border border-gray-700 flex ${rightSide ? 'justify-end' : ''}">
-                  <div class="h-full ${barBg}" style="width: ${pPct}%;"></div>
+                <div class="flex flex-col flex-1 min-w-0 gap-0.5">
+                  <span class="text-gray-300 leading-none ${rightSide ? 'text-right' : ''}" style="font-family:'Press Start 2P',monospace; font-size:6px;">Lv.${p.level ?? 1}</span>
+                  <div class="min-w-0 h-2 bg-gray-900 rounded overflow-hidden border border-gray-700 flex ${rightSide ? 'justify-end' : ''}">
+                    <div class="h-full ${barBg}" style="width: ${pPct}%;"></div>
+                  </div>
                 </div>
               </div>
             `;
