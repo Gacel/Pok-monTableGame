@@ -156,3 +156,27 @@ Ver [`15-TURN_EVENTS.md`](15-TURN_EVENTS.md) para el contrato completo y el filt
   para pintar los números sobre el sprite (hoy T0.2 no tiene feedback visual de números).
 - **`TALL_GRASS` en el mapa:** el generador procedural tampoco lo produce todavía
   (relevante para el sigilo de la Épica 1); se abordará cuando toque esa mecánica.
+
+## FIX-voladores — Inmunidad de voladores al daño de suelo (lava y pantano)
+
+**Síntoma (usuario):** Pokémon voladores sufrían daño de **pantano** y de **fuego/lava**.
+
+**Causa:** `terrainDamage` ya eximía a `type === 'FLYING'`, pero el dominio usa un **tipo
+único** y casi ningún volador de Gen 1 tiene Flying como tipo primario (Pidgey→Normal,
+Charizard→Fire, Zubat→Poison, Gyarados→Water, Aerodactyl→Rock…): en el modelo quedan como su
+otro tipo y, por tanto, pisaban el suelo.
+
+**Solución:** marca **`airborne`** derivada de la especie (Flying en cualquier slot de
+PokeAPI), independiente del tipo de dominio:
+- [`engine/airborne.ts`](../services/game-service/src/engine/airborne.ts): set curado de los
+  voladores Gen 1 + `isAirborne(name)`.
+- [`PokemonService.getTemplate`](../services/game-service/src/services/PokemonService.ts)
+  fija `airborne = isAirborne(name)` (en cache-hit, alta y fallback), igual que `size`/`scale`
+  (derivado en lectura, sin persistir columna). `Pokemon.airborne?` en el dominio.
+- [`terrainDamage`](../services/game-service/src/engine/environment.ts): un `airborne`
+  devuelve **0** en `FIRE` (lava) y `SWAMP`, como el tipo FLYING. Solo afecta al **daño de
+  terreno**, no al movimiento.
+
+**Verificación:** `environment.test.ts` — un volador con tipo de dominio no-FLYING (WATER
+`airborne`) es inmune a lava/pantano mientras el mismo tipo sin la marca sí sufre; `isAirborne`
+reconoce los voladores Gen 1. game-service **105/105**, `tsc` limpio.

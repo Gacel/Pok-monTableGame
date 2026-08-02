@@ -5,6 +5,7 @@ import { getMoveShape } from '../engine/moveShapes.js';
 import { selectMoves } from '../engine/moveSelection.js';
 import { getKnockback, isDash } from '../engine/moveTactics.js';
 import { sizeForSpecies, visualScale } from '../engine/sizes.js';
+import { isAirborne } from '../engine/airborne.js';
 import { EvolutionModel } from '../models/EvolutionModel.js';
 import { parseEvolutionChain } from '../engine/evolution.js';
 import type { EvolutionInfo, EvolutionChainResponse } from '../engine/evolution.js';
@@ -108,6 +109,7 @@ export const PokemonService = {
       // (los guardados antes de esta mecánica tenían size 'medium' y sin escala).
       cached.size = sizeForSpecies(name);
       cached.scale = visualScale(name);
+      cached.airborne = isAirborne(name);
       return cached;
     }
 
@@ -131,6 +133,7 @@ export const PokemonService = {
         speed: Math.max(2, Math.floor(statOf(data, 'speed', 60) / 20)),
         size: sizeForSpecies(name),
         scale: visualScale(name),
+        airborne: isAirborne(name),
       };
       await PokemonModel.save(tpl, data);
       // Importa el learnset completo (barato: viene en la misma respuesta).
@@ -148,6 +151,7 @@ export const PokemonService = {
         speed: 3,
         size: sizeForSpecies(name),
         scale: visualScale(name),
+        airborne: isAirborne(name),
       };
       await PokemonModel.save(tpl);
       return tpl;

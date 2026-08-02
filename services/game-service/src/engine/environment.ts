@@ -66,18 +66,21 @@ export function canEnter(pokemon: Pokemon, terrain: Biome): boolean {
 /** Daño por turno sufrido por un Pokémon al permanecer en un terreno. */
 export function terrainDamage(pokemon: Pokemon, terrain: Biome): number {
   if (pokemon.type === 'FLYING') return 0; // No tocan el suelo
+  // Los voladores (Flying en cualquier slot, aunque su tipo de dominio sea otro: Charizard,
+  // Gyarados, Pidgey, Zubat…) no pisan el suelo: inmunes al daño de lava y pantano.
+  const airborne = pokemon.airborne === true;
 
   if (terrain === 'FIRE') {
-    if (pokemon.type === 'FIRE') return 0;
+    if (pokemon.type === 'FIRE' || airborne) return 0;
     const turns = pokemon.lavaTurns && pokemon.lavaTurns > 0 ? pokemon.lavaTurns : 1;
     const multiplier = Math.pow(2, turns - 1);
     if (pokemon.type === 'WATER') return 1 * multiplier;
     if (pokemon.type === 'GRASS' || pokemon.type === 'ICE') return 4 * multiplier;
     return 2 * multiplier;
   }
-  
+
   if (terrain === 'SWAMP') {
-    if (pokemon.type === 'POISON' || pokemon.type === 'STEEL') return 0;
+    if (pokemon.type === 'POISON' || pokemon.type === 'STEEL' || airborne) return 0;
     return 2; // Daño tóxico constante
   }
 
