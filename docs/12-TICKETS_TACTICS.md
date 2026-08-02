@@ -1031,6 +1031,29 @@ Ver [`28-BOT_CAST_FIX.md`](28-BOT_CAST_FIX.md). `performMove`/`performCast` devu
 alcance con `pickCastMove`), con fallback de acercamiento y `endTurn` garantizado. frontend
 22/22.
 
+## 🎟️ FIX-ondas — Terratemblor (autocentrado) no lanzable por colosos ✅
+
+**Historia:** Como jugador con un coloso (Snorlax), quiero lanzar ondas autocentradas
+(terratemblor, surf…) y que alcancen a los enemigos que rodean su cuerpo.
+
+**Bug:** una onda autocentrada (`aoe:'radius'`, `range 0`) exigía clicar el **hex-centro**
+exacto del coloso (los otros 6 hexes de su huella daban «fuera de rango»), y su `radius 2`
+partía del centro cuando el cuerpo ya llena el anillo 1 → apenas alcanzaba 1 anillo más allá.
+
+**Criterios de aceptación:**
+- [x] Una onda autocentrada se centra **siempre** en el lanzador, se clique donde se clique.
+- [x] El radio se **expande por la huella** del caster (`large` → alcanza más allá del cuerpo).
+- [x] El preview dibuja el AoE alrededor de la pieza (no depende del ratón) y basta clicar.
+- [x] Las ondas radiales **con alcance** siguen respetando su rango (sin rango infinito).
+- [x] La IA usa autocentrados cuando hay enemigos en el radio. Tests server+cliente.
+
+### ✅ Resolución (lo realmente hecho)
+
+Ver [`24-ATTACK_SHAPES.md`](24-ATTACK_SHAPES.md) §FIX-ondas. Helpers compartidos
+`isAutocentered`/`autocenteredRadius`; `cast` centra en el lanzador y expande el radio por
+tamaño; `buildAttackPreview` dibuja el AoE siempre; `pickCastMove` valora autocentrados por
+radio. game-service 86/86, frontend 23/23.
+
 ---
 
 # ÉPICA 5 — Scope Gen 1 (151) y catálogo de especies

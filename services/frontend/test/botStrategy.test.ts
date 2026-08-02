@@ -226,6 +226,12 @@ describe('pickCastMove · elección de ataque por alcance (fix IA congela)', () 
     assert.equal(pickCastMove([mv(70, 2, 'radius')], 0), 0);
   });
 
+  it('un autocentrado (range 0) alcanza a un enemigo dentro de su radio, no solo a dist 0', () => {
+    const quake: PokemonMove = { name: 'earthquake', type: 'GROUND', power: 90, damageClass: 'physical', range: 0, aoe: 'radius', radius: 2 };
+    assert.equal(pickCastMove([quake], 2), 0); // dist 2 <= radio 2
+    assert.equal(pickCastMove([quake], 3), -1); // fuera del radio
+  });
+
   it('sin movimientos no hay elección', () => {
     assert.equal(pickCastMove([], 1), -1);
   });

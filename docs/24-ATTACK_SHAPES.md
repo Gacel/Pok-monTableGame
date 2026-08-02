@@ -93,4 +93,36 @@ aporta el PNG). La `img-src` del CSP ya permite `'self'` para esos assets.
 **Verificación:** `tsc` frontend limpio, build OK. Smoke: los botones QWER muestran nombre
 traducido + icono de tipo + badge de clase.
 
+## FIX-ondas — Autocentradas lanzables por colosos (terratemblor con Snorlax)
+
+**Síntoma (usuario):** «no puedo hacer terratemblor con Snorlax porque el rango de ataque es
+igual a las casillas que ocupa el Pokémon, por tanto no puede haber ningún enemigo ahí».
+
+**Causa raíz:** una onda **autocentrada** (radial con `range 0`: terratemblor, surf,
+autodestrucción…) debe centrarse **sobre el propio lanzador**, pero:
+1. La validación exigía que la casilla clicada estuviera a `dist ≤ 0` del **hex-centro**. Un
+   coloso ocupa 7 hexes; clicar cualquiera de los otros 6 daba «fuera de rango» → en la
+   práctica, imposible de lanzar.
+2. El `radius 2` partía del centro, pero el **cuerpo** del coloso ya llena el anillo 1, así
+   que la onda solo alcanzaba **1 anillo** más allá de su cuerpo (casi nada).
+
+**Solución:**
+- **`isAutocentered(move)`** y **`autocenteredRadius(radius, size)`** en
+  [`combat.ts`](../packages/shared/src/combat.ts) (compartidas, servidor+cliente).
+- [`GameService.cast`](../services/game-service/src/services/GameService.ts): una onda
+  autocentrada **ignora la casilla clicada** y se centra siempre en el lanzador (`dist 0`,
+  nunca «fuera de rango»); su radio se **expande por la huella** del caster
+  (`autocenteredRadius`: `large` → +1), de modo que alcanza *más allá* de su cuerpo.
+- [`BoardView.buildAttackPreview`](../services/frontend/src/views/BoardView.ts): el AoE de un
+  autocentrado se dibuja **siempre alrededor de la pieza** (no depende del ratón) y con el
+  radio expandido, para ver qué alcanza; basta clicar para lanzarlo.
+- [`botStrategy.pickCastMove`](../services/frontend/src/controllers/botStrategy.ts): la IA
+  considera un autocentrado «con alcance» a un enemigo dentro de su **radio** (no solo a
+  dist 0), así el bot también usa terratemblor.
+
+**Verificación:** `moveShapes.test.ts` — autocentrado ignora el target y golpea al vecino;
+el radio se expande con la huella del coloso (medium radio 2 no llega a dist 3, large sí);
+radial *con* alcance (rock-slide) sigue respetando el rango. `pickCastMove` con autocentrado.
+game-service **86/86**, frontend **23/23**, `tsc` limpio en los 3 workspaces.
+
 ## TA.4 — Tutor de movimientos *(diferido — futuro)*
