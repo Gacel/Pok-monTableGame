@@ -12,6 +12,7 @@ import { PokemonService } from './PokemonService.js';
 import { PokemonTemplate } from '../models/PokemonModel.js';
 import { MatchModel } from '../models/MatchModel.js';
 import { OwnedPokemonModel } from '../models/OwnedPokemonModel.js';
+import { scaledVitals } from '../engine/progression.js';
 
 /**
  * Plantilla de Pokémon augmentada con la identidad de una instancia del inventario
@@ -106,14 +107,19 @@ export class MatchManager {
         ? pickRandomSpawns(board, component, TEAM_SIZE, teams.length, makeRng(this.freshSeed()))
         : pickCornerSpawns(board, component, TEAM_SIZE, teams.length);
 
-    const build = (tpl: TeamPiece, playerId: string, i: number): Pokemon => ({
-      ...tpl,
-      id: `${playerId}-${i}`,
-      playerId,
+    const build = (tpl: TeamPiece, playerId: string, i: number): Pokemon => {
       // Nivel REAL de la instancia (equipos por ownedId, T6.3); las piezas de draft son Lv.1.
-      level: tpl.level ?? 1,
-      ...(tpl.ownedId ? { ownedId: tpl.ownedId } : {}),
-    });
+      const level = tpl.level ?? 1;
+      return {
+        ...tpl,
+        id: `${playerId}-${i}`,
+        playerId,
+        level,
+        // Stats escaladas por nivel (T6.2): a Lv.1 no altera nada (draft intacto).
+        ...scaledVitals(tpl, level),
+        ...(tpl.ownedId ? { ownedId: tpl.ownedId } : {}),
+      };
+    };
 
     const result: { hex: Tile['hex']; pokemon: Pokemon }[] = [];
     teams.forEach((team, tIdx) => {
@@ -325,11 +331,13 @@ export class MatchManager {
   // ----------------------------------------------------------- ARENA (mundo vivo)
 
   private buildPokemon(tpl: TeamPiece, playerId: string, i: number): Pokemon {
+    const level = tpl.level ?? 1;
     return {
       ...tpl,
       id: `${playerId}-${i}`,
       playerId,
-      level: tpl.level ?? 1,
+      level,
+      ...scaledVitals(tpl, level), // stats escaladas por nivel (T6.2)
       ...(tpl.ownedId ? { ownedId: tpl.ownedId } : {}),
     };
   }

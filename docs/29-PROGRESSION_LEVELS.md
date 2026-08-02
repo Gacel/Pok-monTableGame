@@ -42,3 +42,28 @@ nombre/roster) queda intacto hasta que la Épica 7 lo elimine.
 **Verificación:** [`test/ownedTeam.test.ts`](../services/game-service/test/ownedTeam.test.ts)
 — orden preservado y nivel real en `findManyByIds`; `allOwnedBy` (propiedad, inexistentes,
 escrow). game-service **90/90**, `tsc` limpio en los 3 workspaces, build + contenedores OK.
+
+## T6.2 — Escalado de stats por nivel
+
+**Por qué:** con T6.3 la pieza ya trae su nivel real, pero sus stats seguían siendo las de la
+plantilla (equivalente a Lv.1). Un Pokémon de nivel alto debe ser **notablemente más fuerte**.
+
+**Cómo (curva pura y ajustable):**
+- [`engine/progression.ts`](../services/game-service/src/engine/progression.ts) (puro,
+  testeable):
+  - `levelMultiplier(level) = 1 + (nivel-1)·0.04` — **+4 %/nivel** sobre la base, saturado a
+    `[1, LEVEL_CAP=100]`. A **nivel 1 vale 1.0** → no altera nada (draft/roster intactos).
+  - `scaleStat(base, level)` y `scaledVitals({maxHp,atk,def}, level)` → `hp`/`maxHp` (a tope)
+    + `atk`/`def` escaladas.
+- Aplicado en la **creación de la pieza** (fuente única): `MatchManager.build` (partidas) y
+  `buildPokemon` (ARENA) mezclan `scaledVitals(tpl, level)`. Como el combate lee `atk`/`def`/
+  `hp` de la pieza, **no hace falta tocar `computeMoveDamage`/`effectiveAtk/Def`**: escalar
+  una sola vez al crear evita doble escalado y mantiene el terreno como multiplicador aparte.
+
+**Nota:** a Lv.1 el resultado es idéntico al anterior (multiplicador 1), así que las partidas
+de draft/local no cambian; solo las instancias de nivel >1 (equipos por `ownedId`) pegan y
+aguantan más.
+
+**Verificación:** [`test/progression.test.ts`](../services/game-service/test/progression.test.ts)
+— Lv.1 = base; monotonía por nivel; saturación en `[1,100]`; `scaledVitals` (hp lleno,
+atk/def crecen). game-service **94/94**, `tsc` limpio.

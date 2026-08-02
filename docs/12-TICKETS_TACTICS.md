@@ -1159,14 +1159,21 @@ notablemente más fuerte que uno recién obtenido.
 **Dudas resueltas (D14):** escalado de stats.
 
 **Criterios de aceptación:**
-- [ ] Dos instancias de la misma especie a niveles distintos tienen stats distintos en partida.
-- [ ] Tests del escalado.
+- [x] Dos instancias de la misma especie a niveles distintos tienen stats distintos en partida.
+- [x] Tests del escalado.
 
 **Investigación:** `computeMoveDamage` (`engine/combat.ts:14-30`),
 `effectiveAtk/Def` (`environment.ts:7-22`), creación de pieza (`MatchManager` `build`
 L101-106 / `buildPokemon` L302-304, hoy `level:1`).
 
 **Dependencias:** →T6.1. **Paralelizable:** no.
+
+### ✅ Resolución (lo realmente hecho)
+
+Ver [`29-PROGRESSION_LEVELS.md`](29-PROGRESSION_LEVELS.md) §T6.2. `engine/progression.ts`
+puro: `levelMultiplier` (+4 %/nivel, 1.0 a Lv.1, saturado a [1,100]) + `scaledVitals`.
+Aplicado en `MatchManager.build`/`buildPokemon` (fuente única al crear la pieza; el combate
+lee la stat ya escalada, sin doble escalado). A Lv.1 idéntico al anterior. game-service 94/94.
 
 ## 🎟️ T6.3 — Equipos por instancia (`ownedId`)
 
