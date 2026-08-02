@@ -15,6 +15,11 @@ export class BoardView {
   private ctx: CanvasRenderingContext2D;
   private state: GameState;
 
+  /** Color RGB (para rgba) de cada jugador — huella de los grandes. */
+  private static readonly PLAYER_RGB: Record<string, string> = {
+    player1: '59, 130, 246', player2: '239, 68, 68', player3: '168, 85, 247', player4: '234, 179, 8',
+  };
+
   public readonly HEX_SIZE = 45;
   public readonly CENTER_X: number;
   public readonly CENTER_Y: number;
@@ -447,9 +452,11 @@ export class BoardView {
       this.drawBiomeTransitions(tile, x, y, tileMap);
       this.drawRelief(tile, x, y, !!fogged);
 
-      // Huella de un Pokémon grande (T4.2): resalta las 7 casillas que ocupa.
+      // Huella de un Pokémon grande (T4.2): resalta sus 7 casillas con el color de su
+      // jugador, muy tenue (para leerlas sin seleccionarlo).
       if (tile.occupant?.size === 'large') {
-        this.drawTileOverlay(x, y, 'rgba(250, 204, 21, 0.12)', 'rgba(250, 204, 21, 0.5)', 1.5);
+        const rgb = BoardView.PLAYER_RGB[tile.occupant.playerId] ?? '148, 163, 184';
+        this.drawTileOverlay(x, y, `rgba(${rgb}, 0.16)`, `rgba(${rgb}, 0.45)`, 1);
       }
 
       if (isSelected) {

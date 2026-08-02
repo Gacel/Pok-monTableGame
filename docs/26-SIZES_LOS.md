@@ -89,3 +89,17 @@ decía "se mueve" pero no se movía si por su tamaño no cabía.
 **Verificación:** [`test/largeMovement.test.ts`](../services/game-service/test/largeMovement.test.ts)
 — un large se mueve en abierto e igual se consulte por el centro o por el borde; no ofrece
 destinos donde la huella no cabe; medium sin regresión. game-service 82/82.
+
+## T4.6 — Pulido de presentación de grandes (feedback de smoke)
+
+- **Huella con color del jugador:** las 7 casillas de un large se tiñen con el **color de su
+  jugador** muy tenue (`BoardView.PLAYER_RGB`, alpha 0.16), en vez del ámbar plano, para
+  leerlas sin seleccionarlo.
+- **HUD sin duplicados:** el roster del HUD mapeaba `tiles → occupant` sin dedup, así que un
+  large (7 casillas) salía **7 veces**; ahora se deduplica por id (`HUDView`).
+- **`LARGE` recortado:** la lista de tamaños era demasiado generosa (Mewtwo, pájaros
+  legendarios, Machamp, Rapidash… salían tan grandes como Snorlax). Se deja `large` solo para
+  colosos reales (Snorlax, Onix, Gyarados, Lapras, Dragonite, Rhydon, Golem, Kangaskhan,
+  Venusaur, Charizard, Blastoise, Arcanine, Aerodactyl, Exeggutor, Nidoking/queen); el resto,
+  `medium`. *(Nota: una partida en curso conserva el tamaño con el que se creó; se aprecia al
+  empezar una nueva.)*
