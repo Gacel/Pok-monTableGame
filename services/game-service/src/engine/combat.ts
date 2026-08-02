@@ -36,4 +36,4 @@ export function computeMoveDamage(
 // ----------------------------------------------------------------------------
 // Geometría AoE (Área de Efecto)
 // ----------------------------------------------------------------------------
-export { getSingleArea, getRadiusArea, getLineArea, getConeArea, calculateAoE } from '@transcendence/shared';
+export { getSingleArea, getRadiusArea, getLineArea, getConeArea, calculateAoE, isAutocentered, autocenteredRadius } from '@transcendence/shared';

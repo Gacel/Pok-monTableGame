@@ -1,5 +1,5 @@
 import type { Hex, Pokemon, PokemonMove } from '../models/Types';
-import { typeAdvantage } from '@transcendence/shared';
+import { typeAdvantage, isAutocentered } from '@transcendence/shared';
 
 /**
  * IA del bot (partida local). No hay "IA" real: es la LISTEZA al elegir
@@ -49,7 +49,13 @@ export function pickCastMove(moves: readonly PokemonMove[], dist: number): numbe
   for (let i = 0; i < moves.length; i++) {
     const mv = moves[i]!;
     const range = mv.range ?? 1;
-    const reaches = mv.aoe === 'radius' ? dist <= range : dist >= 1 && dist <= range;
+    // Autocentrada (terratemblor…): alcanza si el objetivo cae en su radio (envuelve al
+    // lanzador). Radial con alcance: el centro debe estar en rango. Resto: melee/proyectil.
+    const reaches = isAutocentered(mv)
+      ? dist <= Math.max(1, mv.radius ?? 1)
+      : mv.aoe === 'radius'
+        ? dist <= range
+        : dist >= 1 && dist <= range;
     const power = mv.power ?? 0;
     if (reaches && power > bestPower) {
       bestPower = power;

@@ -52,9 +52,11 @@ function activeGame(caster: Pokemon, extra?: (b: Board) => void): GameService {
     { player1: res(), player2: res() }, []);
 }
 
-describe('GameService.cast · validación de rango (TA.1)', () => {
+describe('GameService.cast · rango, forma y ondas autocentradas', () => {
   const MELEE: PokemonMove = { name: 'tackle', type: 'NORMAL', power: 40, damageClass: 'physical', range: 1, aoe: 'single' };
   const QUAKE: PokemonMove = { name: 'earthquake', type: 'GROUND', power: 90, damageClass: 'physical', range: 0, aoe: 'radius', radius: 2 };
+  // Radial CON alcance (no autocentrada): su centro sí debe respetar el rango.
+  const ROCKSLIDE: PokemonMove = { name: 'rock-slide', type: 'NORMAL', power: 75, damageClass: 'physical', range: 2, aoe: 'radius', radius: 1 };
 
   it('un melee (range 1) rechaza un objetivo a distancia 2', () => {
     const caster = mk({ id: 'c', playerId: 'player1', type: 'NORMAL', moves: [MELEE] });
@@ -64,18 +66,38 @@ describe('GameService.cast · validación de rango (TA.1)', () => {
     expect(r.error).toMatch(/fuera de rango/);
   });
 
-  it('un radius (range 0) ya NO es lanzable en cualquier casilla (solo autocentrado)', () => {
-    const caster = mk({ id: 'c', playerId: 'player1', type: 'GROUND', moves: [QUAKE] });
-    const far = game_far(caster);
-    // Lanzar lejos (dist 3) debe fallar por rango (antes se permitía por la exención de radius).
-    expect(far.cast('player1', { q: 0, r: 0 }, { q: 3, r: 0 }, 0).ok).toBe(false);
-    // Autocentrado (dist 0) sí es válido.
-    const self = game_far(mk({ id: 'c', playerId: 'player1', type: 'GROUND', moves: [QUAKE] }));
-    expect(self.cast('player1', { q: 0, r: 0 }, { q: 0, r: 0 }, 0).ok).toBe(true);
+  it('una onda radial CON alcance no es lanzable fuera de su rango (no hay rango infinito)', () => {
+    const caster = mk({ id: 'c', playerId: 'player1', type: 'NORMAL', moves: [ROCKSLIDE] });
+    const game = activeGame(caster); // enemigo lejano en (5,0)
+    expect(game.cast('player1', { q: 0, r: 0 }, { q: 3, r: 0 }, 0).ok).toBe(false); // dist 3 > range 2
+    expect(game.cast('player1', { q: 0, r: 0 }, { q: 2, r: 0 }, 0).ok).toBe(true); // dist 2 = range 2
   });
 
-  function game_far(caster: Pokemon): GameService {
-    // Enemigo dentro del radio del autocentrado para que el cast autocentrado golpee.
-    return activeGame(caster, (b) => b.setOccupant({ q: 1, r: 0 }, mk({ id: 'v', playerId: 'player2', type: 'NORMAL' })));
-  }
+  it('una onda autocentrada (terratemblor) se centra SIEMPRE en el lanzador, se clique donde se clique', () => {
+    const victim = mk({ id: 'v', playerId: 'player2', type: 'NORMAL', hp: 500, maxHp: 500 });
+    const caster = mk({ id: 'c', playerId: 'player1', type: 'GROUND', moves: [QUAKE] });
+    const game = activeGame(caster, (b) => b.setOccupant({ q: 1, r: 0 }, victim));
+    // Clic en una casilla lejana: NO falla por rango (es autocentrada) y golpea al vecino.
+    const r = game.cast('player1', { q: 0, r: 0 }, { q: 4, r: 0 }, 0);
+    expect(r.ok).toBe(true);
+    expect(victim.hp).toBeLessThan(500);
+  });
+
+  it('el radio de un autocentrado se EXPANDE con la huella del coloso (alcanza más allá de su cuerpo)', () => {
+    // Enemigo a distancia 3 del centro. Con radius 2 solo lo alcanza un large (radio efectivo 3).
+    const farEnemy = () => mk({ id: 'v', playerId: 'player2', type: 'NORMAL', hp: 500, maxHp: 500 });
+
+    const medVictim = farEnemy();
+    const medium = mk({ id: 'm', playerId: 'player1', type: 'GROUND', size: 'medium', moves: [QUAKE] });
+    const g1 = activeGame(medium, (b) => b.setOccupant({ q: 3, r: 0 }, medVictim));
+    g1.cast('player1', { q: 0, r: 0 }, { q: 0, r: 0 }, 0);
+    expect(medVictim.hp).toBe(500); // radio 2: no llega a dist 3
+
+    const bigVictim = farEnemy();
+    // El coloso ocupa (0,0)+vecinos; el enemigo en (3,0) queda libre y a dist 3 del centro.
+    const large = mk({ id: 'l', playerId: 'player1', type: 'GROUND', size: 'large', moves: [QUAKE] });
+    const g2 = activeGame(large, (b) => b.setOccupant({ q: 3, r: 0 }, bigVictim));
+    g2.cast('player1', { q: 0, r: 0 }, { q: 0, r: 0 }, 0);
+    expect(bigVictim.hp).toBeLessThan(500); // radio efectivo 3: sí llega
+  });
 });

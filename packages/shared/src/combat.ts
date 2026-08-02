@@ -1,4 +1,4 @@
-import type { Hex } from './domain.js';
+import type { Hex, PokemonMove, PokemonSize } from './domain.js';
 
 // Replicating basic hex logic needed for AoE
 const DIRECTIONS: Hex[] = [
@@ -89,6 +89,23 @@ export function getConeArea(start: Hex, target: Hex, length: number): Hex[] {
     }
   }
   return hexes;
+}
+
+/**
+ * Una onda es **autocentrada** si es radial y su alcance es 0 (terratemblor, surf,
+ * autodestrucción…): siempre se centra sobre el propio lanzador, no sobre un objetivo.
+ */
+export function isAutocentered(move: Pick<PokemonMove, 'aoe' | 'range'>): boolean {
+  return move.aoe === 'radius' && (move.range ?? 1) === 0;
+}
+
+/**
+ * Radio efectivo de una onda autocentrada. Se expande por la **huella** del lanzador
+ * (un `large` ocupa el anillo 1 alrededor de su centro), para que el temblor alcance
+ * MÁS ALLÁ de su propio cuerpo en vez de morir sobre las casillas que ocupa.
+ */
+export function autocenteredRadius(radius: number | undefined, casterSize: PokemonSize): number {
+  return Math.max(1, radius ?? 1) + (casterSize === 'large' ? 1 : 0);
 }
 
 export function calculateAoE(

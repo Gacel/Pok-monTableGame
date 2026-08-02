@@ -1,7 +1,7 @@
 import { Board, Pokemon, Tile, PokemonMove } from '../engine/board.js';
 import { Hex, hexEqual, hexDistance, hexNeighbors, hexAdd, hexDirection, hexLineDraw } from '../engine/hex.js';
 import { getMoveOptions, MoveOptions } from '../engine/movement.js';
-import { computeMoveDamage, calculateAoE } from '../engine/combat.js';
+import { computeMoveDamage, calculateAoE, isAutocentered, autocenteredRadius } from '../engine/combat.js';
 import { terrainDamage, canEnter } from '../engine/environment.js';
 import { collectResources, PlayerResources } from '../engine/resources.js';
 import { BALL_LABEL, pickChestBall } from '@transcendence/shared';
@@ -547,10 +547,16 @@ export class GameService {
       return { ok: false, error: 'El movimiento seleccionado no existe', state: this.getStateDTO() };
     }
     
-    // Validar rango (distancia geométrica entre centro del caster y el targetHex)
-    // Asumimos que los ataques siempre se pueden lanzar si el centro está dentro del range.
     const range = move.range ?? 1;
-    const dist = hexDistance(from, targetHex);
+    const aoe = move.aoe || 'single';
+
+    // Ondas autocentradas (terratemblor, surf…): SIEMPRE se centran sobre el lanzador,
+    // sin importar en qué casilla se haya hecho clic. Un `large` ocupa 7 hexes; exigir
+    // el hex-centro exacto hacía imposible lanzarlas (las otras 6 daban "fuera de rango").
+    const center = isAutocentered(move) ? from : targetHex;
+
+    // Validar rango (distancia geométrica entre centro del caster y el centro del AoE).
+    const dist = hexDistance(from, center);
 
     // El centro del AoE debe estar dentro del alcance (también los radiales — TA.1: se
     // acabó el "rango infinito").
@@ -559,7 +565,7 @@ export class GameService {
     }
 
     // Auto-cast (dist 0) solo válido para ondas radiales autocentradas.
-    if (dist === 0 && move.aoe !== 'radius') {
+    if (dist === 0 && aoe !== 'radius') {
        return { ok: false, error: 'No puedes atacarte a ti mismo con este movimiento', state: this.getStateDTO() };
     }
 
@@ -569,9 +575,13 @@ export class GameService {
       return this.castDash(caster, from, targetHex, move);
     }
 
-    const aoe = move.aoe || 'single';
     const moveRange = move.range || 1;
-    const aoeHexes = calculateAoE(from, targetHex, aoe, moveRange, move.radius);
+    // Radio efectivo: las ondas autocentradas se expanden por la huella del lanzador
+    // para alcanzar MÁS ALLÁ de su propio cuerpo (un large llena el anillo 1).
+    const radius = isAutocentered(move)
+      ? autocenteredRadius(move.radius, caster.size)
+      : move.radius;
+    const aoeHexes = calculateAoE(from, center, aoe, moveRange, radius);
     let hits = 0;
     
     this.log.push(`🔥 ${nameOf(caster)} lanza ${move.name.toUpperCase()}!`);

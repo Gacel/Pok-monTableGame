@@ -1,6 +1,6 @@
 import { GameState } from '../models/GameState';
 import type { Hex, Tile, BallKey } from '../models/Types';
-import { calculateAoE } from '@transcendence/shared';
+import { calculateAoE, isAutocentered, autocenteredRadius } from '@transcendence/shared';
 
 /** Color de la mitad superior de la bola en el suelo, por tipo. */
 const BALL_TOP: Record<string, string> = {
@@ -389,6 +389,17 @@ export class BoardView {
     const aoeSet = new Set<string>();
     let hoverInRange = false;
     let hoverKey: string | null = null;
+
+    // Ondas autocentradas (terratemblor…): siempre se centran sobre el lanzador, así que
+    // su AoE se muestra SIEMPRE alrededor de la pieza (no depende de dónde esté el ratón),
+    // con el radio expandido por su huella (igual que el servidor). Así se ve qué alcanza
+    // y basta clicar para lanzarla.
+    if (isAutocentered(move)) {
+      const size = casterTile?.occupant?.size ?? 'medium';
+      const radius = autocenteredRadius(move.radius, size);
+      for (const h of calculateAoE(sel, sel, aoe, range, radius)) aoeSet.add(`${h.q},${h.r}`);
+      return { range, selfOk, aoeSet, hoverInRange: true, hoverKey: `${sel.q},${sel.r}` };
+    }
 
     const hv = this.state.hoverHex;
     if (hv) {
