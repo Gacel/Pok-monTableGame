@@ -5,6 +5,7 @@ import { ItemModel } from '../models/ItemModel.js';
 import { UserModel } from '../models/UserModel.js';
 import { FriendModel } from '../models/FriendModel.js';
 import { PokemonService } from '../services/PokemonService.js';
+import { scaledVitals, xpToNext } from '../engine/progression.js';
 import { BALLS, rollTier, pickFromTier } from '../services/loot.js';
 import { LOOT_POOL_TIERS } from '../services/lootPool.js';
 
@@ -42,22 +43,28 @@ export const InventoryController = {
     const pokemon = await Promise.all(
       owned.map(async (p) => {
         let type = 'NORMAL';
+        // Stats REALES a su nivel (escaladas, T6.2/T6.4): la ficha muestra su fuerza actual.
         let hp = 0;
         let atk = 0;
         let def = 0;
         try {
           const t = await PokemonService.getTemplate(p.name);
           type = t.type;
-          hp = t.hp;
-          atk = t.atk;
-          def = t.def;
+          const v = scaledVitals(t, p.level);
+          hp = v.maxHp;
+          atk = v.atk;
+          def = v.def;
         } catch {
           /* si PokeAPI falla, se devuelve solo el nombre */
         }
+        const next = xpToNext(p.level);
         return {
           id: p.id,
           name: p.name,
           level: p.level,
+          xp: p.xp,
+          // XP para el siguiente nivel; null en el nivel máximo (JSON no admite Infinity).
+          xpToNext: Number.isFinite(next) ? next : null,
           isStarter: p.is_starter === 1,
           isShiny: p.is_shiny === 1,
           acquiredVia: p.acquired_via,

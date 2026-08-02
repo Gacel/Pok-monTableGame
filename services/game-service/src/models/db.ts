@@ -131,6 +131,7 @@ async function openAndMigrate(): Promise<Database> {
       user_id      TEXT NOT NULL,
       name         TEXT NOT NULL,
       level        INTEGER NOT NULL DEFAULT 1,
+      xp           INTEGER NOT NULL DEFAULT 0,
       is_starter   INTEGER NOT NULL DEFAULT 0,
       is_shiny     INTEGER NOT NULL DEFAULT 0,
       acquired_via TEXT NOT NULL DEFAULT 'starter',
@@ -189,6 +190,10 @@ async function openAndMigrate(): Promise<Database> {
   }
   if (!opCols.some((c: { name: string }) => c.name === 'is_shiny')) {
     await db.exec(`ALTER TABLE owned_pokemon ADD COLUMN is_shiny INTEGER NOT NULL DEFAULT 0`);
+  }
+  // XP acumulada hacia el siguiente nivel (T6.1). El nivel ya existe (default 1).
+  if (!opCols.some((c: { name: string }) => c.name === 'xp')) {
+    await db.exec(`ALTER TABLE owned_pokemon ADD COLUMN xp INTEGER NOT NULL DEFAULT 0`);
   }
 
   // Migración defensiva: columna `email` en users (si la tabla ya existía).

@@ -67,6 +67,10 @@ export interface PokemonMove {
 export interface Pokemon {
   id: string;
   playerId: string;
+  /** Id de la instancia del inventario (`owned_pokemon.id`) que representa esta pieza.
+   *  Ausente en piezas de draft/roster (no ligadas a un Pokémon propio). Necesario para
+   *  atribuir XP (T6.1) y capturas (Épica 8) a la instancia concreta. */
+  ownedId?: string;
   name?: string;
   type: PokemonType;
   speed: number;

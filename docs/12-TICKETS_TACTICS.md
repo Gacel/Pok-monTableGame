@@ -1137,8 +1137,8 @@ combatiendo y suban de nivel, para progresar con mi colección.
 **Dudas resueltas (D14):** XP en batalla + subida de nivel.
 
 **Criterios de aceptación:**
-- [ ] Un Pokémon que combate y hace KOs gana XP y puede subir de nivel (persistente).
-- [ ] Tests de la curva de XP y el level-up.
+- [x] Un Pokémon que combate y hace KOs gana XP y puede subir de nivel (persistente).
+- [x] Tests de la curva de XP y el level-up.
 
 **Investigación:** `owned_pokemon` (`db.ts:120-129`, `level` default 1 nunca mutado),
 `OwnedPokemonModel` (sin `xp`, `grantMany` fija level=1), `EconomyService.awardForResult`
@@ -1146,6 +1146,14 @@ combatiendo y suban de nivel, para progresar con mi colección.
 
 **Dependencias:** ninguna para el nivel/XP base; la atribución fina depende de T6.3.
 **Paralelizable:** sí (parte).
+
+### ✅ Resolución (lo realmente hecho)
+
+Ver [`29-PROGRESSION_LEVELS.md`](29-PROGRESSION_LEVELS.md) §T6.1. Columna `xp`; curva pura
+`xpToNext`/`applyXp` (lineal, cap 100, cascada); `OwnedPokemonModel.addXp` persiste;
+`defeats.killerOwnedId` para atribuir; `ProgressionService.awardMatchXp` (+30 por KO al
+atacante, +40 a supervivientes ganadores) enganchado junto a la economía. game-service
+103/103.
 
 ## 🎟️ T6.2 — Escalado de stats por nivel
 
@@ -1159,14 +1167,21 @@ notablemente más fuerte que uno recién obtenido.
 **Dudas resueltas (D14):** escalado de stats.
 
 **Criterios de aceptación:**
-- [ ] Dos instancias de la misma especie a niveles distintos tienen stats distintos en partida.
-- [ ] Tests del escalado.
+- [x] Dos instancias de la misma especie a niveles distintos tienen stats distintos en partida.
+- [x] Tests del escalado.
 
 **Investigación:** `computeMoveDamage` (`engine/combat.ts:14-30`),
 `effectiveAtk/Def` (`environment.ts:7-22`), creación de pieza (`MatchManager` `build`
 L101-106 / `buildPokemon` L302-304, hoy `level:1`).
 
 **Dependencias:** →T6.1. **Paralelizable:** no.
+
+### ✅ Resolución (lo realmente hecho)
+
+Ver [`29-PROGRESSION_LEVELS.md`](29-PROGRESSION_LEVELS.md) §T6.2. `engine/progression.ts`
+puro: `levelMultiplier` (+4 %/nivel, 1.0 a Lv.1, saturado a [1,100]) + `scaledVitals`.
+Aplicado en `MatchManager.build`/`buildPokemon` (fuente única al crear la pieza; el combate
+lee la stat ya escalada, sin doble escalado). A Lv.1 idéntico al anterior. game-service 94/94.
 
 ## 🎟️ T6.3 — Equipos por instancia (`ownedId`)
 
@@ -1184,9 +1199,9 @@ L101-106 / `buildPokemon` L302-304, hoy `level:1`).
 **Dudas resueltas (D12):** equipos por instancia con stats reales.
 
 **Criterios de aceptación:**
-- [ ] El equipo se valida y construye por `ownedId`; la partida refleja nivel/stats/forma reales.
-- [ ] La validación de propiedad sigue siendo autoritativa (solo tus instancias).
-- [ ] Tests de `resolveOwnedTeams` con instancias de distinto nivel.
+- [x] El equipo se valida y construye por `ownedId`; la partida refleja el nivel real de la instancia.
+- [x] La validación de propiedad sigue siendo autoritativa (solo tus instancias, no en subasta).
+- [x] Tests de la carga/propiedad por id con instancias de distinto nivel.
 
 **Investigación:** `SubmitTeamRequest`/`DRAFT_TEAM_SIZE` (`packages/shared/src/lobby.ts`),
 `RoomService.submitTeam` (validación por nombre, `RoomService.ts:145-191`),
@@ -1195,6 +1210,15 @@ L101-106 / `buildPokemon` L302-304, hoy `level:1`).
 (`domain.ts:60-85`, sin `ownedId`).
 
 **Dependencias:** →T6.2. **Paralelizable:** no.
+
+### ✅ Resolución (lo realmente hecho)
+
+Ver [`29-PROGRESSION_LEVELS.md`](29-PROGRESSION_LEVELS.md) §T6.3. `Pokemon.ownedId?` en el
+engine; `OwnedPokemonModel.findManyByIds`/`allOwnedBy`; `RoomService` valida por id;
+`MatchManager.ownedTeamFromIds` carga la instancia real (nivel + `ownedId`) y `placements`/
+`buildPokemon` la propagan; el picker envía `ownedId`. **Reordenado**: se hizo antes que
+T6.2/T6.1 por ser fundacional (trae el nivel real que aquéllos escalan/otorgan). El escalado
+de stats es T6.2; la XP, T6.1. game-service 90/90.
 
 ## 🎟️ T6.4 — UI de nivel/XP (frontend)
 
@@ -1205,11 +1229,18 @@ Pokémon en el inventario y en la partida.
 `PokemonDetailModal` y HUD de combate.
 
 **Criterios de aceptación:**
-- [ ] El inventario y la ficha muestran nivel y progreso; el HUD muestra el nivel en partida.
+- [x] El inventario y la ficha muestran nivel y progreso; el HUD muestra el nivel en partida.
 
 **Investigación:** `InventoryView.ts`, `PokemonDetailModal.ts`, `HUDView.ts`.
 
 **Dependencias:** →T6.2. **Paralelizable:** no.
+
+### ✅ Resolución (lo realmente hecho)
+
+Ver [`29-PROGRESSION_LEVELS.md`](29-PROGRESSION_LEVELS.md) §T6.4. `/api/inventory` expone
+`xp`/`xpToNext` (+ hp/atk/def escalados por nivel); la ficha dibuja una barra de XP (`xpBar`,
+«★ NIVEL MÁXIMO» en el cap); el HUD muestra `· Lv.N` en el activo y `Lv.N` en cada pieza del
+roster. **Épica 6 completa.**
 
 ---
 

@@ -11,6 +11,15 @@ import { GameService } from './GameService.js';
 import { PokemonService } from './PokemonService.js';
 import { PokemonTemplate } from '../models/PokemonModel.js';
 import { MatchModel } from '../models/MatchModel.js';
+import { OwnedPokemonModel } from '../models/OwnedPokemonModel.js';
+import { scaledVitals } from '../engine/progression.js';
+
+/**
+ * Plantilla de Pokémon augmentada con la identidad de una instancia del inventario
+ * (`ownedId`) y su nivel real. Las piezas de draft/roster son plantillas planas (sin
+ * estos campos); las de equipos por instancia (T6.3) los llevan.
+ */
+type TeamPiece = PokemonTemplate & { ownedId?: string; level?: number };
 
 const DEFAULT_MATCH_ID = 'default';
 /** Mundo ARENA persistente: un único matchId global, siempre vivo, sin sala/host. */
@@ -88,7 +97,7 @@ export class MatchManager {
    */
   private placements(
     board: Board,
-    teams: PokemonTemplate[][],
+    teams: TeamPiece[][],
     gameMode: GameMode = 'ffa'
   ): { hex: Tile['hex']; pokemon: Pokemon }[] {
     const component = largestLandComponent(board);
@@ -98,12 +107,19 @@ export class MatchManager {
         ? pickRandomSpawns(board, component, TEAM_SIZE, teams.length, makeRng(this.freshSeed()))
         : pickCornerSpawns(board, component, TEAM_SIZE, teams.length);
 
-    const build = (tpl: PokemonTemplate, playerId: string, i: number): Pokemon => ({
-      ...tpl,
-      id: `${playerId}-${i}`,
-      playerId,
-      level: 1,
-    });
+    const build = (tpl: TeamPiece, playerId: string, i: number): Pokemon => {
+      // Nivel REAL de la instancia (equipos por ownedId, T6.3); las piezas de draft son Lv.1.
+      const level = tpl.level ?? 1;
+      return {
+        ...tpl,
+        id: `${playerId}-${i}`,
+        playerId,
+        level,
+        // Stats escaladas por nivel (T6.2): a Lv.1 no altera nada (draft intacto).
+        ...scaledVitals(tpl, level),
+        ...(tpl.ownedId ? { ownedId: tpl.ownedId } : {}),
+      };
+    };
 
     const result: { hex: Tile['hex']; pokemon: Pokemon }[] = [];
     teams.forEach((team, tIdx) => {
@@ -184,23 +200,38 @@ export class MatchManager {
   }
 
   /**
-   * Como resolveTeams pero SIN la regla de unicidad cruzada: en BR/ARENA cada
-   * jugador usa sus PROPIOS Pokémon, así que varios pueden llevar el mismo.
+   * Como resolveTeams pero SIN la regla de unicidad cruzada: en BR/ARENA cada jugador usa
+   * sus PROPIOS Pokémon (varios pueden llevar el mismo). Los equipos llegan como `ownedId[]`
+   * (T6.3): se carga la instancia real (nombre + nivel) y se arrastra el `ownedId`, para que
+   * la partida refleje el nivel/stats reales, no plantillas a nivel 1.
    */
-  private async resolveOwnedTeams(teams: Record<string, string[]>): Promise<PokemonTemplate[][]> {
-    // Los Pokémon propios pueden estar FUERA del roster de draft (looteados en la
-    // tienda, pool de ~200): se resuelven por PokeAPI (cache-first) en vez de por roster.
-    const teamArrays: PokemonTemplate[][] = [];
+  private async resolveOwnedTeams(teams: Record<string, string[]>): Promise<TeamPiece[][]> {
+    const teamArrays: TeamPiece[][] = [];
     for (let i = 1; i <= 4; i++) {
-      const names = teams[`player${i}`];
-      if (names && names.length > 0) {
-        teamArrays.push(await Promise.all(names.map((n) => PokemonService.getTemplate(n))));
+      const ids = teams[`player${i}`];
+      if (ids && ids.length > 0) {
+        teamArrays.push(await this.ownedTeamFromIds(ids));
       }
     }
     if (teamArrays.length < 2) {
       throw new Error('Se necesitan al menos 2 equipos para iniciar la partida');
     }
     return teamArrays;
+  }
+
+  /**
+   * Resuelve `ownedId[]` a piezas de equipo con su nivel real. La plantilla base (stats,
+   * tipo, tamaño) se saca por especie de PokeAPI (cache-first); el nivel/identidad, de la
+   * instancia del inventario. La propiedad se valida antes (RoomService), aquí solo se carga.
+   */
+  private async ownedTeamFromIds(ids: string[]): Promise<TeamPiece[]> {
+    const records = await OwnedPokemonModel.findManyByIds(ids);
+    return Promise.all(
+      records.map(async (rec) => {
+        const tpl = await PokemonService.getTemplate(rec.name);
+        return { ...tpl, ownedId: rec.id, level: rec.level };
+      })
+    );
   }
 
   /** Alianzas del modo 2v2 (P1+P3 vs P2+P4); null en todos contra todos. */
@@ -299,8 +330,16 @@ export class MatchManager {
 
   // ----------------------------------------------------------- ARENA (mundo vivo)
 
-  private buildPokemon(tpl: PokemonTemplate, playerId: string, i: number): Pokemon {
-    return { ...tpl, id: `${playerId}-${i}`, playerId, level: 1 };
+  private buildPokemon(tpl: TeamPiece, playerId: string, i: number): Pokemon {
+    const level = tpl.level ?? 1;
+    return {
+      ...tpl,
+      id: `${playerId}-${i}`,
+      playerId,
+      level,
+      ...scaledVitals(tpl, level), // stats escaladas por nivel (T6.2)
+      ...(tpl.ownedId ? { ownedId: tpl.ownedId } : {}),
+    };
   }
 
   /** Devuelve la ARENA global (la crea vacía y persistente si no existía). */
@@ -319,11 +358,11 @@ export class MatchManager {
     return game;
   }
 
-  /** Añade un jugador a la ARENA en un spawn ALEATORIO (entrada en caliente). */
-  async addToArena(slot: string, teamNames: string[]): Promise<void> {
+  /** Añade un jugador a la ARENA en un spawn ALEATORIO (entrada en caliente). Equipo por `ownedId`. */
+  async addToArena(slot: string, ownedIds: string[]): Promise<void> {
     const game = await this.getOrCreateArena();
-    // Equipo desde el inventario propio (puede estar fuera del roster): PokeAPI cache-first.
-    const templates = await Promise.all(teamNames.map((n) => PokemonService.getTemplate(n)));
+    // Equipo desde el inventario propio (instancias reales con su nivel): T6.3.
+    const templates = await this.ownedTeamFromIds(ownedIds);
     const board = game.getBoard();
     const component = largestLandComponent(board);
     const cluster =
