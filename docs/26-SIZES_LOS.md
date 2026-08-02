@@ -36,6 +36,21 @@ grandes/pequeños clásicos y `medium` por defecto, insensible a mayúsculas. ga
 **Verificación:** `tsc` frontend limpio, tests 17/17. Smoke: un Snorlax/Onix se ve grande y
 sus 7 casillas resaltadas.
 
-## T4.3 — Línea de visión + bodyblocking (backend) *(pendiente)*
+## T4.3 — Línea de visión + bodyblocking (backend)
+
+**Qué:** un `large` enemigo interpuesto entre el atacante y el objetivo **intercepta** el
+impacto (lo recibe él; lo de detrás queda a la sombra). Vale para línea, cono y ondas
+radiales (LoS por hex del AoE) — D3.
+
+**Cómo** ([`GameService`](../services/game-service/src/services/GameService.ts)):
+`losBlocker(from, targetHex, targetId, caster)` traza `hexLineDraw(from, targetHex)` y busca
+en los hexes **intermedios** (excluye origen y objetivo) un `large` **enemigo** (los aliados
+no bloquean tu propio disparo; el objetivo no se auto-bloquea). El bucle de daño de `cast`
+usa `victim = blocker ?? occupant` y `victimHex` correspondiente, de modo que el coloso
+recibe el daño/KO/knockback/revelado en lugar del objetivo original (dedup por id).
+
+**Verificación:** [`test/bodyblock.test.ts`](../services/game-service/test/bodyblock.test.ts)
+— coloso enemigo intercepta y el de detrás queda intacto; sin coloso el objetivo recibe;
+un large aliado no bloquea. game-service 71/71.
 
 ## T4.4 — Feedback de intercepción (frontend) *(pendiente)*

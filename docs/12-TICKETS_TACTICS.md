@@ -757,15 +757,22 @@ para bloquear proyectiles y ondas y proteger a los que están detrás.
 **Dudas resueltas (D3):** bloquea línea Y radiales-detrás (LoS por hex del AoE).
 
 **Criterios de aceptación:**
-- [ ] Un Hiperrayo contra alguien tras un `large` impacta en el `large`.
-- [ ] Una explosión radial no daña a los hexes en sombra del `large`.
-- [ ] Tests del motor de LoS/oclusión para line y radius/cone.
+- [x] Un Hiperrayo contra alguien tras un `large` impacta en el `large`.
+- [x] Una explosión radial no daña a los hexes en sombra del `large`.
+- [x] Tests del motor de LoS/oclusión para line y radius/cone.
 
 **Investigación:** `cast` daño (`GameService.ts:435-458`), `calculateAoE`
 (`packages/shared/src/combat.ts:94-102`, sin conocimiento de ocupantes → el filtrado va
 en el llamador game-service), `hexLineDraw` (T0.3), `getOccupiedHexes` (`board.ts:36-41`).
 
 **Dependencias:** →T0.3, →T4.1. **Paralelizable:** no.
+
+### ✅ Resolución (lo realmente hecho)
+
+`GameService.losBlocker` (línea `hexLineDraw`, busca un large enemigo intermedio); el bucle
+de daño usa `victim = blocker ?? occupant` → el coloso recibe daño/KO/knockback/revelado y lo
+de detrás queda a la sombra. Aliados no bloquean; dedup por id. Tests `bodyblock.test.ts`
+(71/71). Doc: [`26-SIZES_LOS.md`](26-SIZES_LOS.md).
 
 ## 🎟️ T4.4 — Feedback de intercepción (frontend)
 
