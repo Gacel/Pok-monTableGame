@@ -597,7 +597,7 @@ export class GameService {
       hits++;
       if (block) this.log.push(`🛡️ ${nameOf(victim)} intercepta el ataque con su cuerpo!`);
       this.log.push(`💥 ${nameOf(victim)} recibe ${dmg} de daño (HP: ${victim.hp}).`);
-      this.events.push({ kind: 'damage', pokemonId: victim.id, hex: victimHex, delta: -dmg });
+      this.events.push({ kind: 'damage', pokemonId: victim.id, hex: victimHex, delta: -dmg, ...(block ? { blocked: true } : {}) });
 
       if (victim.hp <= 0) {
         this.log.push(`💀 ¡${nameOf(victim)} ha caído KO!`);

@@ -35,6 +35,8 @@ export interface TurnEvent {
   /** Origen/destino de un desplazamiento (knockback/dash) — tickets posteriores. */
   from?: Tile['hex'];
   to?: Tile['hex'];
+  /** El daño lo interceptó un `large` (bodyblocking): el cliente muestra un escudo (T4.4). */
+  blocked?: boolean;
 }
 
 /** Estado autoritativo de la partida (DTO que difunde el servidor). */

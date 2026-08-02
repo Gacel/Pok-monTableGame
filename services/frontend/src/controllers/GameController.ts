@@ -428,6 +428,7 @@ export class GameController {
       switch (ev.kind) {
         case 'damage':
           this.fxLayer.floatingNumber(ev.hex, String(ev.delta ?? 0), 'damage');
+          if (ev.blocked) this.fxLayer.flash(ev.hex, '🛡️'); // intercepción de un coloso (T4.4)
           break;
         case 'heal':
           this.fxLayer.floatingNumber(ev.hex, `+${ev.delta ?? 0}`, 'heal'); // +N verde (T2.3)
