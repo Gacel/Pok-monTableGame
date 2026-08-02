@@ -10,7 +10,7 @@
   `SCREAMING_SNAKE_CASE`: `NN-NOMBRE.md`.
 - El número refleja el **orden de creación**, no la importancia ni un orden de
   lectura obligatorio. El siguiente documento nuevo usa el número más alto + 1
-  (el último a día de hoy es `26`, así que el próximo sería `27-*.md`).
+  (el último a día de hoy es `27`, así que el próximo sería `28-*.md`).
 - Los documentos **históricos** (diarios de sesión, auditorías puntuales, planes
   de refactor ya ejecutados) van a `docs/archive/`, sin numerar — son un
   registro de un momento concreto, no una referencia a mantener al día. Cada uno
@@ -49,7 +49,8 @@
 | 23 | [`23-SHINY_GACHA.md`](23-SHINY_GACHA.md) | Pokémon Shiny (probabilidad por bola, sprites ✨) y apertura cinemática de gacha con audio sintetizado (Épica G, TG.1/TG.2). |
 | 24 | [`24-ATTACK_SHAPES.md`](24-ATTACK_SHAPES.md) | Sistema de ataques (Épica A): catálogo híbrido de rango/forma AoE + radio propio y validación de rango (TA.1); selección, preview e iconos pendientes. |
 | 25 | [`25-TACTICAL_MOVES.md`](25-TACTICAL_MOVES.md) | Movimientos tácticos (Épica 3): empuje/knockback (T3.1); dash y deslizamientos pendientes. |
-| 26 | [`26-SIZES_LOS.md`](26-SIZES_LOS.md) | Tamaños por especie, render de grandes, línea de visión y bodyblocking (Épica 4): tamaño por especie (T4.1); resto pendiente. |
+| 26 | [`26-SIZES_LOS.md`](26-SIZES_LOS.md) | Tamaños por especie, render de grandes, línea de visión y bodyblocking (Épica 4): T4.1–T4.4. |
+| 27 | [`27-GEN1_SCOPE.md`](27-GEN1_SCOPE.md) | Scope Gen 1 (Épica 5): clamp a los 151 (fuente única `gen1.ts`, loot pool de 151) — T5.1; catálogo de evolución pendiente. |
 
 ## Archivo (histórico, no numerado)
 
