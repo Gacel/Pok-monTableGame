@@ -97,6 +97,15 @@ async function openAndMigrate(): Promise<Database> {
     );
     CREATE INDEX IF NOT EXISTS idx_pokemon_moves_pokemon ON pokemon_moves(pokemon_name);
 
+    -- Catalogo de evolucion por especie (T5.2). evolves_to NULL = forma final.
+    CREATE TABLE IF NOT EXISTS evolutions (
+      name        TEXT PRIMARY KEY,
+      evolves_to  TEXT,
+      trigger     TEXT,
+      min_level   INTEGER,
+      item        TEXT
+    );
+
     -- Amistades ACEPTADAS (COMUNIDAD). Bidireccional: se guardan las dos direcciones.
     CREATE TABLE IF NOT EXISTS friendships (
       user_id    TEXT NOT NULL,
