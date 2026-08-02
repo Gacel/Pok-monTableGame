@@ -1006,15 +1006,23 @@ el hub, sobre su learnset (reutiliza `pokemon_moves` de doc 04). **Dependencias:
 **Dudas resueltas (D11):** clamp a #1-151.
 
 **Criterios de aceptación:**
-- [ ] Ningún flujo concede/instancia un Pokémon fuera de #1-151.
-- [ ] Tienda/starters/loot usan la misma lista de 151.
-- [ ] Tests de los límites.
+- [x] Ningún flujo concede/instancia un Pokémon fuera de #1-151.
+- [x] Tienda/starters/loot usan la misma lista de 151.
+- [x] Tests de los límites.
 
 **Investigación:** `lootPool.ts` (`LOOT_POOL_TIERS`, 200 estáticos),
 `PokemonService.getTemplate` (`PokemonService.ts:97-140`, sin límite de dex),
 `loot.ts` (`BALLS`, `rollTier`, `pickFromTier`), `MatchManager` `STARTER_POOL`.
 
 **Dependencias:** ninguna (tras TR.1). **Paralelizable:** sí.
+
+### ✅ Resolución (lo realmente hecho)
+
+`engine/gen1.ts` (`GEN1_NAMES` 151 + `isGen1`) como fuente única. `lootPool.ts` regenerada a
+los 151 (filtrada del pool #1-200; tienda/cofres tiran de aquí). `STARTER_POOL` ya era Gen 1.
+Desviación: `getTemplate` no rechaza (sirve cualquiera para no romper owned Gen 2 previos);
+lo clampado son las fuentes que conceden. Test `gen1.test.ts` (75/75). Doc:
+[`27-GEN1_SCOPE.md`](27-GEN1_SCOPE.md).
 
 ## 🎟️ T5.2 — Catálogo de especies: cadenas de evolución de PokeAPI
 
