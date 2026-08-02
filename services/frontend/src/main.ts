@@ -339,12 +339,12 @@ export function startArena() {
     title: 'ARENA · TU EQUIPO',
     pick: 3,
     onBack: () => showMultiplayerMenu(),
-    onConfirm: (names) => {
+    onConfirm: (ids) => {
       void (async () => {
         try {
           const res = await apiFetch('/api/arena/join', {
             method: 'POST',
-            body: JSON.stringify({ team: names }),
+            body: JSON.stringify({ team: ids }),
           });
           const data = await res.json();
           if (res.ok && data.room) {
@@ -391,9 +391,9 @@ function showOnlineDraft(room: RoomInfo) {
       title: 'BATTLE ROYALE · TU EQUIPO',
       pick: 3,
       onBack: () => draftLayer.classList.add('hidden'),
-      onConfirm: (names) => {
+      onConfirm: (ids) => {
         draftLayer.classList.add('hidden');
-        submitOnlineTeam(room, names);
+        submitOnlineTeam(room, ids);
       },
     });
     void picker.render();
