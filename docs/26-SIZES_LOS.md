@@ -92,7 +92,7 @@ destinos donde la huella no cabe; medium sin regresión. game-service 82/82.
 
 ## T4.6 — Pulido de presentación de grandes (feedback de smoke)
 
-- **Huella con color del jugador:** las 7 casillas de un large se tiñen con el **color de su
+- **Casilla del jugador (todas las piezas):** cada Pokémon tiñe su(s) casilla(s) con el **color de su
   jugador** muy tenue (`BoardView.PLAYER_RGB`, alpha 0.16), en vez del ámbar plano, para
   leerlas sin seleccionarlo.
 - **HUD sin duplicados:** el roster del HUD mapeaba `tiles → occupant` sin dedup, así que un

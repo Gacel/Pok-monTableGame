@@ -452,11 +452,17 @@ export class BoardView {
       this.drawBiomeTransitions(tile, x, y, tileMap);
       this.drawRelief(tile, x, y, !!fogged);
 
-      // Huella de un Pokémon grande (T4.2): resalta sus 7 casillas con el color de su
-      // jugador, muy tenue (para leerlas sin seleccionarlo).
-      if (tile.occupant?.size === 'large') {
-        const rgb = BoardView.PLAYER_RGB[tile.occupant.playerId] ?? '148, 163, 184';
-        this.drawTileOverlay(x, y, `rgba(${rgb}, 0.16)`, `rgba(${rgb}, 0.45)`, 1);
+      // Casilla(s) ocupada(s) por CUALQUIER Pokémon: se tiñen con el color de su jugador
+      // (tenue) para leer de quién es y qué ocupa (un large marca sus 7 hexes). No se tiñe
+      // un enemigo oculto para el observador (no filtrar su posición) — mismo filtro que
+      // EntityView; `hiddenAllySlots` null en online/hot-seat.
+      if (tile.occupant) {
+        const allies = this.state.hiddenAllySlots;
+        const hiddenFromViewer = tile.occupant.isHidden && allies && !allies.includes(tile.occupant.playerId);
+        if (!hiddenFromViewer) {
+          const rgb = BoardView.PLAYER_RGB[tile.occupant.playerId] ?? '148, 163, 184';
+          this.drawTileOverlay(x, y, `rgba(${rgb}, 0.24)`, `rgba(${rgb}, 0.55)`, 1);
+        }
       }
 
       if (isSelected) {
