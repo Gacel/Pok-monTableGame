@@ -182,7 +182,10 @@ export class MinimapView {
       }
     }
 
-    // Piezas: cada Pokémon con el color de SU jugador (P1..P4).
+    // Piezas: cada Pokémon con el color de SU jugador (P1..P4). Los colosos ocupan
+    // varias casillas con el MISMO ocupante (id), así que se agrupan por id y se pinta
+    // un único punto en el centroide de su huella (si no, saldría multiplicado).
+    const grouped = new Map<string, { occ: NonNullable<Tile['occupant']>; sx: number; sy: number; n: number }>();
     for (const t of tiles) {
       if (!t.occupant) continue;
       if (isDeployment && t.occupant.playerId !== this.state.match?.currentPlayer) continue;
@@ -191,14 +194,27 @@ export class MinimapView {
       const allies = this.state.hiddenAllySlots;
       if (t.occupant.isHidden && allies && !allies.includes(t.occupant.playerId)) continue;
       const p = this.boardView.hexToPixel(t.hex.q, t.hex.r);
-      const x = offX + (p.x - b.minX) * scale;
-      const y = offY + (p.y - b.minY) * scale;
+      const g = grouped.get(t.occupant.id);
+      if (g) {
+        g.sx += p.x;
+        g.sy += p.y;
+        g.n += 1;
+      } else {
+        grouped.set(t.occupant.id, { occ: t.occupant, sx: p.x, sy: p.y, n: 1 });
+      }
+    }
+    for (const g of grouped.values()) {
+      const x = offX + (g.sx / g.n - b.minX) * scale;
+      const y = offY + (g.sy / g.n - b.minY) * scale;
+      // Los colosos (huella > 1 casilla) se pintan un poco más grandes, coherente con
+      // su tamaño en el tablero.
+      const radius = Math.max(2, cell * (g.n > 1 ? 1.0 : 0.7));
       // Los ocultos que sí se muestran (los míos en vs-IA, o ambos en hot-seat) se
       // pintan translúcidos, como indicador de emboscada (igual que en el tablero).
-      ctx.globalAlpha = t.occupant.isHidden ? 0.45 : 1;
+      ctx.globalAlpha = g.occ.isHidden ? 0.45 : 1;
       ctx.beginPath();
-      ctx.arc(x, y, Math.max(2, cell * 0.7), 0, Math.PI * 2);
-      ctx.fillStyle = MinimapView.PLAYER_COLORS[t.occupant.playerId] ?? '#e5e7eb';
+      ctx.arc(x, y, radius, 0, Math.PI * 2);
+      ctx.fillStyle = MinimapView.PLAYER_COLORS[g.occ.playerId] ?? '#e5e7eb';
       ctx.strokeStyle = '#000';
       ctx.lineWidth = 0.5;
       ctx.fill();

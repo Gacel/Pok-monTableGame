@@ -97,6 +97,10 @@ destinos donde la huella no cabe; medium sin regresión. game-service 82/82.
   leerlas sin seleccionarlo.
 - **HUD sin duplicados:** el roster del HUD mapeaba `tiles → occupant` sin dedup, así que un
   large (7 casillas) salía **7 veces**; ahora se deduplica por id (`HUDView`).
+- **Minimapa sin duplicados** *(follow-up)*: el mismo problema en `MinimapView` — un punto por
+  casilla ocupada → un coloso salía como 7 puntitos. Ahora las piezas se agrupan por
+  `occupant.id` y se pinta **un único punto en el centroide** de su huella (los colosos, algo
+  más grandes). Respeta los filtros de despliegue/ocultación existentes.
 - **`LARGE` recortado:** la lista de tamaños era demasiado generosa (Mewtwo, pájaros
   legendarios, Machamp, Rapidash… salían tan grandes como Snorlax). Se deja `large` solo para
   colosos reales (Snorlax, Onix, Gyarados, Lapras, Dragonite, Rhydon, Golem, Kangaskhan,
