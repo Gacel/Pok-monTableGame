@@ -10,7 +10,7 @@
   `SCREAMING_SNAKE_CASE`: `NN-NOMBRE.md`.
 - El número refleja el **orden de creación**, no la importancia ni un orden de
   lectura obligatorio. El siguiente documento nuevo usa el número más alto + 1
-  (el último a día de hoy es `26`, así que el próximo sería `27-*.md`).
+  (el último a día de hoy es `27`, así que el próximo sería `28-*.md`).
 - Los documentos **históricos** (diarios de sesión, auditorías puntuales, planes
   de refactor ya ejecutados) van a `docs/archive/`, sin numerar — son un
   registro de un momento concreto, no una referencia a mantener al día. Cada uno
