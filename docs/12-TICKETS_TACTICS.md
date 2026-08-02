@@ -1007,6 +1007,30 @@ acciones); `PokemonMove.type`/`aoe`/`damageClass` para el mapeo de icono.
 **Estado:** **futuro** (pedido por el usuario). Elegir/asignar los moves de cada Pokémon en
 el hub, sobre su learnset (reutiliza `pokemon_moves` de doc 04). **Dependencias:** →TA.1, →TA.2.
 
+## 🎟️ FIX-IA — La IA hacía movimientos ilegales y congelaba la partida ✅
+
+**Historia:** Como jugador contra la IA, quiero que el bot juegue turnos válidos y que la
+partida **avance siempre**, sin quedarse congelada.
+
+**Bug:** al migrar el combate a on-map por rango (`/cast`, Épica A), la IA del bot siguió
+ejecutando sus decisiones de ataque como `/move` a la casilla del enemigo. Mover a una casilla
+ocupada es **ilegal** → el servidor lo rechaza; y como el rechazo no reprogramaba al bot (el
+bucle avanza al aplicar estado nuevo), el turno **se quedaba congelado**.
+
+**Criterios de aceptación:**
+- [x] Los ataques de la IA se lanzan por `/cast` (nunca por `/move` a casilla ocupada).
+- [x] La IA elige el ataque de mayor potencia cuyo **alcance real** llega al objetivo.
+- [x] Si el objetivo está fuera de alcance, la pieza se **acerca** en vez de perder el turno.
+- [x] Cualquier acción rechazada por el servidor **pasa turno** (la partida nunca se congela).
+- [x] Tests puros de la elección de ataque por rango (`pickCastMove`).
+
+### ✅ Resolución (lo realmente hecho)
+
+Ver [`28-BOT_CAST_FIX.md`](28-BOT_CAST_FIX.md). `performMove`/`performCast` devuelven ahora
+`boolean` (éxito real); `runBotTurn` enruta `type:'attack'` por `botCast` (elige move por
+alcance con `pickCastMove`), con fallback de acercamiento y `endTurn` garantizado. frontend
+22/22.
+
 ---
 
 # ÉPICA 5 — Scope Gen 1 (151) y catálogo de especies

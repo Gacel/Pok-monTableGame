@@ -13,7 +13,7 @@ import type { OnlineSession } from '../state/MatchSession';
 import type { Hex, MatchState, Pokemon, BallKey } from '../models/Types';
 import { BALL_SPRITE, BALL_LABEL } from '@transcendence/shared';
 import { authState } from '../auth/AuthState';
-import { decideBotAction } from './botStrategy';
+import { decideBotAction, hexDistance, pickCastMove } from './botStrategy';
 import type { BotLevel, BotPieceOptions, EnemyPiece } from './botStrategy';
 
 /**
@@ -203,9 +203,62 @@ export class GameController {
     const decision = decideBotAction(pieces, enemies, this.bots[slot] ?? 2, Math.random, biomeOf);
     if (decision.type === 'end') {
       await this.endTurn(true);
-    } else {
-      await this.performMove(decision.from, decision.to);
+      return;
     }
+
+    // Ejecuta la decisión. Los ataques van SIEMPRE por /cast (combate on-map por
+    // rango), nunca por /move — mover a una casilla ocupada es ilegal y era la causa
+    // de que la IA se quedara congelada.
+    let ok: boolean;
+    if (decision.type === 'attack') {
+      ok = await this.botCast(decision.from, decision.to);
+      if (!ok) {
+        // El objetivo estaba fuera del alcance real del ataque (la heurística del bot
+        // razona por adyacencia, no por rango de `cast`): en vez de perder el turno, la
+        // pieza se ACERCA al enemigo para poder atacar el próximo turno.
+        const piece = pieces.find((p) => p.from.q === decision.from.q && p.from.r === decision.from.r);
+        const step = this.closestStepToward(piece?.moves ?? [], decision.to);
+        ok = step ? await this.performMove(decision.from, step) : false;
+      }
+    } else {
+      ok = await this.performMove(decision.from, decision.to);
+    }
+    // Si nada prosperó (acción rechazada por el servidor), pasamos turno: la partida
+    // avanza en lugar de congelarse.
+    if (!ok) {
+      await this.endTurn(true);
+    }
+  }
+
+  /** Hex de `moves` que deja a la pieza más cerca de `target` (o `null` si no acerca). */
+  private closestStepToward(moves: Hex[], target: Hex): Hex | null {
+    let best: Hex | null = null;
+    let bestDist = Infinity;
+    for (const h of moves) {
+      const d = hexDistance(h, target);
+      if (d < bestDist) {
+        bestDist = d;
+        best = h;
+      }
+    }
+    return best;
+  }
+
+  /**
+   * La IA lanza un ataque on-map con /cast: elige, entre los movimientos del atacante,
+   * el de mayor potencia cuyo alcance real llega al objetivo desde su posición actual.
+   * Devuelve `false` si ningún movimiento alcanza (para que el turno avance sin congelar).
+   */
+  private async botCast(from: Hex, target: Hex): Promise<boolean> {
+    const caster = this.state.match?.tiles.find(
+      (t) => t.hex.q === from.q && t.hex.r === from.r,
+    )?.occupant;
+    const moves = caster?.moves ?? [];
+    if (!moves.length) return false;
+
+    const bestIdx = pickCastMove(moves, hexDistance(from, target));
+    if (bestIdx < 0) return false;
+    return this.performCast(from, target, bestIdx);
   }
 
   /** Opciones de movimiento/ataque de una pieza SIN tocar el estado de la UI. */
@@ -702,7 +755,7 @@ export class GameController {
     }
   }
 
-  private async performMove(from: Hex, to: Hex): Promise<void> {
+  private async performMove(from: Hex, to: Hex): Promise<boolean> {
     const movingOcc = this.state.currentTiles.find((t) => t.hex.q === from.q && t.hex.r === from.r)?.occupant;
     if (movingOcc) {
       this.state.setLastInteractedPokemon(movingOcc.playerId, movingOcc.id);
@@ -721,13 +774,15 @@ export class GameController {
           this.hudView.flashToast(`Combate: gana ${String(c.winnerId).toUpperCase()}`, '#7c3aed');
         }
         this.applyMatchState(data.state as MatchState);
-      } else {
-        this.hudView.flashToast(data.error ?? 'Jugada inválida');
-        this.state.selectedHex = null;
+        return true;
       }
+      this.hudView.flashToast(data.error ?? 'Jugada inválida');
+      this.state.selectedHex = null;
+      return false;
     } catch (err) {
       console.error(err);
       this.hudView.flashToast('Error de red');
+      return false;
     } finally {
       this.busy = false;
     }
@@ -776,7 +831,7 @@ export class GameController {
     }
   }
 
-  private async performCast(from: Hex, to: Hex, moveIndex: number): Promise<void> {
+  private async performCast(from: Hex, to: Hex, moveIndex: number): Promise<boolean> {
     const movingOcc = this.state.currentTiles.find((t) => t.hex.q === from.q && t.hex.r === from.r)?.occupant;
     if (movingOcc) {
       this.state.setLastInteractedPokemon(movingOcc.playerId, movingOcc.id);
@@ -792,12 +847,14 @@ export class GameController {
         this.state.selectedHex = null;
         this.state.activeMoveIndex = null;
         this.applyMatchState(data.state as MatchState);
-      } else {
-        this.hudView.flashToast(data.error ?? 'Jugada inválida');
+        return true;
       }
+      this.hudView.flashToast(data.error ?? 'Jugada inválida');
+      return false;
     } catch (err) {
       console.error(err);
       this.hudView.flashToast('Error de red');
+      return false;
     } finally {
       this.busy = false;
     }

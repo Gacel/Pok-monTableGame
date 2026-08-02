@@ -51,6 +51,7 @@
 | 25 | [`25-TACTICAL_MOVES.md`](25-TACTICAL_MOVES.md) | Movimientos tácticos (Épica 3): empuje/knockback (T3.1); dash y deslizamientos pendientes. |
 | 26 | [`26-SIZES_LOS.md`](26-SIZES_LOS.md) | Tamaños por especie, render de grandes, línea de visión y bodyblocking (Épica 4): T4.1–T4.4. |
 | 27 | [`27-GEN1_SCOPE.md`](27-GEN1_SCOPE.md) | Scope Gen 1 (Épica 5): clamp a los 151 (fuente única `gen1.ts`, loot pool de 151) — T5.1; catálogo de evolución pendiente. |
+| 28 | [`28-BOT_CAST_FIX.md`](28-BOT_CAST_FIX.md) | Fix de la IA (FIX-IA): ataques del bot por `/cast` (no `/move` ilegal), elección por alcance (`pickCastMove`), acercamiento y turno siempre avanza (no se congela). |
 
 ## Archivo (histórico, no numerado)
 
