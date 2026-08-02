@@ -1184,9 +1184,9 @@ L101-106 / `buildPokemon` L302-304, hoy `level:1`).
 **Dudas resueltas (D12):** equipos por instancia con stats reales.
 
 **Criterios de aceptación:**
-- [ ] El equipo se valida y construye por `ownedId`; la partida refleja nivel/stats/forma reales.
-- [ ] La validación de propiedad sigue siendo autoritativa (solo tus instancias).
-- [ ] Tests de `resolveOwnedTeams` con instancias de distinto nivel.
+- [x] El equipo se valida y construye por `ownedId`; la partida refleja el nivel real de la instancia.
+- [x] La validación de propiedad sigue siendo autoritativa (solo tus instancias, no en subasta).
+- [x] Tests de la carga/propiedad por id con instancias de distinto nivel.
 
 **Investigación:** `SubmitTeamRequest`/`DRAFT_TEAM_SIZE` (`packages/shared/src/lobby.ts`),
 `RoomService.submitTeam` (validación por nombre, `RoomService.ts:145-191`),
@@ -1195,6 +1195,15 @@ L101-106 / `buildPokemon` L302-304, hoy `level:1`).
 (`domain.ts:60-85`, sin `ownedId`).
 
 **Dependencias:** →T6.2. **Paralelizable:** no.
+
+### ✅ Resolución (lo realmente hecho)
+
+Ver [`29-PROGRESSION_LEVELS.md`](29-PROGRESSION_LEVELS.md) §T6.3. `Pokemon.ownedId?` en el
+engine; `OwnedPokemonModel.findManyByIds`/`allOwnedBy`; `RoomService` valida por id;
+`MatchManager.ownedTeamFromIds` carga la instancia real (nivel + `ownedId`) y `placements`/
+`buildPokemon` la propagan; el picker envía `ownedId`. **Reordenado**: se hizo antes que
+T6.2/T6.1 por ser fundacional (trae el nivel real que aquéllos escalan/otorgan). El escalado
+de stats es T6.2; la XP, T6.1. game-service 90/90.
 
 ## 🎟️ T6.4 — UI de nivel/XP (frontend)
 

@@ -93,4 +93,31 @@ export const OwnedPokemonModel = {
     const db = await getDb();
     return db.get<OwnedPokemonRecord>('SELECT * FROM owned_pokemon WHERE id = ?', id);
   },
+
+  /**
+   * Carga varias instancias por id **conservando el orden** de `ids`. Omite las que no
+   * existan. Para construir un equipo por instancia (T6.3) desde los `ownedId` elegidos.
+   */
+  async findManyByIds(ids: string[]): Promise<OwnedPokemonRecord[]> {
+    if (ids.length === 0) return [];
+    const db = await getDb();
+    const placeholders = ids.map(() => '?').join(',');
+    const rows = await db.all<OwnedPokemonRecord[]>(
+      `SELECT * FROM owned_pokemon WHERE id IN (${placeholders})`,
+      ...ids
+    );
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    return ids.map((id) => byId.get(id)).filter((r): r is OwnedPokemonRecord => !!r);
+  },
+
+  /**
+   * ¿Son TODOS estos ids instancias libres (no en subasta) del usuario? Validación de
+   * propiedad autoritativa para armar equipos por `ownedId` (T6.3).
+   */
+  async allOwnedBy(userId: string, ids: string[]): Promise<boolean> {
+    if (ids.length === 0) return false;
+    const rows = await this.findManyByIds(ids);
+    if (rows.length !== ids.length) return false;
+    return rows.every((r) => r.user_id === userId && (r.auction_id ?? null) === null);
+  },
 };

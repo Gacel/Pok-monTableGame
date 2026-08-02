@@ -90,6 +90,10 @@ export interface CreateRoomRequest {
 }
 
 export interface SubmitTeamRequest {
-  /** Exactamente DRAFT_TEAM_SIZE nombres del roster. */
+  /**
+   * Exactamente DRAFT_TEAM_SIZE elementos. En modos de draft son **nombres** del roster;
+   * en modos de equipo propio (`OWNED_TEAM_MODES`: BR/ARENA) son **`ownedId`** de instancias
+   * del inventario (T6.3), para llevar a la partida el nivel/stats reales de cada instancia.
+   */
   team: string[];
 }

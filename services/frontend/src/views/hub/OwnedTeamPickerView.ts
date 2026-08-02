@@ -23,7 +23,8 @@ export class OwnedTeamPickerView {
   private container: HTMLElement;
   private title: string;
   private pick: number;
-  private onConfirm: (names: string[]) => void;
+  /** Devuelve los `ownedId` de las instancias elegidas (equipos por instancia, T6.3). */
+  private onConfirm: (ownedIds: string[]) => void;
   private onBack: () => void;
 
   private owned: OwnedPokemon[] = [];
@@ -32,7 +33,7 @@ export class OwnedTeamPickerView {
 
   constructor(
     container: HTMLElement,
-    opts: { title: string; pick?: number; onConfirm: (names: string[]) => void; onBack: () => void }
+    opts: { title: string; pick?: number; onConfirm: (ownedIds: string[]) => void; onBack: () => void }
   ) {
     this.container = container;
     this.title = opts.title;
@@ -67,7 +68,8 @@ export class OwnedTeamPickerView {
   }
 
   private draw(): void {
-    // Se selecciona por id de instancia, pero el equipo se envía por nombre.
+    // Se selecciona y se ENVÍA por id de instancia (equipos por ownedId, T6.3): así la
+    // partida usa el nivel/stats reales de esa instancia concreta, no una plantilla Lv.1.
     const cards = this.owned
       .map((p) => {
         const sel = this.selected.has(p.id);
@@ -120,8 +122,9 @@ export class OwnedTeamPickerView {
     document.getElementById('btn-owned-back')?.addEventListener('click', () => this.onBack());
     document.getElementById('btn-owned-confirm')?.addEventListener('click', () => {
       if (this.selected.size !== this.pick) return;
-      const names = this.owned.filter((p) => this.selected.has(p.id)).map((p) => p.name);
-      this.onConfirm(names);
+      // Preserva el ORDEN de selección de `this.selected` (Set inserta en orden de clic).
+      const ids = [...this.selected];
+      this.onConfirm(ids);
     });
   }
 }
