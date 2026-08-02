@@ -4,7 +4,7 @@ import { PokemonMove, PokemonType } from '../engine/board.js';
 import { getMoveShape } from '../engine/moveShapes.js';
 import { selectMoves } from '../engine/moveSelection.js';
 import { getKnockback, isDash } from '../engine/moveTactics.js';
-import { sizeForSpecies } from '../engine/sizes.js';
+import { sizeForSpecies, visualScale } from '../engine/sizes.js';
 import { EvolutionModel } from '../models/EvolutionModel.js';
 import { parseEvolutionChain } from '../engine/evolution.js';
 import type { EvolutionInfo, EvolutionChainResponse } from '../engine/evolution.js';
@@ -104,9 +104,10 @@ export const PokemonService = {
   async getTemplate(name: string): Promise<PokemonTemplate> {
     const cached = await PokemonModel.findByName(name);
     if (cached) {
-      // Tamaño por especie (T4.1/D6): se aplica también al template cacheado (los
-      // guardados antes de esta mecánica tenían size 'medium').
+      // Tamaño/escala por especie (T4.1/T4.8): se aplican también al template cacheado
+      // (los guardados antes de esta mecánica tenían size 'medium' y sin escala).
       cached.size = sizeForSpecies(name);
+      cached.scale = visualScale(name);
       return cached;
     }
 
@@ -129,6 +130,7 @@ export const PokemonService = {
         type,
         speed: Math.max(2, Math.floor(statOf(data, 'speed', 60) / 20)),
         size: sizeForSpecies(name),
+        scale: visualScale(name),
       };
       await PokemonModel.save(tpl, data);
       // Importa el learnset completo (barato: viene en la misma respuesta).
@@ -145,6 +147,7 @@ export const PokemonService = {
         type: 'GRASS',
         speed: 3,
         size: sizeForSpecies(name),
+        scale: visualScale(name),
       };
       await PokemonModel.save(tpl);
       return tpl;
