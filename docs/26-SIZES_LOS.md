@@ -53,4 +53,16 @@ recibe el daño/KO/knockback/revelado en lugar del objetivo original (dedup por 
 — coloso enemigo intercepta y el de detrás queda intacto; sin coloso el objetivo recibe;
 un large aliado no bloquea. game-service 71/71.
 
-## T4.4 — Feedback de intercepción (frontend) *(pendiente)*
+## T4.4 — Feedback de intercepción (frontend)
+
+**Qué:** que se vea que el proyectil impacta en el muro (coloso) y no en el objetivo.
+
+**Cómo:** el daño de intercepción ya se emite en el hex del coloso (T4.3), así que el número
+flotante aparece sobre él. Además, `TurnEvent.blocked?` (nuevo en
+[`match.ts`](../packages/shared/src/match.ts)) marca el evento de daño interceptado;
+[`GameController.dispatchEvents`](../services/frontend/src/controllers/GameController.ts)
+reproduce un **flash de escudo 🛡️** sobre el coloso (primitiva `flash` de T0.4) junto al
+número. **Cierra la Épica 4.**
+
+**Verificación:** `tsc` limpio en los 3 workspaces, game-service 71/71. (Smoke visual
+pendiente por el tooling de Docker en el entorno.)

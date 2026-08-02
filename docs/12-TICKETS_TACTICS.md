@@ -783,9 +783,15 @@ no en mi objetivo, para entender por qué no hice daño.
 interceptor (flash/número) en vez de sobre el objetivo original.
 
 **Criterios de aceptación:**
-- [ ] Un ataque bloqueado muestra el impacto en el coloso.
+- [x] Un ataque bloqueado muestra el impacto en el coloso.
 
 **Dependencias:** →T4.3, →T0.4. **Paralelizable:** no.
+
+### ✅ Resolución (lo realmente hecho)
+
+El daño interceptado ya se emite en el hex del coloso (número flotante ahí). `TurnEvent.blocked?`
+marca el evento; `dispatchEvents` añade un flash de escudo 🛡️ sobre el coloso. Doc:
+[`26-SIZES_LOS.md`](26-SIZES_LOS.md).
 
 ---
 
