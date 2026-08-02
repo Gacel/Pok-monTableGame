@@ -572,6 +572,24 @@ los Pokémon, en combate y al final del turno, para seguir lo que pasa sin mirar
 'heal')` (verde). El `-N` rojo de combate y de fin de turno ya se pintaba desde T0.4.
 Verificado (usuario). Doc: [`22-PASSIVES_TERRAIN.md`](22-PASSIVES_TERRAIN.md). **Cierra la Épica 2.**
 
+## 🎟️ FIX-voladores — Los voladores sufrían daño de suelo (lava/pantano) ✅
+
+**Historia:** Como jugador, quiero que mis Pokémon voladores **no** sufran daño de pantano ni
+de lava (no pisan el suelo), aunque en el juego tengan otro tipo (Charizard, Gyarados…).
+
+**Bug:** `terrainDamage` solo eximía al tipo de dominio `FLYING`, pero con el modelo de **tipo
+único** casi ningún volador Gen 1 tiene Flying como primario, así que recibían daño de suelo.
+
+**Criterios de aceptación:**
+- [x] Una especie voladora (Flying en cualquier slot) es inmune a lava y pantano.
+- [x] No cambia el movimiento, solo el daño de terreno. Tests.
+
+### ✅ Resolución (lo realmente hecho)
+
+Ver [`16-TERRAIN_EFFECTS.md`](16-TERRAIN_EFFECTS.md) §FIX-voladores. Marca `airborne` derivada
+por especie (`engine/airborne.ts`, set curado Gen 1), fijada en `getTemplate` como `size`/
+`scale`; `terrainDamage` devuelve 0 en FIRE/SWAMP para `airborne`. game-service 105/105.
+
 ---
 
 # ÉPICA 3 — Movimientos Tácticos (Fase 5)

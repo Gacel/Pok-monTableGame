@@ -12,6 +12,8 @@ export interface PokemonTemplate {
   size: 'small' | 'medium' | 'large';
   /** Escala visual (derivada en lectura; no se persiste). */
   scale?: number;
+  /** Especie voladora (derivada en lectura; no se persiste). */
+  airborne?: boolean;
 }
 
 /** Capa MODELO: caché de plantillas de Pokémon (datos derivados de PokeAPI). */

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { Board, Pokemon } from '../src/engine/board.js';
 import { GameService } from '../src/services/GameService.js';
 import { terrainDamage } from '../src/engine/environment.js';
+import { isAirborne } from '../src/engine/airborne.js';
 import type { PlayerResources, Biome } from '@transcendence/shared';
 
 const res = (): PlayerResources => ({ FIRE_CANDY: 0, WATER_CANDY: 0, GRASS_CANDY: 0 });
@@ -60,10 +61,31 @@ describe('engine · terrainDamage (lógica pura)', () => {
     expect(terrainDamage(steel, 'SWAMP')).toBe(0);
   });
 
-  it('Volador no toca el suelo: inmune a lava y pantano', () => {
+  it('Volador (tipo FLYING) no toca el suelo: inmune a lava y pantano', () => {
     const flying = mk({ id: 'fl', playerId: 'player1', type: 'FLYING', lavaTurns: 3 });
     expect(terrainDamage(flying, 'FIRE')).toBe(0);
     expect(terrainDamage(flying, 'SWAMP')).toBe(0);
+  });
+
+  it('Especie voladora con tipo de dominio NO-FLYING (airborne) también es inmune al suelo', () => {
+    // Charizard→FIRE, Gyarados→WATER, Pidgey→NORMAL en el modelo de tipo único, pero vuelan.
+    const gyaradosLike = mk({ id: 'gy', playerId: 'player1', type: 'WATER', airborne: true, lavaTurns: 3 });
+    expect(terrainDamage(gyaradosLike, 'FIRE')).toBe(0); // sin la marca: 1·4 = 4
+    expect(terrainDamage(gyaradosLike, 'SWAMP')).toBe(0); // sin la marca: 2
+
+    // Sin la marca, el mismo tipo SÍ sufre daño (control).
+    const grounded = mk({ id: 'gr', playerId: 'player1', type: 'WATER', lavaTurns: 1 });
+    expect(terrainDamage(grounded, 'FIRE')).toBe(1);
+    expect(terrainDamage(grounded, 'SWAMP')).toBe(2);
+  });
+
+  it('isAirborne reconoce voladores Gen 1 (cualquier slot) y no a los de suelo', () => {
+    for (const n of ['charizard', 'gyarados', 'pidgey', 'zubat', 'dragonite', 'aerodactyl', 'moltres']) {
+      expect(isAirborne(n), n).toBe(true);
+    }
+    for (const n of ['bulbasaur', 'snorlax', 'onix', 'pikachu', 'magikarp', 'diglett']) {
+      expect(isAirborne(n), n).toBe(false);
+    }
   });
 
   it('hierba alta: una Planta se cura 8% maxHp (negativo); otros tipos, 0 (T2.2)', () => {

@@ -77,6 +77,8 @@ export interface Pokemon {
   size: PokemonSize;
   /** Escala visual continua del sprite (de las dimensiones reales). ~[0.72, 2.15]. */
   scale?: number;
+  /** Especie voladora: inmune al daño de terreno de suelo (lava/pantano). Derivado de PokeAPI. */
+  airborne?: boolean;
   hp: number;
   maxHp: number;
   /** Ataque base (por defecto 50 si no se especifica). */
