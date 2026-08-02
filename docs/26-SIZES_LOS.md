@@ -112,3 +112,18 @@ por el mapa se resaltan las casillas que **ocuparía** (7 si es `large`, 1 si no
 huella sobre el hover (centro + vecinos con `EDGE_DIRS`) y si el sitio es **válido** (todas
 dentro de la zona de despliegue y libres) → **verde**; si no → **rojo**. Actualiza en cada
 `mousemove` (el hover ya dispara render).
+
+## T4.8 — Rediseño de tamaños (footprint curado + escala visual continua)
+
+Se separan dos conceptos (antes pegados: todos los large se veían idénticos):
+- **Footprint táctico** (`sizeForSpecies`, `large` = 7 hexes): **lista curada** de 8 colosos
+  (`onix, gyarados, dragonite, kangaskhan, snorlax, venusaur, exeggutor, golem`). La fórmula
+  height/weight pura metía colosos indeseados (arbok/dragonair/mewtwo puntúan alto por
+  altura), así que se eligen a mano. Lapras queda **medium** (por decisión del usuario).
+- **Escala visual** (`visualScale`, continua): de las dimensiones reales de PokeAPI
+  (`engine/gen1Dimensions.ts`, generado por script), `metric = height_m·∛weight_kg` acotada a
+  ~[0.72, 2.15]. Cada especie tiene su tamaño (Lapras se ve grande aunque su footprint sea
+  medium). `PokemonMove`… `Pokemon.scale` viaja en el DTO; `EntityView` la usa para el sprite.
+
+**Verificación:** `sizes.test.ts` (lista de colosos, escala acotada y monótona). 84/84.
+*(Una partida en curso conserva tamaños; se aprecia al empezar una nueva.)*

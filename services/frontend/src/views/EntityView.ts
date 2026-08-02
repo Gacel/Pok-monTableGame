@@ -86,8 +86,9 @@ export class EntityView {
 
           const { x: screenX, y: screenY } = this.boardView.hexToScreen(tile.hex);
 
-          // Escalado por tamaño de especie (T4.2): los grandes ~2×, los pequeños ~0.75×.
-          const sizeMult = tile.occupant.size === 'large' ? 2 : tile.occupant.size === 'small' ? 0.75 : 1;
+          // Escala visual continua por especie (T4.8): de las dimensiones reales; cada
+          // Pokémon su tamaño (no el bucket small/medium/large uniforme).
+          const sizeMult = tile.occupant.scale ?? 1;
           const sSize = this.boardView.HEX_SIZE * 1.5 * this.state.zoom * sizeMult;
 
           // En agua el sprite se hunde: se recorta el tercio inferior, así que se baja

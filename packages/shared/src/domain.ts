@@ -71,6 +71,8 @@ export interface Pokemon {
   type: PokemonType;
   speed: number;
   size: PokemonSize;
+  /** Escala visual continua del sprite (de las dimensiones reales). ~[0.72, 2.15]. */
+  scale?: number;
   hp: number;
   maxHp: number;
   /** Ataque base (por defecto 50 si no se especifica). */
