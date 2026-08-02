@@ -298,9 +298,11 @@ export class HUDView {
       const teamEl = document.getElementById(`hud-${slot}-team`);
       if (teamEl && playerId) {
         const rightSide = slot === 'p2' || slot === 'p4';
-        const team = this.state.match?.tiles
-          .map((t) => t.occupant)
-          .filter((p): p is NonNullable<typeof p> => !!p && p.playerId === playerId && p.id !== occ.id) ?? [];
+        const teamSeen = new Set<string>();
+        const team = (this.state.match?.tiles.map((t) => t.occupant) ?? [])
+          .filter((p): p is NonNullable<typeof p> => !!p && p.playerId === playerId && p.id !== occ.id)
+          // Un `large` ocupa 7 casillas: dedup por id para no repetirlo en el HUD.
+          .filter((p) => (teamSeen.has(p.id) ? false : (teamSeen.add(p.id), true)));
         if (team.length === 0) {
           teamEl.innerHTML = '';
           teamEl.classList.add('hidden');

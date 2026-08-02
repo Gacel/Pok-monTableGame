@@ -7,11 +7,11 @@ import type { PokemonSize } from '@transcendence/shared';
  * Se aplica en `PokemonService.getTemplate` (también sobre el template cacheado).
  */
 
+// Solo colosos de verdad (mucho volumen/altura). Se dejan como `medium` los altos pero
+// esbeltos o de tamaño humano (Mewtwo, los pájaros legendarios, Machamp, Rapidash…).
 const LARGE = new Set<string>([
-  'venusaur', 'charizard', 'blastoise', 'arcanine', 'machamp', 'golem', 'rapidash',
-  'slowbro', 'muk', 'cloyster', 'onix', 'hitmonlee', 'rhydon', 'kangaskhan', 'seaking',
-  'gyarados', 'lapras', 'vaporeon', 'snorlax', 'dragonite', 'aerodactyl', 'exeggutor',
-  'victreebel', 'nidoking', 'nidoqueen', 'tauros', 'articuno', 'zapdos', 'moltres', 'mewtwo',
+  'venusaur', 'charizard', 'blastoise', 'arcanine', 'golem', 'onix', 'rhydon', 'kangaskhan',
+  'gyarados', 'lapras', 'snorlax', 'dragonite', 'aerodactyl', 'exeggutor', 'nidoking', 'nidoqueen',
 ]);
 
 const SMALL = new Set<string>([
