@@ -572,49 +572,55 @@ export class GameService {
     
     this.log.push(`🔥 ${nameOf(caster)} lanza ${move.name.toUpperCase()}!`);
     
-    // Aplicar daño a todo ocupante en el área afectada
-    const processed = new Set<string>(); // para no dañar al mismo pokemon grande 2 veces
+    // Aplicar daño a todo ocupante enemigo del área afectada.
+    const processed = new Set<string>(); // para no dañar al mismo pokemon (incl. large) 2 veces
     for (const h of aoeHexes) {
       const tile = this.board.getTile(h);
-      if (tile && tile.occupant && !processed.has(tile.occupant.id)) {
-         // Evitar fuego amigo a no ser que el ataque lo especifique (simplificado: daña a todos los enemigos)
-         if (!this.sameTeam(tile.occupant.playerId, caster.playerId)) {
-            processed.add(tile.occupant.id);
-            const targetTerrain = tile.biome;
-            const casterTerrain = this.board.getTile(from)?.biome ?? 'GRASS';
-            
-            const dmg = computeMoveDamage(caster, tile.occupant, move, casterTerrain, targetTerrain);
-            if (dmg > 0) {
-              tile.occupant.hp = Math.max(0, tile.occupant.hp - dmg);
-              hits++;
-              this.log.push(`💥 ${nameOf(tile.occupant)} recibe ${dmg} de daño (HP: ${tile.occupant.hp}).`);
-              this.events.push({ kind: 'damage', pokemonId: tile.occupant.id, hex: tile.hex, delta: -dmg });
+      if (!tile || !tile.occupant) continue;
+      if (this.sameTeam(tile.occupant.playerId, caster.playerId)) continue;
 
-              if (tile.occupant.hp <= 0) {
-                 this.log.push(`💀 ¡${nameOf(tile.occupant)} ha caído KO!`);
-                 this.events.push({ kind: 'ko', pokemonId: tile.occupant.id, hex: tile.hex });
-                 this.defeats.push({ killerSlot: caster.playerId, victimSlot: tile.occupant.playerId });
-                 this.addKo(caster.playerId);
-                 this.dropBall(tile.occupant, tile.hex);
-                 this.board.setOccupant(tile.hex, null);
-              } else {
-                 // Sobrevive al impacto directo.
-                 if (tile.occupant.isHidden) {
-                   // Golpeado por AoE: se descubre (T1.1). `revealed` evita que
-                   // updateStealthVisibility lo vuelva a ocultar estando quieto.
-                   tile.occupant.isHidden = false;
-                   tile.occupant.revealed = true;
-                   this.log.push(`👁️ ¡${nameOf(tile.occupant)} ha sido descubierto!`);
-                   this.events.push({ kind: 'reveal', pokemonId: tile.occupant.id, hex: tile.hex });
-                 }
-                 // Empuje (knockback) desde el atacante — T3.1.
-                 if (move.knockback) {
-                   const dir = hexDirection(from, tile.hex);
-                   this.applyKnockback(tile.hex, dir, move.knockback, tile.occupant, caster.playerId);
-                 }
-              }
-            }
-         }
+      // Línea de visión / bodyblocking (T4.3, D3): si un `large` enemigo se interpone
+      // entre el atacante y este hex, intercepta el impacto (lo recibe él; lo que hay
+      // detrás queda a la sombra). Aplica a línea, cono y ondas radiales por igual.
+      const block = this.losBlocker(from, h, tile.occupant.id, caster);
+      const victim = block?.occ ?? tile.occupant;
+      const victimHex = block?.hex ?? tile.hex;
+      if (processed.has(victim.id)) continue;
+      processed.add(victim.id);
+
+      const targetTerrain = this.board.getTile(victimHex)?.biome ?? tile.biome;
+      const casterTerrain = this.board.getTile(from)?.biome ?? 'GRASS';
+      const dmg = computeMoveDamage(caster, victim, move, casterTerrain, targetTerrain);
+      if (dmg <= 0) continue;
+
+      victim.hp = Math.max(0, victim.hp - dmg);
+      hits++;
+      if (block) this.log.push(`🛡️ ${nameOf(victim)} intercepta el ataque con su cuerpo!`);
+      this.log.push(`💥 ${nameOf(victim)} recibe ${dmg} de daño (HP: ${victim.hp}).`);
+      this.events.push({ kind: 'damage', pokemonId: victim.id, hex: victimHex, delta: -dmg, ...(block ? { blocked: true } : {}) });
+
+      if (victim.hp <= 0) {
+        this.log.push(`💀 ¡${nameOf(victim)} ha caído KO!`);
+        this.events.push({ kind: 'ko', pokemonId: victim.id, hex: victimHex });
+        this.defeats.push({ killerSlot: caster.playerId, victimSlot: victim.playerId });
+        this.addKo(caster.playerId);
+        this.dropBall(victim, victimHex);
+        this.board.setOccupant(victimHex, null);
+      } else {
+        // Sobrevive al impacto directo.
+        if (victim.isHidden) {
+          // Golpeado por AoE: se descubre (T1.1). `revealed` evita que
+          // updateStealthVisibility lo vuelva a ocultar estando quieto.
+          victim.isHidden = false;
+          victim.revealed = true;
+          this.log.push(`👁️ ¡${nameOf(victim)} ha sido descubierto!`);
+          this.events.push({ kind: 'reveal', pokemonId: victim.id, hex: victimHex });
+        }
+        // Empuje (knockback) desde el atacante — T3.1.
+        if (move.knockback) {
+          const dir = hexDirection(from, victimHex);
+          this.applyKnockback(victimHex, dir, move.knockback, victim, caster.playerId);
+        }
       }
     }
     
@@ -628,6 +634,34 @@ export class GameService {
     this.updateStealthVisibility();
     this.checkWinCondition();
     return { ok: true, state: this.getStateDTO() };
+  }
+
+  /**
+   * Línea de visión / bodyblocking (T4.3, D3): busca un `large` ENEMIGO que se interponga
+   * entre el atacante (`from`) y el hex objetivo (`target`), excluyendo el propio origen y
+   * el objetivo. Si lo hay, ese coloso intercepta el impacto. Los aliados no bloquean tu
+   * disparo (por jugabilidad) y el objetivo no se auto-bloquea.
+   */
+  private losBlocker(
+    from: Hex,
+    target: Hex,
+    targetId: string,
+    caster: Pokemon
+  ): { occ: Pokemon; hex: Hex } | null {
+    const line = hexLineDraw(from, target);
+    for (let i = 1; i < line.length - 1; i++) {
+      const o = this.board.getOccupant(line[i]!);
+      if (
+        o &&
+        o.size === 'large' &&
+        o.id !== targetId &&
+        o.id !== caster.id &&
+        !this.sameTeam(o.playerId, caster.playerId)
+      ) {
+        return { occ: o, hex: line[i]! };
+      }
+    }
+    return null;
   }
 
   /**

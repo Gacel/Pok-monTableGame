@@ -702,15 +702,22 @@ se desarrolla en este lote**. Retomar tras estabilizar el resto de la Fase 5.
 **Dudas resueltas (D6):** auto por height/weight + overrides.
 
 **Criterios de aceptación:**
-- [ ] Snorlax/Lapras/Onix salen `large`; Pikachu/Clefairy/etc. `small`; el grueso `medium`.
-- [ ] Un `large` ocupa 7 hexes en partida (ya soportado por `getOccupiedHexes`).
-- [ ] Tests de la clasificación (con casos de override).
+- [x] Snorlax/Lapras/Onix salen `large`; Pikachu/Clefairy/etc. `small`; el grueso `medium`.
+- [x] Un `large` ocupa 7 hexes en partida (ya soportado por `getOccupiedHexes`).
+- [x] Tests de la clasificación (con casos de override).
 
 **Investigación:** `getTemplate` size (`PokemonService.ts:119,135`), `getOccupiedHexes`
 (`board.ts:36-41`), `canEnter` large→montaña (`environment.ts:57-59`), tipo
 `PokemonSize` (`domain.ts:29-30`).
 
 **Dependencias:** ninguna (tras TR.1). **Paralelizable:** sí.
+
+### ✅ Resolución (lo realmente hecho)
+
+`engine/sizes.ts` (`sizeForSpecies`, mapa curado LARGE/SMALL de Gen 1 — D6, más fiable que
+height/weight). `getTemplate` lo aplica al template nuevo y al **cacheado** (cache-safe, sin
+reset de BD). `build`/`buildPokemon` ya propagan el size. Test `sizes.test.ts` (68/68).
+Doc: [`26-SIZES_LOS.md`](26-SIZES_LOS.md).
 
 ## 🎟️ T4.2 — Render de Pokémon Large (frontend)
 
@@ -722,12 +729,18 @@ las 7 casillas que ocupan resaltadas, para leer el tablero.
 2. `BoardView`: highlight de los 7 hexes ocupados por un large.
 
 **Criterios de aceptación:**
-- [ ] Un large se ve claramente mayor y su huella (7 hexes) está resaltada.
+- [x] Un large se ve claramente mayor y su huella (7 hexes) está resaltada.
 
 **Investigación:** `EntityView.ts` (`sSize = HEX_SIZE*1.5*zoom`, no lee `size`),
 `BoardView.ts` (sin concepto de huella multi-hex).
 
 **Dependencias:** →T4.1. **Paralelizable:** no.
+
+### ✅ Resolución (lo realmente hecho)
+
+`EntityView` agrupa por id y dibuja el sprite una vez en el **centro** (centroide), con
+escalado por tamaño (large ×2, small ×0.75). `BoardView` resalta la huella (ámbar) de cada
+casilla de un large. Doc: [`26-SIZES_LOS.md`](26-SIZES_LOS.md).
 
 ## 🎟️ T4.3 — Línea de visión + Bodyblocking (backend)
 
@@ -744,15 +757,22 @@ para bloquear proyectiles y ondas y proteger a los que están detrás.
 **Dudas resueltas (D3):** bloquea línea Y radiales-detrás (LoS por hex del AoE).
 
 **Criterios de aceptación:**
-- [ ] Un Hiperrayo contra alguien tras un `large` impacta en el `large`.
-- [ ] Una explosión radial no daña a los hexes en sombra del `large`.
-- [ ] Tests del motor de LoS/oclusión para line y radius/cone.
+- [x] Un Hiperrayo contra alguien tras un `large` impacta en el `large`.
+- [x] Una explosión radial no daña a los hexes en sombra del `large`.
+- [x] Tests del motor de LoS/oclusión para line y radius/cone.
 
 **Investigación:** `cast` daño (`GameService.ts:435-458`), `calculateAoE`
 (`packages/shared/src/combat.ts:94-102`, sin conocimiento de ocupantes → el filtrado va
 en el llamador game-service), `hexLineDraw` (T0.3), `getOccupiedHexes` (`board.ts:36-41`).
 
 **Dependencias:** →T0.3, →T4.1. **Paralelizable:** no.
+
+### ✅ Resolución (lo realmente hecho)
+
+`GameService.losBlocker` (línea `hexLineDraw`, busca un large enemigo intermedio); el bucle
+de daño usa `victim = blocker ?? occupant` → el coloso recibe daño/KO/knockback/revelado y lo
+de detrás queda a la sombra. Aliados no bloquean; dedup por id. Tests `bodyblock.test.ts`
+(71/71). Doc: [`26-SIZES_LOS.md`](26-SIZES_LOS.md).
 
 ## 🎟️ T4.4 — Feedback de intercepción (frontend)
 
@@ -763,9 +783,15 @@ no en mi objetivo, para entender por qué no hice daño.
 interceptor (flash/número) en vez de sobre el objetivo original.
 
 **Criterios de aceptación:**
-- [ ] Un ataque bloqueado muestra el impacto en el coloso.
+- [x] Un ataque bloqueado muestra el impacto en el coloso.
 
 **Dependencias:** →T4.3, →T0.4. **Paralelizable:** no.
+
+### ✅ Resolución (lo realmente hecho)
+
+El daño interceptado ya se emite en el hex del coloso (número flotante ahí). `TurnEvent.blocked?`
+marca el evento; `dispatchEvents` añade un flash de escudo 🛡️ sobre el coloso. Doc:
+[`26-SIZES_LOS.md`](26-SIZES_LOS.md).
 
 ---
 
