@@ -2,6 +2,7 @@ import type { Hex } from '@transcendence/shared';
 import { GameService, PlayResult } from './GameService.js';
 import { matchManager } from './MatchManager.js';
 import { EconomyService } from './EconomyService.js';
+import { ProgressionService } from './ProgressionService.js';
 import { hub } from '../realtime/hub.js';
 
 export type GameAction =
@@ -63,6 +64,7 @@ export const GameActionService = {
     } else if (ctx.matchId) {
       await matchManager.persistMatch(ctx.matchId);
       await EconomyService.awardForResult(ctx.matchId, result);
+      await ProgressionService.awardMatchXp(result.state); // XP a las instancias propias (T6.1)
     }
 
     hub.broadcastPersonalized(ctx.room, (sCtx) => ({ type: 'state', state: ctx.game.getStateDTO(sCtx.slot ?? undefined) }));
