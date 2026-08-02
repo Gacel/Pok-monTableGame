@@ -46,3 +46,39 @@ export function scaledVitals(
     def: scaleStat(base.def, level),
   };
 }
+
+// ----------------------------------------------------------------- XP (T6.1)
+
+/** XP base del primer nivel (subir de 1→2). */
+const XP_BASE = 25;
+
+/**
+ * XP necesaria para pasar DE `level` a `level+1`. Curva lineal ajustable
+ * (`XP_BASE·level`): barata al principio, más cara a niveles altos. En el cap no hay
+ * siguiente nivel (Infinity ⇒ la XP deja de acumular).
+ */
+export function xpToNext(level: number): number {
+  if (clampLevel(level) >= LEVEL_CAP) return Infinity;
+  return XP_BASE * clampLevel(level);
+}
+
+/**
+ * Aplica `gained` XP a una instancia `{level, xp}` y resuelve las subidas de nivel en
+ * cascada. Determinista y pura. En el cap la XP se congela a 0 (no hay a dónde subir).
+ */
+export function applyXp(
+  level: number,
+  xp: number,
+  gained: number
+): { level: number; xp: number; levelsGained: number } {
+  let lv = clampLevel(level);
+  let acc = Math.max(0, xp) + Math.max(0, gained);
+  let levelsGained = 0;
+  while (lv < LEVEL_CAP && acc >= xpToNext(lv)) {
+    acc -= xpToNext(lv);
+    lv += 1;
+    levelsGained += 1;
+  }
+  if (lv >= LEVEL_CAP) acc = 0;
+  return { level: lv, xp: acc, levelsGained };
+}

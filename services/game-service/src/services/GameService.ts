@@ -192,7 +192,7 @@ export class GameService {
    * consume para dar 500 monedas al killer. Efímero: se resetea al inicio de cada
    * acción y NO se serializa.
    */
-  private defeats: { killerSlot: string; victimSlot: string }[] = [];
+  private defeats: { killerSlot: string; victimSlot: string; killerOwnedId?: string }[] = [];
 
   /**
    * Bolas a conceder al usuario de cada slot (al ganar o abandonar en arena).
@@ -616,7 +616,7 @@ export class GameService {
       if (victim.hp <= 0) {
         this.log.push(`💀 ¡${nameOf(victim)} ha caído KO!`);
         this.events.push({ kind: 'ko', pokemonId: victim.id, hex: victimHex });
-        this.defeats.push({ killerSlot: caster.playerId, victimSlot: victim.playerId });
+        this.defeats.push({ killerSlot: caster.playerId, victimSlot: victim.playerId, ...(caster.ownedId ? { killerOwnedId: caster.ownedId } : {}) });
         this.addKo(caster.playerId);
         this.dropBall(victim, victimHex);
         this.board.setOccupant(victimHex, null);
@@ -633,7 +633,7 @@ export class GameService {
         // Empuje (knockback) desde el atacante — T3.1.
         if (move.knockback) {
           const dir = hexDirection(from, victimHex);
-          this.applyKnockback(victimHex, dir, move.knockback, victim, caster.playerId);
+          this.applyKnockback(victimHex, dir, move.knockback, victim, caster.playerId, caster.ownedId);
         }
       }
     }
@@ -701,7 +701,7 @@ export class GameService {
           if (occ.hp <= 0) {
             this.log.push(`💀 ¡${nameOf(occ)} ha caído KO!`);
             this.events.push({ kind: 'ko', pokemonId: occ.id, hex: h });
-            this.defeats.push({ killerSlot: caster.playerId, victimSlot: occ.playerId });
+            this.defeats.push({ killerSlot: caster.playerId, victimSlot: occ.playerId, ...(caster.ownedId ? { killerOwnedId: caster.ownedId } : {}) });
             this.addKo(caster.playerId);
             this.dropBall(occ, h);
             this.board.setOccupant(h, null);
@@ -735,7 +735,7 @@ export class GameService {
    * detiene ante obstáculo/pieza/borde y, en ese caso, recibe 10% maxHp de colisión.
    * Emite evento `knockback` (from→to) y, si procede, daño/KO de colisión.
    */
-  private applyKnockback(startHex: Hex, dir: Hex, distance: number, occ: Pokemon, killerSlot: string): void {
+  private applyKnockback(startHex: Hex, dir: Hex, distance: number, occ: Pokemon, killerSlot: string, killerOwnedId?: string): void {
     if (occ.size === 'large') return; // Large inmunes al empuje
     if (dir.q === 0 && dir.r === 0) return;
 
@@ -763,7 +763,7 @@ export class GameService {
       if (occ.hp <= 0) {
         this.log.push(`💀 ¡${nameOf(occ)} ha caído KO por el impacto!`);
         this.events.push({ kind: 'ko', pokemonId: occ.id, hex: cur });
-        this.defeats.push({ killerSlot, victimSlot: occ.playerId });
+        this.defeats.push({ killerSlot, victimSlot: occ.playerId, ...(killerOwnedId ? { killerOwnedId } : {}) });
         this.addKo(killerSlot);
         this.dropBall(occ, cur);
         this.board.setOccupant(cur, null);

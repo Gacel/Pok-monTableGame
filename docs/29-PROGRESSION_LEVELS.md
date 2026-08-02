@@ -67,3 +67,33 @@ aguantan más.
 **Verificación:** [`test/progression.test.ts`](../services/game-service/test/progression.test.ts)
 — Lv.1 = base; monotonía por nivel; saturación en `[1,100]`; `scaledVitals` (hp lleno,
 atk/def crecen). game-service **94/94**, `tsc` limpio.
+
+## T6.1 — XP y subida de nivel
+
+**Por qué:** los Pokémon propios deben **progresar** combatiendo: ganar XP, subir de nivel
+(y, con T6.2, hacerse más fuertes), de forma persistente.
+
+**Cómo:**
+- **Columna `xp`** en `owned_pokemon` (default 0; migración defensiva + en `CREATE TABLE`).
+- **Curva pura** en [`engine/progression.ts`](../services/game-service/src/engine/progression.ts):
+  - `xpToNext(level) = 25·level` (lineal, más cara a niveles altos); `Infinity` en el cap.
+  - `applyXp(level, xp, gained)` → resuelve subidas **en cascada**; en el cap la XP se congela.
+- **Persistencia** ([`OwnedPokemonModel.addXp`](../services/game-service/src/models/OwnedPokemonModel.ts)):
+  lee la instancia, aplica la curva y guarda `level`+`xp`; devuelve el nuevo estado y
+  `levelsGained`.
+- **Atribución por instancia**: `defeats` lleva ahora `killerOwnedId` (el `ownedId` del
+  atacante) — poblado en cast, dash y knockback. `MatchStateDTO.defeats` lo transporta.
+- **Reparto** ([`ProgressionService.awardMatchXp`](../services/game-service/src/services/ProgressionService.ts)),
+  llamado junto a la economía en `GameActionService` (solo online/arena; las piezas de
+  draft/local no tienen `ownedId` y se ignoran):
+  - **+30 XP por KO** a la instancia atacante (`killerOwnedId`).
+  - **+40 XP** a cada instancia propia **viva del bando ganador** al finalizar (una vez por
+    `ownedId`: los colosos ocupan varias casillas).
+
+**Nota:** la UI de nivel/XP (inventario, ficha, HUD) es **T6.4**. La atribución fina de XP
+depende de que la pieza lleve `ownedId` (T6.3), ya resuelto: por eso T6.1 va después.
+
+**Verificación:** `progression.test.ts` (curva: umbral, cascada, cap) +
+[`test/xpAward.test.ts`](../services/game-service/test/xpAward.test.ts) (`addXp` persiste y
+sube; XP por KO al atacante; bonus de victoria solo a supervivientes ganadores, una vez por
+coloso, nada al perdedor). game-service **103/103**, `tsc` limpio, contenedor OK.

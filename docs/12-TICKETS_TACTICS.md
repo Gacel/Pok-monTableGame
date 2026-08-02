@@ -1137,8 +1137,8 @@ combatiendo y suban de nivel, para progresar con mi colección.
 **Dudas resueltas (D14):** XP en batalla + subida de nivel.
 
 **Criterios de aceptación:**
-- [ ] Un Pokémon que combate y hace KOs gana XP y puede subir de nivel (persistente).
-- [ ] Tests de la curva de XP y el level-up.
+- [x] Un Pokémon que combate y hace KOs gana XP y puede subir de nivel (persistente).
+- [x] Tests de la curva de XP y el level-up.
 
 **Investigación:** `owned_pokemon` (`db.ts:120-129`, `level` default 1 nunca mutado),
 `OwnedPokemonModel` (sin `xp`, `grantMany` fija level=1), `EconomyService.awardForResult`
@@ -1146,6 +1146,14 @@ combatiendo y suban de nivel, para progresar con mi colección.
 
 **Dependencias:** ninguna para el nivel/XP base; la atribución fina depende de T6.3.
 **Paralelizable:** sí (parte).
+
+### ✅ Resolución (lo realmente hecho)
+
+Ver [`29-PROGRESSION_LEVELS.md`](29-PROGRESSION_LEVELS.md) §T6.1. Columna `xp`; curva pura
+`xpToNext`/`applyXp` (lineal, cap 100, cascada); `OwnedPokemonModel.addXp` persiste;
+`defeats.killerOwnedId` para atribuir; `ProgressionService.awardMatchXp` (+30 por KO al
+atacante, +40 a supervivientes ganadores) enganchado junto a la economía. game-service
+103/103.
 
 ## 🎟️ T6.2 — Escalado de stats por nivel
 

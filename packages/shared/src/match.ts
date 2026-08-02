@@ -56,8 +56,9 @@ export interface MatchStateDTO {
   eliminated: string[];
   /** ARENA: partida persistente que nunca termina. */
   persistent: boolean;
-  /** Bajas por KO de la última acción (para economía). Efímero, no persistido. */
-  defeats: { killerSlot: string; victimSlot: string }[];
+  /** Bajas por KO de la última acción (para economía y XP). Efímero, no persistido.
+   *  `killerOwnedId`: instancia (owned_pokemon.id) del atacante, para atribuir XP (T6.1). */
+  defeats: { killerSlot: string; victimSlot: string; killerOwnedId?: string }[];
   /** Tiempo límite de la fase de despliegue en formato UNIX (ms). */
   deploymentDeadline?: number;
   /** Pokémon pendientes de desplegar en Turno 0. */

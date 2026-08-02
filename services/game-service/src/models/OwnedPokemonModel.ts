@@ -1,11 +1,14 @@
 import crypto from 'node:crypto';
 import { getDb } from './db.js';
+import { applyXp } from '../engine/progression.js';
 
 export interface OwnedPokemonRecord {
   id: string;
   user_id: string;
   name: string;
   level: number;
+  /** XP acumulada hacia el siguiente nivel (T6.1). */
+  xp: number;
   is_starter: number;
   is_shiny: number;
   acquired_via: string;
@@ -119,5 +122,20 @@ export const OwnedPokemonModel = {
     const rows = await this.findManyByIds(ids);
     if (rows.length !== ids.length) return false;
     return rows.every((r) => r.user_id === userId && (r.auction_id ?? null) === null);
+  },
+
+  /**
+   * Otorga `amount` XP a una instancia y persiste el nivel/XP resultantes (subidas en
+   * cascada según la curva, T6.1). Devuelve el nuevo estado y cuántos niveles subió, o
+   * `null` si la instancia no existe.
+   */
+  async addXp(id: string, amount: number): Promise<{ level: number; xp: number; levelsGained: number } | null> {
+    if (amount <= 0) return null;
+    const db = await getDb();
+    const rec = await this.findById(id);
+    if (!rec) return null;
+    const next = applyXp(rec.level, rec.xp ?? 0, amount);
+    await db.run('UPDATE owned_pokemon SET level = ?, xp = ? WHERE id = ?', next.level, next.xp, id);
+    return next;
   },
 };
