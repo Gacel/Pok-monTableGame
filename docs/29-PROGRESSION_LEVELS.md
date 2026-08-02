@@ -97,3 +97,31 @@ depende de que la pieza lleve `ownedId` (T6.3), ya resuelto: por eso T6.1 va des
 [`test/xpAward.test.ts`](../services/game-service/test/xpAward.test.ts) (`addXp` persiste y
 sube; XP por KO al atacante; bonus de victoria solo a supervivientes ganadores, una vez por
 coloso, nada al perdedor). game-service **103/103**, `tsc` limpio, contenedor OK.
+
+## T6.4 — UI de nivel/XP
+
+**Por qué:** el jugador debe **ver** el nivel y el progreso de XP de sus Pokémon: en el
+inventario, en la ficha y en el HUD de combate.
+
+**Cómo:**
+- **Endpoint** ([`InventoryController`](../services/game-service/src/controllers/InventoryController.ts)):
+  `/api/inventory` devuelve ahora `xp` y `xpToNext` (`null` en el nivel máximo, porque JSON no
+  admite `Infinity`); además `hp/atk/def` van **escalados por nivel** (`scaledVitals`), para
+  que la ficha muestre la fuerza real de esa instancia.
+- **Ficha** ([`PokemonDetailModal`](../services/frontend/src/views/hub/PokemonDetailModal.ts)):
+  barra de progreso de XP (`xpBar`) bajo el nivel — `xp/xpToNext` con relleno verde; en el
+  nivel máximo, distintivo «★ NIVEL MÁXIMO».
+- **Inventario** ([`InventoryView`](../services/frontend/src/views/hub/InventoryView.ts)): ya
+  mostraba `Lv.N`; ahora propaga `xp`/`xpToNext` a la ficha.
+- **HUD de combate** ([`HUDView`](../services/frontend/src/views/HUDView.ts)): el nombre del
+  Pokémon activo muestra `· Lv.N`, y cada pieza del roster lleva su `Lv.N` sobre la barra de
+  vida (y en el tooltip).
+
+**Verificación:** `tsc` limpio (frontend + game-service), build OK, contenedores recompilados.
+La UI muestra nivel y progreso en inventario, ficha y HUD.
+
+---
+
+**Épica 6 cerrada** (T6.3 → T6.2 → T6.1 → T6.4). Las instancias propias tienen identidad
+(`ownedId`), nivel real, stats escaladas, XP que sube de nivel combatiendo, y todo se ve en la
+UI. Habilita la Épica 7 (unificar a Pokémon propios) y la Épica 8 (captura por `ownedId`).

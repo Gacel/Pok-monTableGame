@@ -12,6 +12,10 @@ interface InvPokemon {
   id: string;
   name: string;
   level: number;
+  /** XP acumulada hacia el siguiente nivel (T6.4). */
+  xp?: number;
+  /** XP total para subir; null en el nivel máximo. */
+  xpToNext?: number | null;
   isStarter: boolean;
   isShiny?: boolean;
   acquiredVia: string;
@@ -111,6 +115,8 @@ export class InventoryView {
       name: p.name,
       type: p.type as PokemonType,
       level: p.level,
+      xp: p.xp,
+      xpToNext: p.xpToNext,
       hp: p.hp,
       atk: p.atk,
       def: p.def,

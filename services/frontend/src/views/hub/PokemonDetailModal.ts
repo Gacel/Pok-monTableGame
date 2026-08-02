@@ -36,6 +36,10 @@ export interface PokemonDetailSeed {
   name: string;
   type?: PokemonType;
   level?: number;
+  /** XP acumulada hacia el siguiente nivel (T6.4). */
+  xp?: number;
+  /** XP total para subir; null/undefined en el nivel máximo. */
+  xpToNext?: number | null;
   hp?: number;
   atk?: number;
   def?: number;
@@ -84,6 +88,26 @@ function typeRelations(type: PokemonType): {
 
 function typeBadge(t: string, size = 6): string {
   return `<span style="${FONT} font-size:${size}px; background:${TYPE_COLOR[t] ?? '#666'}; color:#000; padding:2px 5px; border-radius:4px; line-height:1;">${escapeHtml(t)}</span>`;
+}
+
+/** Barra de progreso de XP hacia el siguiente nivel (T6.4). Vacía si no hay datos de XP. */
+function xpBar(seed: PokemonDetailSeed): string {
+  if (seed.xp == null) return '';
+  const max = seed.xpToNext;
+  if (max == null) {
+    // Nivel máximo: sin barra, solo distintivo.
+    return `<span class="text-yellow-400 mt-1" style="${FONT} font-size:6px;">★ NIVEL MÁXIMO</span>`;
+  }
+  const pct = Math.max(0, Math.min(100, Math.round((seed.xp / max) * 100)));
+  return `
+    <div class="w-32 mt-1.5">
+      <div class="flex justify-between text-gray-400" style="${FONT} font-size:5px;">
+        <span>XP</span><span>${seed.xp}/${max}</span>
+      </div>
+      <div class="w-full rounded-full bg-gray-800 border border-gray-700 overflow-hidden" style="height:6px;">
+        <div class="h-full bg-green-400" style="width:${pct}%;"></div>
+      </div>
+    </div>`;
 }
 
 function statChip(label: string, val: number | undefined, color: string): string {
@@ -159,6 +183,7 @@ function bodyHtml(
         ${curType ? typeBadge(curType, 7) : ''}
         ${seed.level != null ? `<span class="text-white" style="${FONT} font-size:7px;">Lv.${escapeHtml(seed.level)}</span>` : ''}
       </div>
+      ${xpBar(seed)}
     </div>
 
     <div class="grid grid-cols-3 gap-2 mt-3">

@@ -1229,11 +1229,18 @@ Pokémon en el inventario y en la partida.
 `PokemonDetailModal` y HUD de combate.
 
 **Criterios de aceptación:**
-- [ ] El inventario y la ficha muestran nivel y progreso; el HUD muestra el nivel en partida.
+- [x] El inventario y la ficha muestran nivel y progreso; el HUD muestra el nivel en partida.
 
 **Investigación:** `InventoryView.ts`, `PokemonDetailModal.ts`, `HUDView.ts`.
 
 **Dependencias:** →T6.2. **Paralelizable:** no.
+
+### ✅ Resolución (lo realmente hecho)
+
+Ver [`29-PROGRESSION_LEVELS.md`](29-PROGRESSION_LEVELS.md) §T6.4. `/api/inventory` expone
+`xp`/`xpToNext` (+ hp/atk/def escalados por nivel); la ficha dibuja una barra de XP (`xpBar`,
+«★ NIVEL MÁXIMO» en el cap); el HUD muestra `· Lv.N` en el activo y `Lv.N` en cada pieza del
+roster. **Épica 6 completa.**
 
 ---
 
