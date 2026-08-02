@@ -5,6 +5,9 @@ import { getMoveShape } from '../engine/moveShapes.js';
 import { selectMoves } from '../engine/moveSelection.js';
 import { getKnockback, isDash } from '../engine/moveTactics.js';
 import { sizeForSpecies } from '../engine/sizes.js';
+import { EvolutionModel } from '../models/EvolutionModel.js';
+import { parseEvolutionChain } from '../engine/evolution.js';
+import type { EvolutionInfo, EvolutionChainResponse } from '../engine/evolution.js';
 
 interface PokeApiStat {
   base_stat: number;
@@ -145,6 +148,32 @@ export const PokemonService = {
       };
       await PokemonModel.save(tpl);
       return tpl;
+    }
+  },
+
+  /**
+   * Catálogo de evolución por especie (T5.2): cache-first en SQLite; en fallo consulta
+   * `/pokemon-species/{name}` (para la URL de la cadena) y `/evolution-chain/{id}`, y
+   * parsea *fiel a PokeAPI*. Devuelve `null` si la especie no evoluciona.
+   */
+  async getEvolution(name: string): Promise<EvolutionInfo | null> {
+    const cached = await EvolutionModel.find(name);
+    if (cached) return cached.info;
+    try {
+      const species = await fetchJson<{ evolution_chain?: { url?: string } }>(
+        `https://pokeapi.co/api/v2/pokemon-species/${name.toLowerCase()}`
+      );
+      const url = species.evolution_chain?.url;
+      if (!url) {
+        await EvolutionModel.save(name, null);
+        return null;
+      }
+      const chain = await fetchJson<EvolutionChainResponse>(url);
+      const info = parseEvolutionChain(chain, name);
+      await EvolutionModel.save(name, info);
+      return info;
+    } catch {
+      return null; // no se cachea el fallo: se reintentará
     }
   },
 

@@ -1038,13 +1038,20 @@ lo clampado son las fuentes que conceden. Test `gen1.test.ts` (75/75). Doc:
 **Dudas resueltas (D13):** fiel a PokeAPI.
 
 **Criterios de aceptación:**
-- [ ] Para cualquier especie de Gen 1 se puede consultar su evolución y disparador.
-- [ ] Tests con casos: nivel (Charmander), piedra (Vulpix/Eevee), intercambio (Kadabra).
+- [x] Para cualquier especie de Gen 1 se puede consultar su evolución y disparador.
+- [x] Tests con casos: nivel (Charmander), piedra (Vulpix), intercambio (Kadabra).
 
 **Investigación:** `PokemonService.getTemplate` (`PokemonService.ts:97-140`), tablas
 `pokemons`/`moves`/`pokemon_moves` (`db.ts:36-140`), sin datos de evolución hoy.
 
 **Dependencias:** ninguna (tras TR.1). **Paralelizable:** sí.
+
+### ✅ Resolución (lo realmente hecho)
+
+`engine/evolution.ts` (`parseEvolutionChain`, puro, mapea level/stone/trade), tabla
+`evolutions` + `EvolutionModel`, `PokemonService.getEvolution` (species→chain→parse→cache).
+Guarda la primera rama (Eevee multi-evolución = una forma, se afina en Épica 9). Test
+`evolution.test.ts` (79/79). Doc: [`27-GEN1_SCOPE.md`](27-GEN1_SCOPE.md).
 
 ---
 

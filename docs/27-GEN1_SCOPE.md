@@ -27,4 +27,24 @@ que garantiza "ningún flujo nuevo instancia fuera de #1-151".
 duplicados, `isGen1` (acepta Gen 1, rechaza Gen 2+), la loot pool cubre **exactamente** los
 151 y los starters son todos Gen 1. game-service 75/75, `tsc` limpio.
 
-## T5.2 — Catálogo de especies: cadenas de evolución *(pendiente)*
+## T5.2 — Catálogo de especies: cadenas de evolución
+
+**Qué:** para cada especie, conocer su evolución (forma destino y disparador: nivel/piedra/
+intercambio), fiel a PokeAPI (D13). Base de la Épica 9 (evolución).
+
+**Cómo:**
+- [`engine/evolution.ts`](../services/game-service/src/engine/evolution.ts): `parseEvolutionChain(chain, name)`
+  (puro) recorre la `evolution_chain` de PokeAPI y devuelve `{ evolvesTo, trigger, minLevel?,
+  item? }` o `null` (forma final). Mapea `level-up`→`level`, `use-item`→`stone`, `trade`→`trade`.
+- Tabla `evolutions` (`db.ts`) + [`EvolutionModel`](../services/game-service/src/models/EvolutionModel.ts)
+  (find/save; cachea también el "sin evolución").
+- [`PokemonService.getEvolution(name)`](../services/game-service/src/services/PokemonService.ts):
+  cache-first; en fallo consulta `/pokemon-species/{name}` (URL de la cadena) y
+  `/evolution-chain/{id}`, parsea y cachea.
+
+**Nota:** se guarda la **primera rama** de la cadena; Eevee y otros multi-evolución quedan con
+una forma (se afinará en la Épica 9 si hace falta).
+
+**Verificación:** [`test/evolution.test.ts`](../services/game-service/test/evolution.test.ts)
+— nivel (Charmander), piedra (Vulpix/fire-stone), intercambio (Kadabra) y forma final → null.
+game-service 79/79. **Cierra la Épica 5.**
