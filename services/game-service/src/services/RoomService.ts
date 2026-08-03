@@ -248,6 +248,12 @@ export const RoomService = {
     return new Map(parseRoomPlayers(row).map((p) => [p.slot, p.userId]));
   },
 
+  /** Modo de juego de una sala online (para el robo PvP en BR, T8.4). */
+  async gameModeOf(matchId: string): Promise<GameMode | null> {
+    const row = await MatchModel.findRoom(matchId);
+    return (row?.game_mode as GameMode) ?? null;
+  },
+
   // --------------------------------------------------------------- ARENA (mundo vivo)
 
   /** Garantiza la fila + el mundo de la ARENA (persistente, estado `active`). */

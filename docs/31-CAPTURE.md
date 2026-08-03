@@ -80,3 +80,18 @@ ganador roba la instancia rival (cambia de dueño). game-service **113/113**, `t
 **Verificación:** `capture.test.ts` — `markLost`/`recoverLast` (retira y devuelve; no reutilizable
 en equipos mientras perdida); en Survival la IA que mata mi instancia la pierde (`kind:'lost'`)
 mientras yo capturo lo que derroto. game-service **116/116**, `tsc` limpio, contenedores OK.
+
+## T8.4 — Robo PvP en Battle Royale
+
+**Qué cambia:** el `CaptureService` ya sabía robar en `br` (transferir la instancia rival al
+ganador); T8.4 **engancha el path online**:
+- [`RoomService.gameModeOf(matchId)`](../services/game-service/src/services/RoomService.ts):
+  modo de juego de la sala.
+- [`GameActionService`](../services/game-service/src/services/GameActionService.ts): tras una
+  acción online, si el modo es **`br`**, resuelve capturas con `slotUserMap` → cada KO
+  **transfiere** (roba) la instancia derrotada al ganador y emite `{type:'capture'}` (`kind:'steal'`).
+- Los demás modos (1v1/2v2/arena) **no** roban: `CaptureService.resolve` solo actúa en
+  `survival`/`br`.
+
+**Verificación:** el robo BR está cubierto en `capture.test.ts` (el ganador se queda la
+instancia rival; los modos sin captura devuelven vacío). game-service **116/116**, `tsc` limpio.
