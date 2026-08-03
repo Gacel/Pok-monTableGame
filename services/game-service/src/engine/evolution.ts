@@ -4,6 +4,8 @@
  * qué disparador. Lógica pura y testeable (sin red ni SQLite).
  */
 
+import { STONE_LABEL_ES } from '@transcendence/shared';
+
 export type EvolutionTrigger = 'level' | 'stone' | 'trade' | 'other';
 
 export interface EvolutionInfo {
@@ -68,14 +70,8 @@ export function parseEvolutionChain(chain: EvolutionChainResponse, name: string)
 
 // ------------------------------------------------------- resolución (T9.1)
 
-/** Nombre en español de las piedras evolutivas de Gen 1 (slug PokeAPI → etiqueta). */
-export const STONE_ES: Record<string, string> = {
-  'fire-stone': 'Piedra Fuego',
-  'water-stone': 'Piedra Agua',
-  'thunder-stone': 'Piedra Trueno',
-  'leaf-stone': 'Piedra Hoja',
-  'moon-stone': 'Piedra Lunar',
-};
+/** Nombre en español de las piedras (re-export de la fuente única en shared). */
+export const STONE_ES = STONE_LABEL_ES;
 
 /** Requisito legible (español) de una evolución. */
 export function requirementLabel(info: EvolutionInfo): string {

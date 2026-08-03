@@ -3,9 +3,14 @@ import { UserModel } from '../models/UserModel.js';
 import { OwnedPokemonModel } from '../models/OwnedPokemonModel.js';
 import { BALLS, rollTier, pickFromTier } from '../services/loot.js';
 import { LOOT_POOL_TIERS } from '../services/lootPool.js';
+import { STONES, STONE_KIND, stoneByKey } from '../services/stones.js';
+import { ItemModel } from '../models/ItemModel.js';
 
 interface BuyBody {
   ball?: string;
+}
+interface BuyStoneBody {
+  stone?: string;
 }
 
 /** Precio de recuperar un Pokémon perdido en Survival (T8.3). */
@@ -61,6 +66,30 @@ export const ShopController = {
     await OwnedPokemonModel.grantMany(uid, [name], 'shop', isShiny);
 
     return { success: true, pokemon: { name, tier, isShiny }, coins: user.coins - ball.price };
+  },
+
+  /** Piedras evolutivas a la venta (T9.2). */
+  async stones(_request: FastifyRequest) {
+    return { success: true, stones: STONES.map((s) => ({ key: s.key, price: s.price, label: s.label })) };
+  },
+
+  /** Compra una piedra evolutiva: valida saldo, resta monedas y la añade al inventario. */
+  async buyStone(request: FastifyRequest<{ Body: BuyStoneBody }>, reply: FastifyReply) {
+    const uid = userId(request);
+    if (!uid) return reply.code(401).send({ success: false, error: 'No autenticado' });
+
+    const stone = stoneByKey((request.body?.stone ?? '').trim());
+    if (!stone) return reply.code(400).send({ success: false, error: 'Piedra inválida' });
+
+    const user = await UserModel.findById(uid);
+    if (!user) return reply.code(404).send({ success: false, error: 'Usuario no encontrado' });
+    if (user.coins < stone.price) {
+      return reply.code(402).send({ success: false, error: 'Monedas insuficientes', coins: user.coins });
+    }
+
+    await UserModel.addCoins(uid, -stone.price);
+    await ItemModel.add(uid, STONE_KIND, stone.key, 1);
+    return { success: true, stone: { key: stone.key, label: stone.label }, coins: user.coins - stone.price };
   },
 
   /**
