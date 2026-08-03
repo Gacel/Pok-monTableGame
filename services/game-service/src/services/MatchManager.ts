@@ -75,6 +75,16 @@ export class MatchManager {
   private rosterCache: PokemonTemplate[] | null = null;
   /** Partidas online en memoria, indexadas por matchId (carga perezosa). */
   private onlineMatches: Map<string, GameService> = new Map();
+  /** Metadatos de la partida LOCAL en curso (modo + dueño humano) para captura/pérdida. */
+  private localMeta: { gameMode: GameMode; ownerUserId: string | null } = {
+    gameMode: 'ffa',
+    ownerUserId: null,
+  };
+
+  /** Modo + dueño humano de la partida local actual (Survival: player1 = ownerUserId). */
+  getLocalMeta(): { gameMode: GameMode; ownerUserId: string | null } {
+    return this.localMeta;
+  }
 
   async init(): Promise<GameService> {
     const saved = await MatchModel.loadState(DEFAULT_MATCH_ID);
@@ -234,6 +244,26 @@ export class MatchManager {
   }
 
   /**
+   * SURVIVAL (1J vs IA): el player1 son `ownedId[]` (equipo propio del humano, con su nivel);
+   * el player2 son nombres de especie (IA **salvaje**, sin `ownedId` → capturables como nuevas
+   * instancias, T8.2). Exactamente 2 equipos.
+   */
+  private async resolveSurvivalTeams(teams: Record<string, string[]>): Promise<TeamPiece[][]> {
+    const owned = await this.ownedTeamFromIds(teams.player1 ?? []);
+    const wildNames = teams.player2 ?? [];
+    const wild = await Promise.all(
+      wildNames.map((n) => {
+        if (!isGen1(n)) throw new Error(`Pokémon salvaje no válido: ${n}`);
+        return PokemonService.getTemplate(n);
+      })
+    );
+    if (owned.length === 0 || wild.length === 0) {
+      throw new Error('Survival necesita tu equipo y el de la IA');
+    }
+    return [owned, wild];
+  }
+
+  /**
    * Resuelve `ownedId[]` a piezas de equipo con su nivel real. La plantilla base (stats,
    * tipo, tamaño) se saca por especie de PokeAPI (cache-first); el nivel/identidad, de la
    * instancia del inventario. La propiedad se valida antes (RoomService), aquí solo se carga.
@@ -257,12 +287,25 @@ export class MatchManager {
     return TEAMS_MODE_ALLIANCES.map((team) => [...team]);
   }
 
-  /** Crea la partida LOCAL a partir de los equipos elegidos en el draft. */
+  /**
+   * Crea la partida LOCAL. En SURVIVAL, el player1 llega como `ownedId[]` (equipo propio) y
+   * el resto como nombres (IA salvaje); se guarda `ownerUserId` para atribuir capturas/pérdidas
+   * al humano (T8.2/T8.3). El resto de modos locales usan el draft (nombres).
+   */
   async startMatch(
     teams: Record<string, string[]>,
-    gameMode: GameMode = 'ffa'
+    gameMode: GameMode = 'ffa',
+    ownerUserId: string | null = null
   ): Promise<GameService> {
-    const teamArrays = await this.resolveTeams(teams);
+    if (gameMode === 'survival') {
+      // Propiedad autoritativa: el player1 deben ser instancias libres del propio usuario.
+      if (!ownerUserId || !(await OwnedPokemonModel.allOwnedBy(ownerUserId, teams.player1 ?? []))) {
+        throw new Error('Solo puedes llevar Pokémon de tu inventario a Survival');
+      }
+    }
+    const teamArrays =
+      gameMode === 'survival' ? await this.resolveSurvivalTeams(teams) : await this.resolveTeams(teams);
+    this.localMeta = { gameMode, ownerUserId };
     const board = this.loadBoard(gameMode);
     const placements = await this.withMoves(this.placements(board, teamArrays, gameMode));
     this.match = GameService.create(

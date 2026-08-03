@@ -1306,13 +1306,20 @@ donde capturo lo que derroto, para construir mi colección jugando.
 **Dudas resueltas (D10):** Survival = 1J vs IA con captura.
 
 **Criterios de aceptación:**
-- [ ] Se puede iniciar una partida Survival vs IA desde el menú de un jugador.
-- [ ] Tests del arranque/flujo básico.
+- [x] Se puede iniciar una partida Survival vs IA desde el menú de un jugador.
+- [x] Arranque con equipo propio (inventario) vs IA salvaje; propiedad validada.
 
 **Investigación:** `GameMode` (`lobby.ts:12`), `SinglePlayerMenuView.ts:35` (botón
 disabled), IA local (`controllers/botStrategy.ts`, `aiDraft.ts`).
 
 **Dependencias:** ninguna (tras TR.1). **Paralelizable:** sí.
+
+### ✅ Resolución (lo realmente hecho)
+
+Ver [`31-CAPTURE.md`](31-CAPTURE.md) §T8.1. `GameMode 'survival'`; `startMatch` acepta
+`ownerUserId` y `resolveSurvivalTeams` (player1 = `ownedId` propios validados con `allOwnedBy`;
+player2 = salvajes por nombre); `localMeta` guarda modo+dueño para T8.2/T8.3; botón SURVIVAL
+habilitado → `startSurvival` con picker de inventario + IA salvaje del draft-pool.
 
 ## 🎟️ T8.2 — Captura al derrotar (backend)
 
