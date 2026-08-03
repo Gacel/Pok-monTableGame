@@ -128,7 +128,13 @@ export const OnlineGameController = {
     return apply(actor, { type: 'cast', from, target, moveIndex }, reply);
   },
 
-
+  async evolve(request: FastifyRequest<{ Params: MatchParams; Body: { from?: unknown } }>, reply: FastifyReply) {
+    const actor = await resolveActor(request, reply);
+    if (!actor) return;
+    const from = request.body?.from;
+    if (!isHex(from)) return reply.code(400).send({ success: false, error: 'Coordenada from inválida' });
+    return apply(actor, { type: 'evolve', from }, reply);
+  },
 
   async endTurn(request: FastifyRequest<{ Params: MatchParams }>, reply: FastifyReply) {
     const actor = await resolveActor(request, reply);

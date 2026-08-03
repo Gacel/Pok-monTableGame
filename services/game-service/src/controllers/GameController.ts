@@ -225,6 +225,13 @@ export const GameController = {
     return applyLocal({ type: 'cast', from, target, moveIndex });
   },
 
+  /** Evolución in-match (T9.4): la pieza en `from` evoluciona gastando candies. */
+  async evolve(request: FastifyRequest<{ Body: { from?: unknown } }>, reply: FastifyReply) {
+    const from = request.body?.from;
+    if (!isHex(from)) return reply.code(400).send({ success: false, error: 'Coordenada from inválida' });
+    return applyLocal({ type: 'evolve', from }, reqUserId(request));
+  },
+
   async forceStart() {
     return applyLocal({ type: 'forceStart' });
   },
