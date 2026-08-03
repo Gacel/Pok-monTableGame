@@ -20,18 +20,22 @@ export const CaptureService = {
     const results: CaptureResult[] = [];
     for (const d of state.defeats ?? []) {
       const killerUser = slotUser.get(d.killerSlot) ?? null;
-      if (!killerUser) continue; // sin dueño humano que capture (IA/salvaje)
+      const victimUser = slotUser.get(d.victimSlot) ?? null;
 
       if (gameMode === 'survival') {
-        // Capturar el salvaje derrotado por el humano (los salvajes no tienen instancia).
-        if (!d.victimOwnedId && d.victimName) {
+        // Captura: el humano derrota a un salvaje (sin instancia previa) → nueva instancia.
+        if (killerUser && !d.victimOwnedId && d.victimName) {
           await OwnedPokemonModel.capture(killerUser, d.victimName);
           results.push({ slot: d.killerSlot, name: d.victimName, kind: 'capture' });
         }
+        // Pérdida (T8.3): cae una instancia PROPIA del humano → se retira del inventario.
+        if (victimUser && d.victimOwnedId) {
+          await OwnedPokemonModel.markLost(d.victimOwnedId);
+          results.push({ slot: d.victimSlot, name: d.victimName ?? '', kind: 'lost' });
+        }
       } else {
-        // BR: robar la instancia rival (nunca la propia).
-        const victimUser = slotUser.get(d.victimSlot) ?? null;
-        if (d.victimOwnedId && victimUser !== killerUser) {
+        // BR: el ganador roba la instancia rival (nunca la propia).
+        if (killerUser && d.victimOwnedId && victimUser !== killerUser) {
           await OwnedPokemonModel.transfer(d.victimOwnedId, killerUser);
           results.push({ slot: d.killerSlot, name: d.victimName ?? '', kind: 'steal' });
         }

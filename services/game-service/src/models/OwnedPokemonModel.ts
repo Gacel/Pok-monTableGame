@@ -14,6 +14,8 @@ export interface OwnedPokemonRecord {
   acquired_via: string;
   /** Id de la subasta en la que está retenida (escrow); null si está libre. */
   auction_id?: string | null;
+  /** Marca de baja por pérdida en Survival (T8.3); null = viva/en inventario. */
+  lost_at?: string | null;
   created_at?: string;
 }
 
@@ -21,10 +23,10 @@ export interface OwnedPokemonRecord {
 export const OwnedPokemonModel = {
   async listByUser(userId: string): Promise<OwnedPokemonRecord[]> {
     const db = await getDb();
-    // Excluye las instancias en subasta (escrow): no aparecen en inventario ni
-    // pueden usarse en equipos mientras están a la venta.
+    // Excluye instancias en subasta (escrow) y las PERDIDAS en Survival (lost_at):
+    // no aparecen en inventario ni pueden usarse en equipos.
     return db.all<OwnedPokemonRecord[]>(
-      'SELECT * FROM owned_pokemon WHERE user_id = ? AND auction_id IS NULL ORDER BY created_at',
+      'SELECT * FROM owned_pokemon WHERE user_id = ? AND auction_id IS NULL AND lost_at IS NULL ORDER BY created_at',
       userId
     );
   },
@@ -135,7 +137,40 @@ export const OwnedPokemonModel = {
     if (ids.length === 0) return false;
     const rows = await this.findManyByIds(ids);
     if (rows.length !== ids.length) return false;
-    return rows.every((r) => r.user_id === userId && (r.auction_id ?? null) === null);
+    return rows.every(
+      (r) => r.user_id === userId && (r.auction_id ?? null) === null && (r.lost_at ?? null) === null
+    );
+  },
+
+  /** Marca una instancia como PERDIDA (Survival, T8.3): soft-delete recuperable. */
+  async markLost(id: string): Promise<void> {
+    const db = await getDb();
+    await db.run("UPDATE owned_pokemon SET lost_at = datetime('now') WHERE id = ? AND lost_at IS NULL", id);
+  },
+
+  /** ¿El usuario tiene algún Pokémon perdido recuperable? */
+  async hasLost(userId: string): Promise<boolean> {
+    const db = await getDb();
+    const row = await db.get<{ n: number }>(
+      'SELECT COUNT(*) AS n FROM owned_pokemon WHERE user_id = ? AND lost_at IS NOT NULL',
+      userId
+    );
+    return (row?.n ?? 0) > 0;
+  },
+
+  /**
+   * Recupera el ÚLTIMO Pokémon perdido del usuario (Survival, T8.3): quita `lost_at` y lo
+   * devuelve al inventario. Devuelve el registro recuperado, o `null` si no había ninguno.
+   */
+  async recoverLast(userId: string): Promise<OwnedPokemonRecord | null> {
+    const db = await getDb();
+    const row = await db.get<OwnedPokemonRecord>(
+      'SELECT * FROM owned_pokemon WHERE user_id = ? AND lost_at IS NOT NULL ORDER BY lost_at DESC, rowid DESC LIMIT 1',
+      userId
+    );
+    if (!row) return null;
+    await db.run('UPDATE owned_pokemon SET lost_at = NULL WHERE id = ?', row.id);
+    return { ...row, lost_at: null };
   },
 
   /**

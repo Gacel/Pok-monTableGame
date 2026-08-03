@@ -1369,14 +1369,21 @@ Pokémon caídos, pero quiero poder recuperar uno pagando, para no perderlo para
 **Dudas resueltas (D10):** pérdida permanente + recuperación 10000.
 
 **Criterios de aceptación:**
-- [ ] Perder un Pokémon en Survival lo quita del inventario.
-- [ ] La tienda permite recuperarlo por 10000 (con saldo suficiente).
-- [ ] Tests de pérdida y recuperación.
+- [x] Perder un Pokémon en Survival lo quita del inventario (y de los equipos).
+- [x] La tienda permite recuperar el último por 10000 (con saldo suficiente).
+- [x] Tests de pérdida y recuperación.
 
 **Investigación:** `ShopMenuView.ts:53` (botón disabled), `ShopController`/`shop.routes.ts`,
 `OwnedPokemonModel`, `UserModel.addCoins`.
 
 **Dependencias:** →T8.2. **Paralelizable:** no.
+
+### ✅ Resolución (lo realmente hecho)
+
+Ver [`31-CAPTURE.md`](31-CAPTURE.md) §T8.3. Soft-delete `owned_pokemon.lost_at` (excluida de
+`listByUser`/`allOwnedBy`); `markLost`/`hasLost`/`recoverLast`; `CaptureService` marca la
+pérdida en Survival (`kind:'lost'`); `POST /api/shop/recover-pokemon` (10000 🪙) + botón
+habilitado. game-service 116/116.
 
 ## 🎟️ T8.4 — Robo PvP en Battle Royale
 
