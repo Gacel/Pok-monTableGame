@@ -80,6 +80,14 @@ export class MatchManager {
     gameMode: 'ffa',
     ownerUserId: null,
   };
+  /** Config de la última partida local (para la REVANCHA: repetir la misma, no una por defecto). */
+  private lastLocalStart: {
+    teams: Record<string, string[]>;
+    gameMode: GameMode;
+    ownerUserId: string | null;
+  } | null = null;
+  /** Timer de forzado de fin de despliegue de la partida local en curso (para poder cancelarlo). */
+  private deploymentTimer: ReturnType<typeof setTimeout> | null = null;
 
   /** Modo + dueño humano de la partida local actual (Survival: player1 = ownerUserId). */
   getLocalMeta(): { gameMode: GameMode; ownerUserId: string | null } {
@@ -306,6 +314,8 @@ export class MatchManager {
     const teamArrays =
       gameMode === 'survival' ? await this.resolveSurvivalTeams(teams) : await this.resolveTeams(teams);
     this.localMeta = { gameMode, ownerUserId };
+    // Recuerda la config para la REVANCHA (repetir la MISMA partida, no una por defecto).
+    this.lastLocalStart = { teams, gameMode, ownerUserId };
     const board = this.loadBoard(gameMode);
     const placements = await this.withMoves(this.placements(board, teamArrays, gameMode));
     this.match = GameService.create(
@@ -316,16 +326,30 @@ export class MatchManager {
       gameMode === 'arena'
     );
     await this.persist();
-    
-    setTimeout(() => {
-      if (this.match?.id === DEFAULT_MATCH_ID && this.match.getStateDTO().status === 'deployment') {
-         this.match.forceStart();
-         this.persist().catch(console.error);
-         import('../realtime/hub.js').then(m => m.hub.broadcastPersonalized('local', (ctx) => ({ type: 'state', state: this.match!.getStateDTO(ctx.slot ?? undefined) }))).catch(console.error);
+    this.scheduleLocalForceStart();
+    return this.match;
+  }
+
+  /**
+   * Fuerza el fin del despliegue a los 42s. Cancela cualquier timer anterior y captura la
+   * instancia CONCRETA de partida: si mientras tanto empieza otra (revancha, reinicio), el
+   * timer viejo no la arranca por error (bug de "se inicia otra automáticamente").
+   */
+  private scheduleLocalForceStart(): void {
+    if (this.deploymentTimer) clearTimeout(this.deploymentTimer);
+    const target = this.match;
+    const timer = setTimeout(() => {
+      this.deploymentTimer = null;
+      if (this.match === target && target && target.getStateDTO().status === 'deployment') {
+        target.forceStart();
+        this.persist().catch(console.error);
+        import('../realtime/hub.js')
+          .then((m) => m.hub.broadcastPersonalized('local', (ctx) => ({ type: 'state', state: target.getStateDTO(ctx.slot ?? undefined) })))
+          .catch(console.error);
       }
     }, 42000);
-    
-    return this.match;
+    timer.unref?.(); // no mantener vivo el proceso solo por este timer
+    this.deploymentTimer = timer;
   }
 
   // ------------------------------------------------------- partidas online
@@ -482,7 +506,20 @@ export class MatchManager {
     await MatchModel.upsert(this.match.matchRow, this.match.serialize());
   }
 
+  /**
+   * REVANCHA / reinicio de la partida local: repite la MISMA configuración (modo + equipos)
+   * de la última partida, no una partida por defecto de 4 jugadores con roster (ese era el bug).
+   * Si no hay partida local previa, cae a la de por defecto.
+   */
   async reset(): Promise<GameService> {
+    if (this.lastLocalStart) {
+      const { teams, gameMode, ownerUserId } = this.lastLocalStart;
+      return this.startMatch(teams, gameMode, ownerUserId);
+    }
+    if (this.deploymentTimer) {
+      clearTimeout(this.deploymentTimer);
+      this.deploymentTimer = null;
+    }
     this.match = await this.buildDefault();
     await this.persist();
     return this.match;

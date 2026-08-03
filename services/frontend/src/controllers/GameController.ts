@@ -898,9 +898,14 @@ export class GameController {
         this.state.selectedHex = null;
         await this.preloadSprites(data.state as MatchState);
         this.applyMatchState(data.state as MatchState, false);
+      } else {
+        // p.ej. Survival: si perdiste un Pokémon del equipo, no se puede repetir con los mismos.
+        this.hudView.flashToast(data.error ?? 'No se pudo reiniciar', '#dc2626');
+        setTimeout(() => location.reload(), 1500); // volver al hub para reconfigurar
       }
     } catch (err) {
       console.error(err);
+      this.hudView.flashToast('Error de red al reiniciar', '#dc2626');
     } finally {
       this.busy = false;
     }
