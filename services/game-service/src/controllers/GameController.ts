@@ -229,10 +229,15 @@ export const GameController = {
     return applyLocal({ type: 'forceStart' });
   },
 
-  async reset() {
-    const game = await matchManager.reset();
-    hub.broadcast(LOCAL_ROOM, { type: 'state', state: game.getStateDTO() });
-    return { success: true, state: game.getStateDTO() };
+  async reset(_request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const game = await matchManager.reset();
+      hub.broadcast(LOCAL_ROOM, { type: 'state', state: game.getStateDTO() });
+      return { success: true, state: game.getStateDTO() };
+    } catch (e) {
+      // p.ej. en Survival, si perdiste un Pokémon del equipo ya no puedes repetir con los mismos.
+      return reply.code(400).send({ success: false, error: (e as Error).message });
+    }
   },
 
   async endTurn(request: FastifyRequest) {
