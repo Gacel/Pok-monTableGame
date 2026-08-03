@@ -1,4 +1,4 @@
-import type { RoomInfo, MatchStateDTO } from '@transcendence/shared';
+import type { RoomInfo, MatchStateDTO, CaptureResult } from '@transcendence/shared';
 
 /**
  * Cliente WSS del frontend. Recibe difusiones autoritativas del game-service
@@ -13,11 +13,13 @@ export interface DmHistoryMessage {
 }
 
 export interface WsMessage {
-  type: 'state' | 'room' | 'room_closed' | 'chat' | 'chat_history' | 'error';
+  type: 'state' | 'room' | 'room_closed' | 'chat' | 'chat_history' | 'error' | 'capture';
   state?: MatchStateDTO;
   room?: RoomInfo;
   matchId?: string;
   combat?: unknown;
+  /** Capturas/robos/pérdidas resueltos tras un KO (feedback, T8.5). */
+  captures?: CaptureResult[];
   text?: string;
   /** Chat DM: id del emisor y timestamp (mensajes en vivo). */
   from?: string;

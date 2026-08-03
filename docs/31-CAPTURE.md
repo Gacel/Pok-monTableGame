@@ -95,3 +95,25 @@ ganador); T8.4 **engancha el path online**:
 
 **Verificación:** el robo BR está cubierto en `capture.test.ts` (el ganador se queda la
 instancia rival; los modos sin captura devuelven vacío). game-service **116/116**, `tsc` limpio.
+
+## T8.5 — Feedback de captura/robo/pérdida (frontend)
+
+**Qué cambia:**
+- El servidor difunde `{ type:'capture', captures: CaptureResult[] }` tras cada acción con
+  capturas/robos/pérdidas.
+- [`WsClient`](../services/frontend/src/net/WsClient.ts): el mensaje `capture` (+ `captures`)
+  entra en el tipo `WsMessage`.
+- [`GameController.onRealtimeMessage`](../services/frontend/src/controllers/GameController.ts):
+  nuevo caso `capture` → `showCaptureFeedback`: **toast** + **flash** sobre la pieza del slot
+  implicado, distinto por tipo — 🎯 `¡Capturado!` (verde), 💰 `¡Robaste!` (violeta), 💀
+  `Perdiste a…` (rojo).
+- El inventario ya marca con 🎯 los `acquired_via==='capture'` (previo).
+
+**Verificación:** `tsc` limpio, build + contenedor OK. Feedback en partida al capturar/robar/
+perder; el capturado aparece con 🎯 en el inventario.
+
+---
+
+**Épica 8 cerrada** (T8.1 → T8.5). Survival con equipo propio vs salvajes, captura al derrotar,
+pérdida real con recuperación en tienda, robo PvP en BR y feedback en partida. Apoya la Épica
+9 (evolución de las instancias) y la 10 (intercambio).
