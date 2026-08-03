@@ -3,6 +3,7 @@ import { open, Database } from 'sqlite';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { GEN1_NAMES } from '../engine/gen1.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -250,6 +251,16 @@ async function openAndMigrate(): Promise<Database> {
   if (!moveCols.some((c: { name: string }) => c.name === 'target')) {
     await db.exec(`ALTER TABLE moves ADD COLUMN target TEXT`);
   }
+
+  // Scope Gen 1 (D11): el juego solo usa los 151. La gacha/loot/starter ya conceden solo
+  // Gen 1, pero pudo quedar inventario HEREDADO de Gen 2+ de antes de acotar el pool. Se
+  // purga aquí (idempotente): retira del inventario todo lo que no sea Gen 1.
+  const gen1Lower = GEN1_NAMES.map((n) => n.toLowerCase());
+  const placeholders = gen1Lower.map(() => '?').join(',');
+  await db.run(
+    `DELETE FROM owned_pokemon WHERE lower(name) NOT IN (${placeholders})`,
+    ...gen1Lower
+  );
 
   return db;
 }
