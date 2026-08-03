@@ -1448,12 +1448,18 @@ quiero saber si evoluciona y a qué forma, para aplicarlo.
 **Dudas resueltas (D13):** fiel a PokeAPI (nivel/piedra/intercambio).
 
 **Criterios de aceptación:**
-- [ ] Resuelve correctamente evolución por nivel, por piedra y marca las de intercambio.
-- [ ] Tests con Charmander (nivel), Vulpix (piedra), Kadabra (intercambio).
+- [x] Resuelve correctamente evolución por nivel, por piedra y marca las de intercambio.
+- [x] Tests con Charmander (nivel), Vulpix (piedra), Kadabra (intercambio).
 
 **Investigación:** catálogo de T5.2; `PokemonService`.
 
 **Dependencias:** →T5.2. **Paralelizable:** no.
+
+### ✅ Resolución (lo realmente hecho)
+
+Ver [`32-EVOLUTION.md`](32-EVOLUTION.md) §T9.1. `resolveEvolution(info, {level, items})` →
+`{target, trigger, requirement, canEvolve}` (nivel≥minLevel; piedra en inventario; trade/other
+no evolucionan aquí) + `requirementLabel`/`STONE_ES`. Puro. game-service 121/121.
 
 ## 🎟️ T9.2 — Objetos de evolución como drops + tienda
 

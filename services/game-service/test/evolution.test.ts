@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseEvolutionChain, type EvolutionChainResponse } from '../src/engine/evolution.js';
+import { parseEvolutionChain, resolveEvolution, requirementLabel, type EvolutionChainResponse } from '../src/engine/evolution.js';
 
 // Charmander → Charmeleon (nivel 16) → Charizard (nivel 36).
 const charmanderChain: EvolutionChainResponse = {
@@ -74,5 +74,35 @@ describe('engine · parseEvolutionChain (T5.2)', () => {
   it('forma final o inexistente → null', () => {
     expect(parseEvolutionChain(charmanderChain, 'charizard')).toBeNull(); // final
     expect(parseEvolutionChain(vulpixChain, 'tauros')).toBeNull(); // no está en la cadena
+  });
+});
+
+describe('engine · resolveEvolution (T9.1)', () => {
+  const charmander = parseEvolutionChain(charmanderChain, 'charmander'); // level 16
+  const vulpix = parseEvolutionChain(vulpixChain, 'vulpix'); // fire-stone
+  const kadabra = parseEvolutionChain(kadabraChain, 'kadabra'); // trade
+
+  it('nivel: Charmander evoluciona SOLO al alcanzar el nivel', () => {
+    expect(resolveEvolution(charmander, { level: 15 })).toMatchObject({ target: 'charmeleon', canEvolve: false, requirement: 'Nivel 16' });
+    expect(resolveEvolution(charmander, { level: 16 })).toMatchObject({ target: 'charmeleon', canEvolve: true });
+  });
+
+  it('piedra: Vulpix evoluciona SOLO con la piedra correspondiente en el inventario', () => {
+    expect(resolveEvolution(vulpix, { level: 50 })).toMatchObject({ canEvolve: false, requirement: 'Piedra Fuego' });
+    expect(resolveEvolution(vulpix, { level: 1, items: new Set(['fire-stone']) })).toMatchObject({ target: 'ninetales', canEvolve: true });
+    expect(resolveEvolution(vulpix, { level: 1, items: new Set(['water-stone']) }).canEvolve).toBe(false);
+  });
+
+  it('intercambio: Kadabra no evoluciona aquí (es de la Épica 10)', () => {
+    const r = resolveEvolution(kadabra, { level: 100, items: new Set(['fire-stone']) });
+    expect(r).toMatchObject({ target: 'alakazam', trigger: 'trade', canEvolve: false, requirement: 'Intercambio' });
+  });
+
+  it('forma final → no evoluciona', () => {
+    expect(resolveEvolution(null, { level: 100 })).toMatchObject({ target: null, canEvolve: false, requirement: 'Forma final' });
+  });
+
+  it('requirementLabel traduce la piedra al español', () => {
+    expect(requirementLabel({ evolvesTo: 'x', trigger: 'stone', item: 'thunder-stone' })).toBe('Piedra Trueno');
   });
 });
