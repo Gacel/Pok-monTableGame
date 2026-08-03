@@ -137,6 +137,7 @@ export class InventoryView {
         { icon: '🔍', label: 'Ver ficha', onClick: () => this.openDetail(p) },
         { icon: '⚖️', label: 'Vender en subasta', onClick: () => this.openSellDialog(p) },
         { icon: '🎁', label: 'Regalar a un amigo', onClick: () => void this.openGiftDialog(p) },
+        { icon: '🔄', label: 'Intercambiar', onClick: () => void this.openTradeDialog(p) },
       ],
       `${p.name} · Nv.${p.level}`
     );
@@ -253,6 +254,62 @@ export class InventoryView {
       });
       const data = await res.json().catch(() => ({}));
       return { ok: res.ok && data.success, error: data.error };
+    });
+  }
+
+  /** Propone un intercambio: ofrece este Pokémon a un amigo y le pide N monedas (T10.2). */
+  private async openTradeDialog(p: InvPokemon): Promise<void> {
+    const { body, close } = this.openDialog(
+      `Intercambiar ${p.name}`,
+      `<p class="text-gray-300 animate-pulse text-center" style="${FONT} font-size:9px;">Cargando amigos…</p>`
+    );
+    let friends: { id: string; username: string | null }[] = [];
+    try {
+      const res = await apiFetch('/api/friends');
+      friends = ((await res.json()).friends ?? []) as { id: string; username: string | null }[];
+    } catch {
+      /* red caída */
+    }
+    if (!friends.length) {
+      body.innerHTML = `<p class="text-gray-300 text-center" style="${FONT} font-size:9px; line-height:1.7;">No tienes amigos con quien intercambiar.<br>Añade amigos en COMUNIDAD.</p>`;
+      return;
+    }
+    body.innerHTML = `
+      <p class="text-gray-300 mb-2 text-center" style="${FONT} font-size:8px;">Ofreces <span class="text-yellow-300">${escapeHtml(p.name)} (Nv.${p.level})</span>. Pides a cambio:</p>
+      <label class="flex items-center justify-center gap-2 mb-3 text-white" style="${FONT} font-size:8px;">
+        🪙 <input id="trade-coins" type="number" min="0" value="0" class="w-24 bg-gray-800 border border-gray-600 rounded px-2 py-1 text-white" style="${FONT} font-size:9px;" /> monedas
+      </label>
+      <p class="text-gray-300 mb-2 text-center" style="${FONT} font-size:8px;">Elige al destinatario:</p>
+      <div class="flex flex-col gap-1.5 overflow-y-auto pr-1" style="max-height:38vh;">
+        ${friends
+          .map((f) => `<button data-uid="${escapeHtml(f.id)}" class="trade-friend w-full text-left text-white bg-gray-800 hover:bg-blue-700 rounded px-3 py-2 border border-gray-700 truncate" style="${FONT} font-size:9px;">${escapeHtml(f.username ?? 'jugador')}</button>`)
+          .join('')}
+      </div>
+      <p id="trade-msg" class="text-red-400 min-h-[14px] mt-2" style="${FONT} font-size:8px;"></p>`;
+    const msg = body.querySelector('#trade-msg') as HTMLElement;
+    const coinsEl = body.querySelector('#trade-coins') as HTMLInputElement;
+    body.querySelectorAll<HTMLButtonElement>('.trade-friend').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        void (async () => {
+          const toUserId = btn.dataset.uid ?? '';
+          const coins = Math.max(0, Math.floor(Number(coinsEl.value) || 0));
+          const res = await apiFetch('/api/trades', {
+            method: 'POST',
+            body: JSON.stringify({
+              toUserId,
+              offer: { pokemonIds: [p.id], items: [], coins: 0 },
+              request: { pokemonIds: [], items: [], coins },
+            }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (res.ok && data.success) {
+            close();
+            await this.render();
+          } else {
+            msg.textContent = data.error ?? 'No se pudo proponer';
+          }
+        })();
+      });
     });
   }
 

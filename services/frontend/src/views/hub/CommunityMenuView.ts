@@ -7,7 +7,7 @@ import { FONT, hubPanel, panelTitle, panelCard, menuButton, backButton } from '.
 import { spriteOf } from '../../utils/trainer';
 import { escapeHtml } from '../../utils/html';
 
-type Step = 'root' | 'friends' | 'add' | 'search' | 'recommended' | 'requests' | 'dm' | 'gift';
+type Step = 'root' | 'friends' | 'add' | 'search' | 'recommended' | 'requests' | 'dm' | 'gift' | 'trades';
 
 /** Sala WS del chat directo entre dos usuarios (ids ordenados = misma sala). */
 function dmRoom(a: string, b: string): string {
@@ -51,6 +51,8 @@ export class CommunityMenuView {
         return this.renderDm();
       case 'gift':
         return this.renderGift();
+      case 'trades':
+        return void this.renderTrades();
       default:
         return void this.renderRoot();
     }
@@ -156,6 +158,7 @@ export class CommunityMenuView {
           ${menuButton({ id: 'btn-add', label: 'AÑADIR AMIGO', icon: '➕', color: 'blue' })}
           ${menuButton({ id: 'btn-requests', label: reqLabel, icon: '📨', color: this.requestCount > 0 ? 'yellow' : 'gray' })}
           ${menuButton({ id: 'btn-gift', label: 'ENVIAR REGALO', icon: '🎁', color: 'purple' })}
+          ${menuButton({ id: 'btn-trades', label: 'INTERCAMBIOS', icon: '🔄', color: 'blue' })}
         </div>`,
         'flex flex-col items-center'
       )}
@@ -167,7 +170,72 @@ export class CommunityMenuView {
     document.getElementById('btn-add')?.addEventListener('click', () => this.goto('add'));
     document.getElementById('btn-requests')?.addEventListener('click', () => this.goto('requests'));
     document.getElementById('btn-gift')?.addEventListener('click', () => this.goto('gift'));
+    document.getElementById('btn-trades')?.addEventListener('click', () => this.goto('trades'));
     document.getElementById('btn-back')?.addEventListener('click', () => showMainMenu());
+  }
+
+  /** Panel de INTERCAMBIOS pendientes (T10.2): aceptar (entrantes) / cancelar. */
+  private async renderTrades(): Promise<void> {
+    this.container.innerHTML = hubPanel(
+      `${panelTitle('INTERCAMBIOS')}<p class="text-white text-center animate-pulse" style="${FONT} font-size:10px;">Cargando…</p>${backButton()}`,
+      { minHeight: 680 }
+    );
+    document.getElementById('btn-back')?.addEventListener('click', () => this.goto('root'));
+
+    interface TSide { pokemon: { id: string; name: string; level: number }[]; items: { itemKey: string; qty: number }[]; coins: number; }
+    interface Trade { id: string; direction: 'incoming' | 'outgoing'; offer: TSide; request: TSide; }
+    let trades: Trade[] = [];
+    try {
+      const res = await apiFetch('/api/trades');
+      trades = ((await res.json()).trades ?? []) as Trade[];
+    } catch {
+      /* red caída */
+    }
+
+    const sideStr = (s: TSide): string => {
+      const parts = [
+        ...s.pokemon.map((p) => `${p.name} Nv.${p.level}`),
+        ...s.items.map((i) => `${i.itemKey}×${i.qty}`),
+        ...(s.coins > 0 ? [`${s.coins} 🪙`] : []),
+      ];
+      return parts.length ? parts.join(', ') : 'nada';
+    };
+    const rows = trades.length
+      ? trades
+          .map((t) => {
+            const inc = t.direction === 'incoming';
+            return `
+            <div class="bg-gray-800 border border-gray-700 rounded p-3 flex flex-col gap-2" style="${FONT} font-size:8px;">
+              <span class="text-gray-300">${inc ? '📥 Te ofrecen' : '📤 Ofreces'}: <span class="text-yellow-300">${escapeHtml(sideStr(t.offer))}</span></span>
+              <span class="text-gray-300">${inc ? 'Piden' : 'Pides'}: <span class="text-yellow-300">${escapeHtml(sideStr(t.request))}</span></span>
+              <div class="flex gap-2 justify-end">
+                ${inc ? `<button data-accept="${escapeHtml(t.id)}" class="trade-accept bg-green-600 hover:bg-green-500 text-white rounded px-3 py-1.5" style="${FONT} font-size:8px;">ACEPTAR</button>` : ''}
+                <button data-cancel="${escapeHtml(t.id)}" class="trade-cancel bg-red-700 hover:bg-red-600 text-white rounded px-3 py-1.5" style="${FONT} font-size:8px;">${inc ? 'RECHAZAR' : 'CANCELAR'}</button>
+              </div>
+            </div>`;
+          })
+          .join('')
+      : `<p class="text-gray-400 text-center" style="${FONT} font-size:9px;">No tienes intercambios pendientes.</p>`;
+
+    this.container.innerHTML = hubPanel(
+      `${panelTitle('INTERCAMBIOS')}
+       ${panelCard(`<div class="flex flex-col gap-2 w-full overflow-y-auto" style="max-width:560px; max-height:56vh;">${rows}</div>`, 'flex flex-col items-center w-full')}
+       ${backButton()}`,
+      { minHeight: 680 }
+    );
+    document.getElementById('btn-back')?.addEventListener('click', () => this.goto('root'));
+    const act = async (url: string) => {
+      const res = await apiFetch(url, { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) alert(data.error ?? 'No se pudo');
+      await this.renderTrades();
+    };
+    this.container.querySelectorAll<HTMLButtonElement>('.trade-accept').forEach((b) =>
+      b.addEventListener('click', () => void act(`/api/trades/${encodeURIComponent(b.dataset.accept!)}/accept`))
+    );
+    this.container.querySelectorAll<HTMLButtonElement>('.trade-cancel').forEach((b) =>
+      b.addEventListener('click', () => void act(`/api/trades/${encodeURIComponent(b.dataset.cancel!)}/cancel`))
+    );
   }
 
   private async renderFriends() {
