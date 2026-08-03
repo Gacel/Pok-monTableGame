@@ -15,8 +15,8 @@ interface RosterEntry {
 
 /** Configuración del draft: local secuencial (N jugadores) u online (solo tú). */
 export type DraftConfig =
-  | { mode: 'local'; players: number; gameMode: GameMode }
-  | { mode: 'online'; playerLabel: string; reserved?: string[] };
+  | { mode: 'local'; players: number; gameMode: GameMode; poolEndpoint?: string }
+  | { mode: 'online'; playerLabel: string; reserved?: string[]; poolEndpoint?: string };
 
 const TEAM_SIZE = 3;
 
@@ -68,7 +68,8 @@ export class DraftView {
   async render(): Promise<void> {
     this.container.innerHTML = this.loadingHtml('Cargando Pokémon…');
     try {
-      const res = await apiFetch('/api/game/roster');
+      // Local/vs-IA usan un pool ALEATORIO de 50 (draft-pool); online 1v1/2v2, el roster estable.
+      const res = await apiFetch(this.config.poolEndpoint ?? '/api/game/roster');
       const data = await res.json();
       this.roster = (data.roster ?? []) as RosterEntry[];
       await this.preloadSprites();

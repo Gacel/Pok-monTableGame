@@ -1262,33 +1262,32 @@ roster. **Épica 6 completa.**
 
 ---
 
-# ÉPICA 7 — Eliminar Draft, unificar a Pokémon propios
+# ÉPICA 7 — Draft con pool aleatorio (revisión de D15)
 
-## 🎟️ T7.1 — Todos los modos usan equipos propios
+## 🎟️ T7.1 — Draft con pool aleatorio en local/IA; propios en online ✅
 
-**Historia de usuario:** Como jugador, quiero jugar TODOS los modos con mis propios
-Pokémon (los que consigo y evoluciono), no con un roster de draft genérico.
+> **Cambio de alcance (decisión del usuario, revisa D15).** El plan original era *eliminar*
+> el draft. El usuario decidió **mantenerlo** en local y vs-IA (el hot-seat y la IA no tienen
+> inventario propio), pero con un **pool aleatorio de 50 Pokémon Gen-1 por draft**. Los modos
+> online de equipo propio (BR/ARENA) ya usan `ownedId` (Épica 6).
 
-**Objetivos de desarrollo:**
-1. Eliminar el camino de draft: `ROSTER_NAMES`, `resolveTeams`, `getRoster`, `DraftView`
-   y la ruta `/api/game/roster`.
-2. `OWNED_TEAM_MODES` pasa a ser **todos** los modos; la validación por inventario
-   (`RoomService.submitTeam`) aplica siempre.
-3. Ajustar `MatchManager.createGame` (branch draft/owned, L267-269), `startMatch`
-   (local, hoy siempre draft) y el flujo local.
-
-**Dudas resueltas (D15):** draft eliminado.
+**Historia de usuario:** Como jugador, quiero que los drafts locales y vs-IA sean **variados**
+(un pool distinto cada vez), no siempre la misma lista fija.
 
 **Criterios de aceptación:**
-- [ ] Ningún modo usa el roster de draft; todos exigen equipo del inventario propio.
-- [ ] 1v1/2v2 locales y online funcionan con equipos propios.
-- [ ] Tests de la unificación (no queda referencia viva a `resolveTeams`/roster).
+- [x] El draft local/vs-IA ofrece 50 Pokémon Gen-1 **aleatorios**, distintos cada draft.
+- [x] La validación del servidor acepta cualquier Gen-1 (unicidad cruzada intacta).
+- [x] Online 1v1/2v2 sigue con roster estable; BR/ARENA con inventario propio.
+- [x] Tests del pool aleatorio.
 
-**Investigación:** `MatchManager` (`ROSTER_NAMES` L32-44, `getRoster` L79, `resolveTeams`
-L151-184, `createGame` L261-292, `startMatch` L216-241), `OWNED_TEAM_MODES`
-(`lobby.ts:15`), `DraftView.ts`.
+**Dudas resueltas (D15, revisada):** draft **mantenido** en local/IA con pool aleatorio.
 
-**Dependencias:** →T6.3. **Paralelizable:** no.
+### ✅ Resolución (lo realmente hecho)
+
+Ver [`30-DRAFT_POOL.md`](30-DRAFT_POOL.md). `randomGen1Names` (puro) + `MatchManager.draftPool(50)`
++ ruta `/api/game/draft-pool`; `resolveTeams` acepta cualquier Gen-1 (unicidad intacta);
+`DraftView.poolEndpoint` y `main.ts` local/IA usan el pool aleatorio (la IA, del mismo pool).
+Online 1v1/2v2 conserva `getRoster`/`ROSTER_NAMES`. game-service 108/108.
 
 ---
 

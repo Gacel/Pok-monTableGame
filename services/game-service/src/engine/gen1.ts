@@ -29,3 +29,16 @@ const GEN1_SET = new Set(GEN1_NAMES);
 export function isGen1(name: string): boolean {
   return GEN1_SET.has(name.toLowerCase());
 }
+
+/**
+ * `n` nombres Gen-1 **distintos y aleatorios** (Fisher-Yates con `rng` inyectable).
+ * Base del pool de draft local/IA (T7 · draft con pool aleatorio). Pura y testeable.
+ */
+export function randomGen1Names(n: number, rng: () => number = Math.random): string[] {
+  const names = [...GEN1_NAMES];
+  for (let i = names.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [names[i], names[j]] = [names[j]!, names[i]!];
+  }
+  return names.slice(0, Math.max(0, Math.min(n, names.length)));
+}
