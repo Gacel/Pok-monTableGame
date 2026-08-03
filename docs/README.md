@@ -55,6 +55,7 @@
 | 29 | [`29-PROGRESSION_LEVELS.md`](29-PROGRESSION_LEVELS.md) | Progresión (Épica 6, completa): equipos por instancia `ownedId` con nivel real (T6.3), escalado de stats por nivel (T6.2), XP/level-up por instancia (T6.1) y UI de nivel/XP (T6.4). |
 | 30 | [`30-DRAFT_POOL.md`](30-DRAFT_POOL.md) | Draft con pool aleatorio (Épica 7, T7.1): local/IA draftean de 50 Gen-1 aleatorios por draft; online 1v1/2v2 con roster estable; BR/ARENA con inventario propio. Revisa D15 (draft mantenido, no eliminado). |
 | 31 | [`31-CAPTURE.md`](31-CAPTURE.md) | Captura (Épica 8, completa): modo Survival con equipo propio vs IA salvaje (T8.1), captura al derrotar (T8.2), pérdida real + recuperación en tienda (T8.3), robo PvP en BR (T8.4) y feedback (T8.5). |
+| 32 | [`32-EVOLUTION.md`](32-EVOLUTION.md) | Evolución (Épica 9): resolución por especie (nivel/piedra/intercambio, T9.1); piedras como drops+tienda, evolución meta e in-match, pendientes. |
 
 ## Archivo (histórico, no numerado)
 
