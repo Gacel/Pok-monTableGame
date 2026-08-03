@@ -2,7 +2,7 @@ import { apiFetch } from '../../net/api';
 import { getSprite } from '../../net/PokeSprites';
 import { escapeHtml } from '../../utils/html';
 import { FONT } from './panel';
-import { POKEMON_TYPES, typeAdvantage } from '@transcendence/shared';
+import { POKEMON_TYPES, typeAdvantage, typeLabelEs } from '@transcendence/shared';
 import type { PokemonMove, PokemonType } from '../../models/Types';
 
 /**
@@ -87,7 +87,7 @@ function typeRelations(type: PokemonType): {
 }
 
 function typeBadge(t: string, size = 6): string {
-  return `<span style="${FONT} font-size:${size}px; background:${TYPE_COLOR[t] ?? '#666'}; color:#000; padding:2px 5px; border-radius:4px; line-height:1;">${escapeHtml(t)}</span>`;
+  return `<span style="${FONT} font-size:${size}px; background:${TYPE_COLOR[t] ?? '#666'}; color:#000; padding:2px 5px; border-radius:4px; line-height:1;">${escapeHtml(typeLabelEs(t))}</span>`;
 }
 
 /** Barra de progreso de XP hacia el siguiente nivel (T6.4). Vacía si no hay datos de XP. */
