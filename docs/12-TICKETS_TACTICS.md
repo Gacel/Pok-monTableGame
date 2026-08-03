@@ -1421,11 +1421,17 @@ capturo o me roban un Pokémon.
 🎯 los `acquired_via==='capture'`.
 
 **Criterios de aceptación:**
-- [ ] Al capturar/robar, hay feedback visible en partida y el Pokémon aparece con 🎯 en inventario.
+- [x] Al capturar/robar/perder, hay feedback visible en partida y el capturado aparece con 🎯 en inventario.
 
 **Investigación:** `InventoryView.ts:94` (tag 🎯 ya existe), util de T0.4.
 
 **Dependencias:** →T8.2, →T0.4. **Paralelizable:** no.
+
+### ✅ Resolución (lo realmente hecho)
+
+Ver [`31-CAPTURE.md`](31-CAPTURE.md) §T8.5. Mensaje WS `capture`; `GameController.showCaptureFeedback`
+(toast + flash sobre la pieza) con variantes 🎯 captura / 💰 robo / 💀 pérdida. Inventario ya
+marca 🎯. **Épica 8 completa.**
 
 ---
 
