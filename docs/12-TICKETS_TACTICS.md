@@ -1618,12 +1618,18 @@ instancia intercambiada evoluciona por intercambio y aplicarlo.
 Graveler→Golem, Haunter→Gengar.
 
 **Criterios de aceptación:**
-- [ ] Intercambiar un Kadabra lo convierte en Alakazam para quien lo recibe.
-- [ ] Tests de las 4 evoluciones por intercambio.
+- [x] Intercambiar un Kadabra lo convierte en Alakazam para quien lo recibe.
+- [x] Tests de las evoluciones por intercambio.
 
 **Investigación:** T9.1 (resolución), T10.1 (completar trade).
 
 **Dependencias:** →T10.1, →T9.1. **Paralelizable:** no.
+
+### ✅ Resolución (lo realmente hecho)
+
+Ver [`33-TRADING.md`](33-TRADING.md) §T10.3. `TradeService.applyTradeEvolution` (enganchado en
+`accept`): las instancias movidas que evolucionan por `trigger:'trade'` (Kadabra/Machoke/
+Graveler/Haunter) evolucionan al completar el intercambio. game-service 138/138.
 
 ---
 

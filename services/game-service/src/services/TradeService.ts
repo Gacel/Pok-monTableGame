@@ -3,6 +3,7 @@ import { OwnedPokemonModel } from '../models/OwnedPokemonModel.js';
 import { ItemModel } from '../models/ItemModel.js';
 import { UserModel } from '../models/UserModel.js';
 import { FriendModel } from '../models/FriendModel.js';
+import { PokemonService } from './PokemonService.js';
 
 export class TradeError extends Error {
   constructor(public status: number, message: string) {
@@ -21,6 +22,20 @@ function normalizeSide(raw: Partial<TradeSide> | undefined): TradeSide {
 }
 
 const isEmpty = (s: TradeSide): boolean => s.pokemonIds.length === 0 && s.items.length === 0 && s.coins === 0;
+
+/**
+ * Evolución POR INTERCAMBIO (T10.3, fiel a Gen 1): si la instancia recién intercambiada
+ * evoluciona por `trade` (Kadabra→Alakazam, Machoke→Machamp, Graveler→Golem, Haunter→Gengar),
+ * se aplica. Silencioso si no procede.
+ */
+async function applyTradeEvolution(pokemonId: string): Promise<void> {
+  const rec = await OwnedPokemonModel.findById(pokemonId);
+  if (!rec) return;
+  const info = await PokemonService.getEvolution(rec.name).catch(() => null);
+  if (info && info.trigger === 'trade') {
+    await OwnedPokemonModel.evolve(pokemonId, info.evolvesTo);
+  }
+}
 
 /** Valida que `user` posee TODO lo de `side` libre (no en subasta/trade/perdido). */
 async function assertOwns(user: string, side: TradeSide, who: string): Promise<void> {
@@ -87,6 +102,11 @@ export const TradeService = {
     if (t.request.coins > 0) {
       await UserModel.addCoins(t.to_user, -t.request.coins);
       await UserModel.addCoins(t.from_user, t.request.coins);
+    }
+
+    // Evoluciones por intercambio (T10.3): se aplican a las instancias recién movidas.
+    for (const pid of [...t.offer.pokemonIds, ...t.request.pokemonIds]) {
+      await applyTradeEvolution(pid);
     }
 
     await TradeModel.setStatus(tradeId, 'completed');
