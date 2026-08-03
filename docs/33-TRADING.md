@@ -38,3 +38,17 @@ escrow saca lo ofertado del inventario del proponente; solo con amigos; `accept`
 propiedades (`acquired_via='trade'`); solo el destinatario acepta; `cancel` reembolsa el
 escrow (Pokémon + monedas); no puedes ofertar lo que no tienes. game-service **135/135**,
 `tsc` limpio, contenedor OK.
+
+## T10.3 — Evoluciones por intercambio
+
+**Qué añade:** al **completar** un intercambio, cada instancia recién movida (de ambos lados)
+comprueba con el catálogo (`getEvolution`, T9.1) si evoluciona por **`trade`** y, si es así, se
+aplica — fiel a Gen 1: **Kadabra→Alakazam, Machoke→Machamp, Graveler→Golem, Haunter→Gengar**.
+[`TradeService.applyTradeEvolution`](../services/game-service/src/services/TradeService.ts),
+enganchado en `accept` tras cruzar las propiedades. Silencioso para los que no evolucionan por
+intercambio.
+
+**Verificación:** [`test/tradeEvolution.test.ts`](../services/game-service/test/tradeEvolution.test.ts)
+— un Kadabra intercambiado llega como **Alakazam** a quien lo recibe; funciona también en el
+lado pedido (Machoke→Machamp); los de otro disparador (Pikachu, piedra) no cambian.
+game-service **138/138**, `tsc` limpio, contenedor OK.
