@@ -39,6 +39,16 @@ export interface TurnEvent {
   blocked?: boolean;
 }
 
+/** Captura (Survival) o robo (BR) resuelto tras un KO. Para el feedback del cliente (T8.5). */
+export interface CaptureResult {
+  /** Slot del ganador que se lleva el Pokémon. */
+  slot: string;
+  /** Especie capturada/robada. */
+  name: string;
+  /** `capture` = salvaje capturado (Survival); `steal` = instancia robada a un rival (BR). */
+  kind: 'capture' | 'steal';
+}
+
 /** Estado autoritativo de la partida (DTO que difunde el servidor). */
 export interface MatchStateDTO {
   id: string;
@@ -56,9 +66,18 @@ export interface MatchStateDTO {
   eliminated: string[];
   /** ARENA: partida persistente que nunca termina. */
   persistent: boolean;
-  /** Bajas por KO de la última acción (para economía y XP). Efímero, no persistido.
-   *  `killerOwnedId`: instancia (owned_pokemon.id) del atacante, para atribuir XP (T6.1). */
-  defeats: { killerSlot: string; victimSlot: string; killerOwnedId?: string }[];
+  /** Bajas por KO de la última acción (para economía, XP y captura). Efímero, no persistido.
+   *  `killerOwnedId`: instancia del atacante (XP, T6.1). `victimOwnedId`: instancia de la
+   *  víctima si era propia (robo PvP, T8.4). `victimName`: especie (capturar salvaje, T8.2). */
+  defeats: {
+    killerSlot: string;
+    victimSlot: string;
+    killerOwnedId?: string;
+    victimOwnedId?: string;
+    victimName?: string;
+  }[];
+  /** Capturas/robos resueltos en la última acción (feedback, T8.5). Efímero, no persistido. */
+  captures?: CaptureResult[];
   /** Tiempo límite de la fase de despliegue en formato UNIX (ms). */
   deploymentDeadline?: number;
   /** Pokémon pendientes de desplegar en Turno 0. */

@@ -3,7 +3,9 @@ import { GameService, PlayResult } from './GameService.js';
 import { matchManager } from './MatchManager.js';
 import { EconomyService } from './EconomyService.js';
 import { ProgressionService } from './ProgressionService.js';
+import { CaptureService } from './CaptureService.js';
 import { hub } from '../realtime/hub.js';
+import type { CaptureResult } from '@transcendence/shared';
 
 export type GameAction =
   | { type: 'move'; from: Hex; to: Hex }
@@ -59,8 +61,15 @@ export const GameActionService = {
     const result = run(ctx, action);
     if (!result.ok) return result;
 
+    let captures: CaptureResult[] = [];
     if (ctx.isLocal) {
       await matchManager.persist();
+      // Survival: el humano (player1) captura a los salvajes que derrota (T8.2).
+      const meta = matchManager.getLocalMeta();
+      if (meta.gameMode === 'survival' && meta.ownerUserId) {
+        const slotUser = new Map<string, string | null>([['player1', meta.ownerUserId]]);
+        captures = await CaptureService.resolve('survival', slotUser, result.state);
+      }
     } else if (ctx.matchId) {
       await matchManager.persistMatch(ctx.matchId);
       await EconomyService.awardForResult(ctx.matchId, result);
@@ -68,6 +77,7 @@ export const GameActionService = {
     }
 
     hub.broadcastPersonalized(ctx.room, (sCtx) => ({ type: 'state', state: ctx.game.getStateDTO(sCtx.slot ?? undefined) }));
+    if (captures.length) hub.broadcast(ctx.room, { type: 'capture', captures });
 
     if (!ctx.isLocal && ctx.matchId && result.state.status === 'finished') {
       matchManager.evict(ctx.matchId);

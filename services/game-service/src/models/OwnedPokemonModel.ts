@@ -72,7 +72,21 @@ export const OwnedPokemonModel = {
     }
   },
 
-  /** Transfiere una instancia (captura en survival): pasa al ganador. */
+  /**
+   * Captura un Pokémon SALVAJE (Survival, T8.2): crea una **nueva** instancia para el usuario
+   * (no transfiere: los salvajes no tienen instancia previa). Devuelve el id creado.
+   */
+  async capture(userId: string, name: string, level = 1): Promise<string> {
+    const db = await getDb();
+    const id = crypto.randomUUID();
+    await db.run(
+      "INSERT INTO owned_pokemon (id, user_id, name, level, xp, is_starter, is_shiny, acquired_via) VALUES (?, ?, ?, ?, 0, 0, 0, 'capture')",
+      id, userId, name, Math.max(1, level)
+    );
+    return id;
+  },
+
+  /** Transfiere una instancia (robo PvP en BR): pasa al ganador. */
   async transfer(id: string, toUserId: string): Promise<void> {
     const db = await getDb();
     await db.run(

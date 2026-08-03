@@ -1338,9 +1338,9 @@ mi inventario, como en una partida de tazos.
 **Dudas resueltas (D10):** captura al derrotar; el stub `transfer` ya existe sin uso.
 
 **Criterios de aceptación:**
-- [ ] Derrotar a un Pokémon en Survival lo añade a tu inventario (🎯).
-- [ ] La transferencia usa la instancia correcta (`ownedId`), no el nombre.
-- [ ] Tests de la transferencia y de la resolución de `slot→user→ownedId`.
+- [x] Derrotar a un salvaje en Survival lo añade a tu inventario (🎯, nueva instancia).
+- [x] La captura/robo usa la instancia correcta (`ownedId`/especie), no un nombre suelto.
+- [x] Tests de la captura (Survival) y del robo (BR).
 
 **Investigación:** `OwnedPokemonModel.transfer` (`OwnedPokemonModel.ts:67-75`, 0 llamadas),
 `defeats` (`GameService.ts:183,452` solo slots), `slotUserMap` (`RoomService.ts:245-249`),
@@ -1348,6 +1348,13 @@ mi inventario, como en una partida de tazos.
 engine `Pokemon` (sin `ownedId` hoy).
 
 **Dependencias:** →T6.3, →T8.1. **Paralelizable:** no.
+
+### ✅ Resolución (lo realmente hecho)
+
+Ver [`31-CAPTURE.md`](31-CAPTURE.md) §T8.2. `defeats` lleva `victimOwnedId`/`victimName`;
+`OwnedPokemonModel.capture` (nueva instancia salvaje) + `transfer` (robo); `CaptureService.resolve`
+(survival→capture salvaje, br→robo instancia) enganchado en el path local de Survival, con
+mensaje `capture` para el feedback. El robo online/BR se activa en T8.4. game-service 113/113.
 
 ## 🎟️ T8.3 — Pérdida permanente + recuperar en tienda (Survival)
 

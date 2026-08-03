@@ -192,7 +192,15 @@ export class GameService {
    * consume para dar 500 monedas al killer. Efímero: se resetea al inicio de cada
    * acción y NO se serializa.
    */
-  private defeats: { killerSlot: string; victimSlot: string; killerOwnedId?: string }[] = [];
+  private defeats: {
+    killerSlot: string;
+    victimSlot: string;
+    killerOwnedId?: string;
+    /** Instancia de la víctima (si era un Pokémon propio): para robo PvP (T8.4). */
+    victimOwnedId?: string;
+    /** Especie de la víctima: para capturar salvajes como nueva instancia (T8.2). */
+    victimName?: string;
+  }[] = [];
 
   /**
    * Bolas a conceder al usuario de cada slot (al ganar o abandonar en arena).
@@ -616,7 +624,13 @@ export class GameService {
       if (victim.hp <= 0) {
         this.log.push(`💀 ¡${nameOf(victim)} ha caído KO!`);
         this.events.push({ kind: 'ko', pokemonId: victim.id, hex: victimHex });
-        this.defeats.push({ killerSlot: caster.playerId, victimSlot: victim.playerId, ...(caster.ownedId ? { killerOwnedId: caster.ownedId } : {}) });
+        this.defeats.push({
+          killerSlot: caster.playerId,
+          victimSlot: victim.playerId,
+          ...(caster.ownedId ? { killerOwnedId: caster.ownedId } : {}),
+          ...(victim.ownedId ? { victimOwnedId: victim.ownedId } : {}),
+          ...(victim.name ? { victimName: victim.name } : {}),
+        });
         this.addKo(caster.playerId);
         this.dropBall(victim, victimHex);
         this.board.setOccupant(victimHex, null);
@@ -701,7 +715,13 @@ export class GameService {
           if (occ.hp <= 0) {
             this.log.push(`💀 ¡${nameOf(occ)} ha caído KO!`);
             this.events.push({ kind: 'ko', pokemonId: occ.id, hex: h });
-            this.defeats.push({ killerSlot: caster.playerId, victimSlot: occ.playerId, ...(caster.ownedId ? { killerOwnedId: caster.ownedId } : {}) });
+            this.defeats.push({
+              killerSlot: caster.playerId,
+              victimSlot: occ.playerId,
+              ...(caster.ownedId ? { killerOwnedId: caster.ownedId } : {}),
+              ...(occ.ownedId ? { victimOwnedId: occ.ownedId } : {}),
+              ...(occ.name ? { victimName: occ.name } : {}),
+            });
             this.addKo(caster.playerId);
             this.dropBall(occ, h);
             this.board.setOccupant(h, null);
@@ -763,7 +783,13 @@ export class GameService {
       if (occ.hp <= 0) {
         this.log.push(`💀 ¡${nameOf(occ)} ha caído KO por el impacto!`);
         this.events.push({ kind: 'ko', pokemonId: occ.id, hex: cur });
-        this.defeats.push({ killerSlot, victimSlot: occ.playerId, ...(killerOwnedId ? { killerOwnedId } : {}) });
+        this.defeats.push({
+          killerSlot,
+          victimSlot: occ.playerId,
+          ...(killerOwnedId ? { killerOwnedId } : {}),
+          ...(occ.ownedId ? { victimOwnedId: occ.ownedId } : {}),
+          ...(occ.name ? { victimName: occ.name } : {}),
+        });
         this.addKo(killerSlot);
         this.dropBall(occ, cur);
         this.board.setOccupant(cur, null);
