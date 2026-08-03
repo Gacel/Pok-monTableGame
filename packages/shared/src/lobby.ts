@@ -8,8 +8,9 @@
 export type MatchMode = 'local' | 'online';
 
 /** Modo de juego: todos contra todos (2-4), por parejas (4), BATTLE ROYALE
- *  (FFA con Pokémon propios del jugador), o ARENA (mundo persistente con propios). */
-export type GameMode = 'ffa' | 'teams' | 'br' | 'arena';
+ *  (FFA con Pokémon propios del jugador), ARENA (mundo persistente con propios), o
+ *  SURVIVAL (1 jugador con equipo propio vs IA salvaje, con captura y pérdida real). */
+export type GameMode = 'ffa' | 'teams' | 'br' | 'arena' | 'survival';
 
 /** Modos que usan los Pokémon PROPIOS del jugador (inventario) en vez del draft. */
 export const OWNED_TEAM_MODES: readonly GameMode[] = ['br', 'arena'];

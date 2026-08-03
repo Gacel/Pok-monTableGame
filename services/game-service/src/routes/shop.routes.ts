@@ -17,4 +17,5 @@ export async function shopRoutes(app: FastifyInstance): Promise<void> {
     },
     ShopController.buy
   );
+  app.post('/api/shop/recover-pokemon', ShopController.recoverPokemon);
 }

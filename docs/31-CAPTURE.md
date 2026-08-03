@@ -1,0 +1,119 @@
+# 31 · Captura ("tazos") — Épica 8
+
+> Modo **Survival** (1J vs IA con equipo propio), **captura al derrotar**, **pérdida real**
+> con recuperación en tienda, y **robo PvP** en Battle Royale. Se apoya en la identidad de
+> instancia `ownedId` (Épica 6). Se extiende ticket a ticket. Vigente desde 2026-08-03.
+
+## Modelo (decisión del usuario)
+
+**Survival = equipo propio + captura real.** Llevas tu equipo del **inventario** (picker); la
+IA usa Pokémon **salvajes** (pool aleatorio, sin `ownedId`). Al derrotar a un salvaje lo
+**capturas** (nueva instancia 🎯). Si te matan a uno tuyo, lo **pierdes** de verdad
+(recuperable en tienda por 10000). En **Battle Royale** el KO **roba** la instancia del rival.
+
+## T8.1 — Modo Survival (1J vs IA)
+
+**Qué cambia:**
+- **`GameMode 'survival'`** ([`lobby.ts`](../packages/shared/src/lobby.ts)).
+- **Arranque** ([`MatchManager.startMatch`](../services/game-service/src/services/MatchManager.ts)):
+  acepta `ownerUserId`; en Survival el **player1** son `ownedId[]` (equipo propio, validado con
+  `allOwnedBy` — solo tus instancias libres) y el **player2**, nombres de especie (IA salvaje,
+  sin `ownedId`). `resolveSurvivalTeams` los resuelve. Se guarda `localMeta = { gameMode,
+  ownerUserId }` para atribuir capturas/pérdidas al humano (T8.2/T8.3).
+- **Endpoint** ([`GameController.start`](../services/game-service/src/controllers/GameController.ts)):
+  admite `gameMode:'survival'`, exige sesión y pasa `reqUserId`. `asNameArray` amplía el tope a
+  40 chars para admitir `ownedId` (UUID de 36) además de nombres.
+- **Frontend**: botón **SURVIVAL MODE** habilitado
+  ([`SinglePlayerMenuView`](../services/frontend/src/views/hub/SinglePlayerMenuView.ts)) →
+  `startSurvival(level)` ([`main.ts`](../services/frontend/src/main.ts)): elige tu equipo con
+  el **picker de inventario** (`OwnedTeamPickerView`), la IA saca 3 salvajes del `draft-pool`
+  (`pickAiTeam`), y arranca la partida con `gameMode:'survival'` (P1 humano, P2 bot).
+
+**Nota:** la captura, la pérdida y el robo son T8.2–T8.4; T8.1 deja el modo **jugable** (tu
+equipo real vs salvajes) y el andamiaje de atribución (`localMeta`).
+
+**Verificación:** `tsc` limpio en los 3 workspaces, build + contenedores OK. Smoke: el modo
+arranca desde el menú con el equipo del inventario. Los tests con lógica pura llegan con la
+captura (T8.2).
+
+## T8.2 — Captura al derrotar (backend)
+
+**Qué cambia:**
+- **`defeats`** (engine + [`MatchStateDTO`](../packages/shared/src/match.ts)) lleva ahora
+  `victimOwnedId?` (instancia de la víctima, si era propia → robo) y `victimName?` (especie →
+  capturar salvaje). Se rellena en los 3 KOs: cast, dash y knockback.
+- **Modelo** ([`OwnedPokemonModel.capture`](../services/game-service/src/models/OwnedPokemonModel.ts)):
+  crea una **nueva** instancia (`acquired_via='capture'`) para un salvaje (no transfiere:
+  los salvajes no tenían instancia). `transfer` (ya existía) roba una instancia rival.
+- **Servicio** ([`CaptureService.resolve(gameMode, slotUser, state)`](../services/game-service/src/services/CaptureService.ts)):
+  por cada KO con **ganador humano**:
+  - `survival` → si la víctima es **salvaje** (sin `ownedId`): `capture(ganador, especie)` 🎯.
+  - `br` → si la víctima es una **instancia** rival: `transfer(ownedId, ganador)` (robo, T8.4).
+  Devuelve `CaptureResult[]` (`{slot, name, kind:'capture'|'steal'}`) para el feedback.
+- **Wiring** ([`GameActionService`](../services/game-service/src/services/GameActionService.ts)):
+  en el path **local**, si `localMeta.gameMode === 'survival'`, resuelve capturas con
+  `slotUser = { player1: ownerUserId }` y difunde un mensaje `{ type:'capture', captures }`.
+  (El path **online/br** se engancha en T8.4.)
+
+**Verificación:** [`test/capture.test.ts`](../services/game-service/test/capture.test.ts) —
+Survival: captura el salvaje derrotado por el humano (nueva instancia, `acquired_via='capture'`);
+NO captura si el KO lo hace la IA, ni una instancia propia, ni en modos sin captura. BR: el
+ganador roba la instancia rival (cambia de dueño). game-service **113/113**, `tsc` limpio.
+
+## T8.3 — Pérdida permanente + recuperación en tienda (Survival)
+
+**Qué cambia:**
+- **Soft-delete** `owned_pokemon.lost_at` (migración + `CREATE`): `null` = viva; timestamp =
+  perdida. `listByUser` y `allOwnedBy` **excluyen** las perdidas (no aparecen en inventario ni
+  en equipos).
+- **Modelo** ([`OwnedPokemonModel`](../services/game-service/src/models/OwnedPokemonModel.ts)):
+  `markLost(id)`, `hasLost(userId)`, `recoverLast(userId)` (quita `lost_at` del último perdido).
+- **Pérdida** ([`CaptureService`](../services/game-service/src/services/CaptureService.ts)): en
+  Survival, si cae una instancia **propia** del humano (la mata la IA), se marca perdida y se
+  emite un `CaptureResult` `kind:'lost'` (feedback). La captura y la pérdida conviven en la
+  misma resolución.
+- **Recuperación** ([`ShopController.recoverPokemon`](../services/game-service/src/controllers/ShopController.ts),
+  `POST /api/shop/recover-pokemon`): por **10000 🪙** restaura el **último** Pokémon perdido
+  (valida saldo y que exista alguno; resta monedas). Botón **RECUPERA UN POKÉMON** habilitado
+  en [`ShopMenuView`](../services/frontend/src/views/hub/ShopMenuView.ts).
+
+**Verificación:** `capture.test.ts` — `markLost`/`recoverLast` (retira y devuelve; no reutilizable
+en equipos mientras perdida); en Survival la IA que mata mi instancia la pierde (`kind:'lost'`)
+mientras yo capturo lo que derroto. game-service **116/116**, `tsc` limpio, contenedores OK.
+
+## T8.4 — Robo PvP en Battle Royale
+
+**Qué cambia:** el `CaptureService` ya sabía robar en `br` (transferir la instancia rival al
+ganador); T8.4 **engancha el path online**:
+- [`RoomService.gameModeOf(matchId)`](../services/game-service/src/services/RoomService.ts):
+  modo de juego de la sala.
+- [`GameActionService`](../services/game-service/src/services/GameActionService.ts): tras una
+  acción online, si el modo es **`br`**, resuelve capturas con `slotUserMap` → cada KO
+  **transfiere** (roba) la instancia derrotada al ganador y emite `{type:'capture'}` (`kind:'steal'`).
+- Los demás modos (1v1/2v2/arena) **no** roban: `CaptureService.resolve` solo actúa en
+  `survival`/`br`.
+
+**Verificación:** el robo BR está cubierto en `capture.test.ts` (el ganador se queda la
+instancia rival; los modos sin captura devuelven vacío). game-service **116/116**, `tsc` limpio.
+
+## T8.5 — Feedback de captura/robo/pérdida (frontend)
+
+**Qué cambia:**
+- El servidor difunde `{ type:'capture', captures: CaptureResult[] }` tras cada acción con
+  capturas/robos/pérdidas.
+- [`WsClient`](../services/frontend/src/net/WsClient.ts): el mensaje `capture` (+ `captures`)
+  entra en el tipo `WsMessage`.
+- [`GameController.onRealtimeMessage`](../services/frontend/src/controllers/GameController.ts):
+  nuevo caso `capture` → `showCaptureFeedback`: **toast** + **flash** sobre la pieza del slot
+  implicado, distinto por tipo — 🎯 `¡Capturado!` (verde), 💰 `¡Robaste!` (violeta), 💀
+  `Perdiste a…` (rojo).
+- El inventario ya marca con 🎯 los `acquired_via==='capture'` (previo).
+
+**Verificación:** `tsc` limpio, build + contenedor OK. Feedback en partida al capturar/robar/
+perder; el capturado aparece con 🎯 en el inventario.
+
+---
+
+**Épica 8 cerrada** (T8.1 → T8.5). Survival con equipo propio vs salvajes, captura al derrotar,
+pérdida real con recuperación en tienda, robo PvP en BR y feedback en partida. Apoya la Épica
+9 (evolución de las instancias) y la 10 (intercambio).

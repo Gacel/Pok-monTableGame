@@ -313,6 +313,66 @@ async function onSinglePlayerDraftConfirmed(
   enterGame(null, { player2: level });
 }
 
+// ------------------------------------------------------- SURVIVAL (vs IA, stakes)
+// Llevas tu EQUIPO PROPIO (inventario); la IA usa salvajes. Capturas lo que derrotas y
+// pierdes de verdad a los tuyos (T8.x). El humano es P1; la IA (salvaje), P2.
+
+export function startSurvival(level: BotLevel) {
+  hubLayer.classList.add('opacity-0');
+  setTimeout(() => {
+    hubLayer.style.display = 'none';
+    showSurvivalPicker(level);
+  }, 500);
+}
+
+function showSurvivalPicker(level: BotLevel) {
+  hideSidebar();
+  const draftLayer = document.getElementById('draft-layer') as HTMLElement;
+  draftLayer.classList.remove('hidden');
+  const picker = new OwnedTeamPickerView(draftLayer, {
+    title: 'SURVIVAL · TU EQUIPO',
+    pick: 3,
+    onBack: () => {
+      draftLayer.classList.add('hidden');
+      showSinglePlayerMenu();
+    },
+    onConfirm: (ownedIds) => void onSurvivalConfirmed(draftLayer, level, ownedIds),
+  });
+  void picker.render();
+}
+
+async function onSurvivalConfirmed(draftLayer: HTMLElement, level: BotLevel, ownedIds: string[]) {
+  // Equipo SALVAJE de la IA: 3 del pool aleatorio Gen-1 (sin ownedId → capturables).
+  let aiTeam: string[] = [];
+  try {
+    const res = await apiFetch('/api/game/draft-pool');
+    const data = await res.json();
+    aiTeam = pickAiTeam((data.roster ?? []) as RosterMon[], [], level, Math.random);
+  } catch {
+    /* sin pool: se maneja abajo */
+  }
+  if (aiTeam.length < 3) {
+    alert('No se pudo formar el equipo salvaje');
+    return;
+  }
+  try {
+    const res = await apiFetch('/api/game/start', {
+      method: 'POST',
+      body: JSON.stringify({ player1: ownedIds, player2: aiTeam, gameMode: 'survival' }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      alert(data.error ?? 'No se pudo iniciar Survival');
+      return;
+    }
+  } catch {
+    alert('Error de red al iniciar Survival');
+    return;
+  }
+  draftLayer.classList.add('hidden');
+  enterGame(null, { player2: level });
+}
+
 // ----------------------------------------------------------- PARTIDA ONLINE
 // Lobby (crear/buscar) → sala de espera → draft de tu equipo → Tablero
 

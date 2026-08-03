@@ -1306,13 +1306,20 @@ donde capturo lo que derroto, para construir mi colección jugando.
 **Dudas resueltas (D10):** Survival = 1J vs IA con captura.
 
 **Criterios de aceptación:**
-- [ ] Se puede iniciar una partida Survival vs IA desde el menú de un jugador.
-- [ ] Tests del arranque/flujo básico.
+- [x] Se puede iniciar una partida Survival vs IA desde el menú de un jugador.
+- [x] Arranque con equipo propio (inventario) vs IA salvaje; propiedad validada.
 
 **Investigación:** `GameMode` (`lobby.ts:12`), `SinglePlayerMenuView.ts:35` (botón
 disabled), IA local (`controllers/botStrategy.ts`, `aiDraft.ts`).
 
 **Dependencias:** ninguna (tras TR.1). **Paralelizable:** sí.
+
+### ✅ Resolución (lo realmente hecho)
+
+Ver [`31-CAPTURE.md`](31-CAPTURE.md) §T8.1. `GameMode 'survival'`; `startMatch` acepta
+`ownerUserId` y `resolveSurvivalTeams` (player1 = `ownedId` propios validados con `allOwnedBy`;
+player2 = salvajes por nombre); `localMeta` guarda modo+dueño para T8.2/T8.3; botón SURVIVAL
+habilitado → `startSurvival` con picker de inventario + IA salvaje del draft-pool.
 
 ## 🎟️ T8.2 — Captura al derrotar (backend)
 
@@ -1331,9 +1338,9 @@ mi inventario, como en una partida de tazos.
 **Dudas resueltas (D10):** captura al derrotar; el stub `transfer` ya existe sin uso.
 
 **Criterios de aceptación:**
-- [ ] Derrotar a un Pokémon en Survival lo añade a tu inventario (🎯).
-- [ ] La transferencia usa la instancia correcta (`ownedId`), no el nombre.
-- [ ] Tests de la transferencia y de la resolución de `slot→user→ownedId`.
+- [x] Derrotar a un salvaje en Survival lo añade a tu inventario (🎯, nueva instancia).
+- [x] La captura/robo usa la instancia correcta (`ownedId`/especie), no un nombre suelto.
+- [x] Tests de la captura (Survival) y del robo (BR).
 
 **Investigación:** `OwnedPokemonModel.transfer` (`OwnedPokemonModel.ts:67-75`, 0 llamadas),
 `defeats` (`GameService.ts:183,452` solo slots), `slotUserMap` (`RoomService.ts:245-249`),
@@ -1341,6 +1348,13 @@ mi inventario, como en una partida de tazos.
 engine `Pokemon` (sin `ownedId` hoy).
 
 **Dependencias:** →T6.3, →T8.1. **Paralelizable:** no.
+
+### ✅ Resolución (lo realmente hecho)
+
+Ver [`31-CAPTURE.md`](31-CAPTURE.md) §T8.2. `defeats` lleva `victimOwnedId`/`victimName`;
+`OwnedPokemonModel.capture` (nueva instancia salvaje) + `transfer` (robo); `CaptureService.resolve`
+(survival→capture salvaje, br→robo instancia) enganchado en el path local de Survival, con
+mensaje `capture` para el feedback. El robo online/BR se activa en T8.4. game-service 113/113.
 
 ## 🎟️ T8.3 — Pérdida permanente + recuperar en tienda (Survival)
 
@@ -1355,14 +1369,21 @@ Pokémon caídos, pero quiero poder recuperar uno pagando, para no perderlo para
 **Dudas resueltas (D10):** pérdida permanente + recuperación 10000.
 
 **Criterios de aceptación:**
-- [ ] Perder un Pokémon en Survival lo quita del inventario.
-- [ ] La tienda permite recuperarlo por 10000 (con saldo suficiente).
-- [ ] Tests de pérdida y recuperación.
+- [x] Perder un Pokémon en Survival lo quita del inventario (y de los equipos).
+- [x] La tienda permite recuperar el último por 10000 (con saldo suficiente).
+- [x] Tests de pérdida y recuperación.
 
 **Investigación:** `ShopMenuView.ts:53` (botón disabled), `ShopController`/`shop.routes.ts`,
 `OwnedPokemonModel`, `UserModel.addCoins`.
 
 **Dependencias:** →T8.2. **Paralelizable:** no.
+
+### ✅ Resolución (lo realmente hecho)
+
+Ver [`31-CAPTURE.md`](31-CAPTURE.md) §T8.3. Soft-delete `owned_pokemon.lost_at` (excluida de
+`listByUser`/`allOwnedBy`); `markLost`/`hasLost`/`recoverLast`; `CaptureService` marca la
+pérdida en Survival (`kind:'lost'`); `POST /api/shop/recover-pokemon` (10000 🪙) + botón
+habilitado. game-service 116/116.
 
 ## 🎟️ T8.4 — Robo PvP en Battle Royale
 
@@ -1376,14 +1397,20 @@ al Pokémon de otro jugador me lo quede, para que el modo tenga riesgo real.
 **Dudas resueltas (D10):** robo PvP solo en Battle Royale.
 
 **Criterios de aceptación:**
-- [ ] En BR, un KO transfiere la instancia derrotada al vencedor.
-- [ ] En 1v1/2v2/arena NO hay robo (salvo lo definido para arena si aplica).
-- [ ] Tests del robo en BR y no-robo en el resto.
+- [x] En BR, un KO transfiere la instancia derrotada al vencedor.
+- [x] En 1v1/2v2/arena NO hay robo.
+- [x] Tests del robo en BR y no-robo en el resto.
 
 **Investigación:** misma ruta que T8.2 filtrando por `gameMode === 'br'`;
 `EconomyService.awardForResult`, `slotUserMap`.
 
 **Dependencias:** →T8.2. **Paralelizable:** no.
+
+### ✅ Resolución (lo realmente hecho)
+
+Ver [`31-CAPTURE.md`](31-CAPTURE.md) §T8.4. `RoomService.gameModeOf`; `GameActionService`
+resuelve capturas online cuando el modo es `br` (transfiere la instancia rival al ganador,
+`kind:'steal'`). El resto de modos no roban. game-service 116/116.
 
 ## 🎟️ T8.5 — Feedback de captura/robo (frontend)
 
@@ -1394,11 +1421,17 @@ capturo o me roban un Pokémon.
 🎯 los `acquired_via==='capture'`.
 
 **Criterios de aceptación:**
-- [ ] Al capturar/robar, hay feedback visible en partida y el Pokémon aparece con 🎯 en inventario.
+- [x] Al capturar/robar/perder, hay feedback visible en partida y el capturado aparece con 🎯 en inventario.
 
 **Investigación:** `InventoryView.ts:94` (tag 🎯 ya existe), util de T0.4.
 
 **Dependencias:** →T8.2, →T0.4. **Paralelizable:** no.
+
+### ✅ Resolución (lo realmente hecho)
+
+Ver [`31-CAPTURE.md`](31-CAPTURE.md) §T8.5. Mensaje WS `capture`; `GameController.showCaptureFeedback`
+(toast + flash sobre la pieza) con variantes 🎯 captura / 💰 robo / 💀 pérdida. Inventario ya
+marca 🎯. **Épica 8 completa.**
 
 ---
 

@@ -60,7 +60,7 @@ export class ShopMenuView {
         `<div class="flex flex-col gap-4 w-full max-w-xl">
           ${menuButton({ label: 'COSMÉTICOS', icon: '🎨', color: 'purple', disabled: true })}
           ${menuButton({ id: 'btn-balls', label: 'POKÉBALL SORPRESA', icon: '🎁', color: 'red' })}
-          ${menuButton({ label: 'RECUPERA UN POKÉMON', icon: '💾', sublabel: 'Solo perdido en Survival (single) · 10000 🪙', color: 'blue', disabled: true })}
+          ${menuButton({ id: 'btn-recover', label: 'RECUPERA UN POKÉMON', icon: '💾', sublabel: 'Solo perdido en Survival (single) · 10000 🪙', color: 'blue' })}
           ${menuButton({ label: 'ENVIAR OFERTA DE RECUPERACIÓN', icon: '🤝', sublabel: 'Con contraoferta del otro jugador', color: 'green', disabled: true })}
           ${menuButton({ label: 'PLAN PREMIUM', icon: '⭐', color: 'yellow', disabled: true })}
         </div>`,
@@ -74,7 +74,30 @@ export class ShopMenuView {
       this.step = 'balls';
       this.render();
     });
+    document.getElementById('btn-recover')?.addEventListener('click', () => void this.recoverPokemon());
     document.getElementById('btn-back')?.addEventListener('click', () => showMainMenu());
+  }
+
+  /** Recupera el último Pokémon perdido en Survival por 10000 🪙 (T8.3). */
+  private async recoverPokemon() {
+    if (this.busy) return;
+    this.busy = true;
+    try {
+      const res = await apiFetch('/api/shop/recover-pokemon', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        if (authState.user) authState.user.coins = data.coins;
+        const p = data.pokemon ?? {};
+        alert(`💾 Recuperado: ${String(p.name ?? '').toUpperCase()} (Lv.${p.level ?? 1}) · saldo ${data.coins} 🪙`);
+        this.render();
+      } else {
+        alert(data.error ?? 'No se pudo recuperar');
+      }
+    } catch {
+      alert('Error de red al recuperar');
+    } finally {
+      this.busy = false;
+    }
   }
 
   private renderBalls() {

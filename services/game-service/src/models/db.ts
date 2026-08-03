@@ -132,6 +132,7 @@ async function openAndMigrate(): Promise<Database> {
       name         TEXT NOT NULL,
       level        INTEGER NOT NULL DEFAULT 1,
       xp           INTEGER NOT NULL DEFAULT 0,
+      lost_at      TEXT,
       is_starter   INTEGER NOT NULL DEFAULT 0,
       is_shiny     INTEGER NOT NULL DEFAULT 0,
       acquired_via TEXT NOT NULL DEFAULT 'starter',
@@ -194,6 +195,10 @@ async function openAndMigrate(): Promise<Database> {
   // XP acumulada hacia el siguiente nivel (T6.1). El nivel ya existe (default 1).
   if (!opCols.some((c: { name: string }) => c.name === 'xp')) {
     await db.exec(`ALTER TABLE owned_pokemon ADD COLUMN xp INTEGER NOT NULL DEFAULT 0`);
+  }
+  // Pérdida en Survival (T8.3): marca de baja (soft-delete); null = viva/en inventario.
+  if (!opCols.some((c: { name: string }) => c.name === 'lost_at')) {
+    await db.exec(`ALTER TABLE owned_pokemon ADD COLUMN lost_at TEXT`);
   }
 
   // Migración defensiva: columna `email` en users (si la tabla ya existía).

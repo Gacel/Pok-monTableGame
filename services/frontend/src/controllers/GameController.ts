@@ -12,6 +12,7 @@ import { MatchSession } from '../state/MatchSession';
 import type { OnlineSession } from '../state/MatchSession';
 import type { Hex, MatchState, Pokemon, BallKey } from '../models/Types';
 import { BALL_SPRITE, BALL_LABEL } from '@transcendence/shared';
+import type { CaptureResult } from '@transcendence/shared';
 import { authState } from '../auth/AuthState';
 import { decideBotAction, hexDistance, pickCastMove } from './botStrategy';
 import type { BotLevel, BotPieceOptions, EnemyPiece } from './botStrategy';
@@ -346,6 +347,28 @@ export class GameController {
     } else if (msg.type === 'chat' && msg.text) {
       this.hudView.flashToast(`💬 ${msg.text}`, '#1d4ed8');
       this.hudView.appendChat(msg.text);
+    } else if (msg.type === 'capture' && msg.captures) {
+      this.showCaptureFeedback(msg.captures);
+    }
+  }
+
+  /** Feedback de captura/robo/pérdida (T8.5): toast + número flotante sobre la pieza. */
+  private showCaptureFeedback(captures: CaptureResult[]): void {
+    for (const c of captures) {
+      const name = (c.name || 'POKÉMON').toUpperCase();
+      if (c.kind === 'capture') {
+        this.hudView.flashToast(`🎯 ¡Capturado ${name}!`, '#16a34a');
+      } else if (c.kind === 'steal') {
+        this.hudView.flashToast(`💰 ¡Robaste ${name}!`, '#7c3aed');
+      } else {
+        this.hudView.flashToast(`💀 Perdiste a ${name}`, '#dc2626');
+      }
+      // Marca visual sobre la pieza del slot implicado (si sigue en el tablero).
+      const tile = this.state.currentTiles.find((t) => t.occupant?.playerId === c.slot);
+      if (tile) {
+        const emoji = c.kind === 'lost' ? '💀' : c.kind === 'steal' ? '💰' : '🎯';
+        this.fxLayer.flash(tile.hex, emoji);
+      }
     }
   }
 

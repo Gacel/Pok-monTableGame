@@ -84,7 +84,8 @@ async function applyLocal(action: GameAction, userId?: string | null) {
 
 function asNameArray(v: unknown): string[] | null {
   if (!Array.isArray(v)) return null;
-  if (!v.every((x) => typeof x === 'string' && x.length > 0 && x.length <= 32)) return null;
+  // 40 admite tanto nombres de especie (cortos) como ownedId (UUID de 36, Survival).
+  if (!v.every((x) => typeof x === 'string' && x.length > 0 && x.length <= 40)) return null;
   return v as string[];
 }
 
@@ -185,9 +186,14 @@ export const GameController = {
       return reply.code(400).send({ success: false, error: 'Se necesitan al menos 2 jugadores' });
     }
     const gm = request.body?.gameMode;
-    const gameMode = (gm === 'teams' || gm === 'arena' || gm === 'br' ? gm : 'ffa') as GameMode;
+    const gameMode = (gm === 'teams' || gm === 'arena' || gm === 'br' || gm === 'survival' ? gm : 'ffa') as GameMode;
+    // Survival: el player1 son ownedId (equipo propio del humano); se atribuye al usuario que
+    // inicia (para capturas/pérdidas). El resto de modos locales usan draft (nombres).
+    if (gameMode === 'survival' && !reqUserId(request)) {
+      return reply.code(401).send({ success: false, error: 'Debes iniciar sesión para jugar Survival' });
+    }
     try {
-      const game = await matchManager.startMatch(teams, gameMode);
+      const game = await matchManager.startMatch(teams, gameMode, reqUserId(request));
       hub.broadcast(LOCAL_ROOM, { type: 'state', state: game.getStateDTO() });
       return { success: true, state: game.getStateDTO() };
     } catch (e) {

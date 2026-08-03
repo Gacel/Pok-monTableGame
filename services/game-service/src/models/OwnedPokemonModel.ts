@@ -14,6 +14,8 @@ export interface OwnedPokemonRecord {
   acquired_via: string;
   /** Id de la subasta en la que está retenida (escrow); null si está libre. */
   auction_id?: string | null;
+  /** Marca de baja por pérdida en Survival (T8.3); null = viva/en inventario. */
+  lost_at?: string | null;
   created_at?: string;
 }
 
@@ -21,10 +23,10 @@ export interface OwnedPokemonRecord {
 export const OwnedPokemonModel = {
   async listByUser(userId: string): Promise<OwnedPokemonRecord[]> {
     const db = await getDb();
-    // Excluye las instancias en subasta (escrow): no aparecen en inventario ni
-    // pueden usarse en equipos mientras están a la venta.
+    // Excluye instancias en subasta (escrow) y las PERDIDAS en Survival (lost_at):
+    // no aparecen en inventario ni pueden usarse en equipos.
     return db.all<OwnedPokemonRecord[]>(
-      'SELECT * FROM owned_pokemon WHERE user_id = ? AND auction_id IS NULL ORDER BY created_at',
+      'SELECT * FROM owned_pokemon WHERE user_id = ? AND auction_id IS NULL AND lost_at IS NULL ORDER BY created_at',
       userId
     );
   },
@@ -72,7 +74,21 @@ export const OwnedPokemonModel = {
     }
   },
 
-  /** Transfiere una instancia (captura en survival): pasa al ganador. */
+  /**
+   * Captura un Pokémon SALVAJE (Survival, T8.2): crea una **nueva** instancia para el usuario
+   * (no transfiere: los salvajes no tienen instancia previa). Devuelve el id creado.
+   */
+  async capture(userId: string, name: string, level = 1): Promise<string> {
+    const db = await getDb();
+    const id = crypto.randomUUID();
+    await db.run(
+      "INSERT INTO owned_pokemon (id, user_id, name, level, xp, is_starter, is_shiny, acquired_via) VALUES (?, ?, ?, ?, 0, 0, 0, 'capture')",
+      id, userId, name, Math.max(1, level)
+    );
+    return id;
+  },
+
+  /** Transfiere una instancia (robo PvP en BR): pasa al ganador. */
   async transfer(id: string, toUserId: string): Promise<void> {
     const db = await getDb();
     await db.run(
@@ -121,7 +137,40 @@ export const OwnedPokemonModel = {
     if (ids.length === 0) return false;
     const rows = await this.findManyByIds(ids);
     if (rows.length !== ids.length) return false;
-    return rows.every((r) => r.user_id === userId && (r.auction_id ?? null) === null);
+    return rows.every(
+      (r) => r.user_id === userId && (r.auction_id ?? null) === null && (r.lost_at ?? null) === null
+    );
+  },
+
+  /** Marca una instancia como PERDIDA (Survival, T8.3): soft-delete recuperable. */
+  async markLost(id: string): Promise<void> {
+    const db = await getDb();
+    await db.run("UPDATE owned_pokemon SET lost_at = datetime('now') WHERE id = ? AND lost_at IS NULL", id);
+  },
+
+  /** ¿El usuario tiene algún Pokémon perdido recuperable? */
+  async hasLost(userId: string): Promise<boolean> {
+    const db = await getDb();
+    const row = await db.get<{ n: number }>(
+      'SELECT COUNT(*) AS n FROM owned_pokemon WHERE user_id = ? AND lost_at IS NOT NULL',
+      userId
+    );
+    return (row?.n ?? 0) > 0;
+  },
+
+  /**
+   * Recupera el ÚLTIMO Pokémon perdido del usuario (Survival, T8.3): quita `lost_at` y lo
+   * devuelve al inventario. Devuelve el registro recuperado, o `null` si no había ninguno.
+   */
+  async recoverLast(userId: string): Promise<OwnedPokemonRecord | null> {
+    const db = await getDb();
+    const row = await db.get<OwnedPokemonRecord>(
+      'SELECT * FROM owned_pokemon WHERE user_id = ? AND lost_at IS NOT NULL ORDER BY lost_at DESC, rowid DESC LIMIT 1',
+      userId
+    );
+    if (!row) return null;
+    await db.run('UPDATE owned_pokemon SET lost_at = NULL WHERE id = ?', row.id);
+    return { ...row, lost_at: null };
   },
 
   /**
