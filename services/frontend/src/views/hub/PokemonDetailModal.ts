@@ -46,6 +46,17 @@ export interface PokemonDetailSeed {
   /** Sprite ya precargado por la vista (evita re-fetch). */
   spriteUrl?: string;
   isShiny?: boolean;
+  /** Id de instancia (inventario): habilita la evolución meta (T9.3). Ausente en draft. */
+  ownedId?: string;
+  /** Callback tras evolucionar (para refrescar el inventario). */
+  onEvolved?: () => void;
+}
+
+/** Resolución de evolución de la instancia (del servidor, T9.3). */
+interface EvoUi {
+  canEvolve: boolean;
+  target: string | null;
+  requirement: string;
 }
 
 /** Ataque curado + su descripción corta (short_effect de PokeAPI, cacheada). */
@@ -110,6 +121,22 @@ function xpBar(seed: PokemonDetailSeed): string {
     </div>`;
 }
 
+/** Bloque de evolución meta (T9.3): botón si puede evolucionar ya; si no, el requisito. */
+function evolveHtml(seed: PokemonDetailSeed, evo?: EvoUi | null): string {
+  if (!seed.ownedId || !evo || !evo.target) return ''; // draft o forma final: nada
+  const to = evo.target.toUpperCase();
+  if (evo.canEvolve) {
+    return `
+      <button id="pkmn-evolve-btn" class="w-full mt-3 py-2 rounded border-b-4 bg-green-600 hover:bg-green-500 text-white border-green-800 active:border-b-0" style="${FONT} font-size:9px; box-shadow:0 3px 0 #000;">
+        ✨ EVOLUCIONAR A ${escapeHtml(to)}
+      </button>`;
+  }
+  return `
+    <div class="w-full mt-3 py-2 rounded bg-gray-800 border border-gray-700 text-center" style="${FONT} font-size:7px; color:#9ca3af;">
+      Evoluciona a ${escapeHtml(to)} · ${escapeHtml(evo.requirement)}
+    </div>`;
+}
+
 function statChip(label: string, val: number | undefined, color: string): string {
   return `
     <div class="flex flex-col items-center rounded bg-gray-800/80 border border-gray-700" style="padding:4px 8px;">
@@ -156,7 +183,8 @@ function bodyHtml(
   seed: PokemonDetailSeed,
   data: PokedexData | null,
   sprite: string,
-  loading: boolean
+  loading: boolean,
+  evo?: EvoUi | null
 ): string {
   const curType = data?.type ?? seed.type;
   const hp = data?.hp ?? seed.hp;
@@ -191,6 +219,8 @@ function bodyHtml(
       ${statChip('ATK', atk, '#f87171')}
       ${statChip('DEF', def, '#60a5fa')}
     </div>
+
+    ${evolveHtml(seed, evo)}
 
     <h4 class="text-white mt-4 mb-1.5" style="${FONT} font-size:8px;">ATAQUES APRENDIDOS</h4>
     ${movesHtml}
@@ -241,15 +271,23 @@ export function openPokemonDetail(seed: PokemonDetailSeed): void {
 
   const body = overlay.querySelector('#pkmn-modal-body') as HTMLElement;
   let sprite = seed.spriteUrl ?? '';
-  const paint = (data: PokedexData | null, loading: boolean): void => {
-    body.innerHTML = bodyHtml(seed, data, sprite, loading);
+  let pdData: PokedexData | null = null;
+  let loading = true;
+  let evo: EvoUi | null = null;
+  const paint = (): void => {
+    body.innerHTML = bodyHtml(seed, pdData, sprite, loading, evo);
   };
-  paint(null, true);
+  paint();
 
   overlay.addEventListener('click', (e) => {
     if (e.target === overlay) closePokemonDetail();
   });
   overlay.querySelector('#pkmn-modal-close')?.addEventListener('click', () => closePokemonDetail());
+  // Evolución meta (T9.3): botón dentro del cuerpo (se re-pinta), por delegación.
+  overlay.addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement).closest('#pkmn-evolve-btn');
+    if (btn && seed.ownedId && evo?.canEvolve) void doEvolve(seed);
+  });
   document.addEventListener('keydown', onKey);
 
   // Sprite: si la vista no lo precargó, lo pedimos (cacheado en memoria por PokeSprites).
@@ -268,9 +306,48 @@ export function openPokemonDetail(seed: PokemonDetailSeed): void {
       const res = await apiFetch(`/api/game/pokedex/${encodeURIComponent(seed.name)}`);
       const json = await res.json();
       if (activeOverlay !== overlay) return; // el usuario cerró o abrió otra ficha
-      paint(res.ok && json.pokemon ? (json.pokemon as PokedexData) : null, false);
+      pdData = res.ok && json.pokemon ? (json.pokemon as PokedexData) : null;
     } catch {
-      if (activeOverlay === overlay) paint(null, false);
+      /* sin datos */
+    }
+    if (activeOverlay === overlay) {
+      loading = false;
+      paint();
     }
   })();
+
+  // Evolución (solo instancias del inventario).
+  if (seed.ownedId) {
+    void (async () => {
+      try {
+        const res = await apiFetch(`/api/inventory/pokemon/${seed.ownedId}/evolution`);
+        const json = await res.json();
+        if (activeOverlay !== overlay) return;
+        if (res.ok && json.evolution) {
+          evo = json.evolution as EvoUi;
+          paint();
+        }
+      } catch {
+        /* sin info de evolución */
+      }
+    })();
+  }
+}
+
+/** Ejecuta la evolución meta de la instancia y refresca (T9.3). */
+async function doEvolve(seed: PokemonDetailSeed): Promise<void> {
+  if (!seed.ownedId) return;
+  try {
+    const res = await apiFetch(`/api/inventory/pokemon/${seed.ownedId}/evolve`, { method: 'POST' });
+    const json = await res.json();
+    if (res.ok && json.success) {
+      alert(`✨ ${String(json.from ?? seed.name).toUpperCase()} evolucionó a ${String(json.evolvedTo ?? '').toUpperCase()}!`);
+      closePokemonDetail();
+      seed.onEvolved?.();
+    } else {
+      alert(json.error ?? 'No se pudo evolucionar');
+    }
+  } catch {
+    alert('Error de red al evolucionar');
+  }
 }

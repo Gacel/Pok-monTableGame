@@ -4,6 +4,8 @@
  * qué disparador. Lógica pura y testeable (sin red ni SQLite).
  */
 
+import { STONE_LABEL_ES } from '@transcendence/shared';
+
 export type EvolutionTrigger = 'level' | 'stone' | 'trade' | 'other';
 
 export interface EvolutionInfo {
@@ -64,4 +66,63 @@ export function parseEvolutionChain(chain: EvolutionChainResponse, name: string)
     if (d.item?.name) info.item = d.item.name;
   }
   return info;
+}
+
+// ------------------------------------------------------- resolución (T9.1)
+
+/** Nombre en español de las piedras (re-export de la fuente única en shared). */
+export const STONE_ES = STONE_LABEL_ES;
+
+/** Requisito legible (español) de una evolución. */
+export function requirementLabel(info: EvolutionInfo): string {
+  switch (info.trigger) {
+    case 'level':
+      return `Nivel ${info.minLevel ?? '?'}`;
+    case 'stone':
+      return STONE_ES[info.item ?? ''] ?? `Objeto: ${info.item ?? '?'}`;
+    case 'trade':
+      return info.item ? `Intercambio (con ${info.item})` : 'Intercambio';
+    default:
+      return 'No evoluciona por ahora';
+  }
+}
+
+/** Resolución de evolución de una INSTANCIA en su contexto (nivel + objetos). */
+export interface EvolutionResolution {
+  /** Info de evolución de la especie (null = forma final / no evoluciona). */
+  info: EvolutionInfo | null;
+  /** Especie destino, o null si no evoluciona. */
+  target: string | null;
+  trigger: EvolutionTrigger | null;
+  /** Requisito legible (español). */
+  requirement: string;
+  /** ¿Cumple el requisito AHORA en este contexto? (los de intercambio son de la Épica 10). */
+  canEvolve: boolean;
+}
+
+/**
+ * Resuelve, para una instancia, si puede evolucionar ya, a qué forma y con qué requisito.
+ * PURA (sin red ni SQLite): recibe el catálogo (`info`) y el contexto. Los triggers `trade`/
+ * `other` no evolucionan aquí (el intercambio es la Épica 10).
+ */
+export function resolveEvolution(
+  info: EvolutionInfo | null,
+  ctx: { level: number; items?: ReadonlySet<string> }
+): EvolutionResolution {
+  if (!info) {
+    return { info: null, target: null, trigger: null, requirement: 'Forma final', canEvolve: false };
+  }
+  let canEvolve = false;
+  if (info.trigger === 'level') {
+    canEvolve = ctx.level >= (info.minLevel ?? Infinity);
+  } else if (info.trigger === 'stone') {
+    canEvolve = !!info.item && (ctx.items?.has(info.item) ?? false);
+  }
+  return {
+    info,
+    target: info.evolvesTo,
+    trigger: info.trigger,
+    requirement: requirementLabel(info),
+    canEvolve,
+  };
 }

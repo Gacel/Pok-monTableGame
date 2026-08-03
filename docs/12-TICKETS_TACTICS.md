@@ -1448,12 +1448,18 @@ quiero saber si evoluciona y a qué forma, para aplicarlo.
 **Dudas resueltas (D13):** fiel a PokeAPI (nivel/piedra/intercambio).
 
 **Criterios de aceptación:**
-- [ ] Resuelve correctamente evolución por nivel, por piedra y marca las de intercambio.
-- [ ] Tests con Charmander (nivel), Vulpix (piedra), Kadabra (intercambio).
+- [x] Resuelve correctamente evolución por nivel, por piedra y marca las de intercambio.
+- [x] Tests con Charmander (nivel), Vulpix (piedra), Kadabra (intercambio).
 
 **Investigación:** catálogo de T5.2; `PokemonService`.
 
 **Dependencias:** →T5.2. **Paralelizable:** no.
+
+### ✅ Resolución (lo realmente hecho)
+
+Ver [`32-EVOLUTION.md`](32-EVOLUTION.md) §T9.1. `resolveEvolution(info, {level, items})` →
+`{target, trigger, requirement, canEvolve}` (nivel≥minLevel; piedra en inventario; trade/other
+no evolucionan aquí) + `requirementLabel`/`STONE_ES`. Puro. game-service 121/121.
 
 ## 🎟️ T9.2 — Objetos de evolución como drops + tienda
 
@@ -1469,14 +1475,21 @@ y comprándolas, para evolucionar a mis Pokémon.
 **Dudas resueltas (D16):** drops post-combate + tienda; reutiliza cofres.
 
 **Criterios de aceptación:**
-- [ ] Las piedras aparecen como botín en cofres y en la tienda.
-- [ ] Se acumulan en el inventario de objetos.
-- [ ] Tests del catálogo/otorgamiento.
+- [x] Las piedras aparecen como botín en cofres (35%) y en la tienda (3000 🪙).
+- [x] Se acumulan en el inventario de objetos (kind `stone`, con sprite y etiqueta ES).
+- [x] Tests del catálogo/otorgamiento.
 
 **Investigación:** `owned_items`/`ItemModel`, sistema de cofres (post-TR.1: `f6a6134`),
 `ShopController`.
 
 **Dependencias:** →T5.2, →TR.1. **Paralelizable:** parcial.
+
+### ✅ Resolución (lo realmente hecho)
+
+Ver [`32-EVOLUTION.md`](32-EVOLUTION.md) §T9.2. `services/stones.ts` (5 piedras Gen 1);
+`GET /api/shop/stones` + `POST /api/shop/stone` + sección en la tienda; drop 35% en cofres
+(`EconomyService`); inventario muestra piedras con sprite PokeAPI + etiqueta ES compartida.
+game-service 123/123.
 
 ## 🎟️ T9.3 — Evolución meta en el hub
 
@@ -1492,14 +1505,21 @@ inventario cuando cumplen el requisito (nivel o piedra), de forma permanente.
 **Dudas resueltas (D13):** evolución meta persistente.
 
 **Criterios de aceptación:**
-- [ ] Un Pokémon que cumple requisito puede evolucionar desde el inventario (persistente).
-- [ ] Consume la piedra correspondiente / valida el nivel.
-- [ ] Tests del flujo meta.
+- [x] Un Pokémon que cumple requisito puede evolucionar desde el inventario (persistente).
+- [x] Consume la piedra correspondiente / valida el nivel.
+- [x] Tests del flujo meta.
 
 **Investigación:** `OwnedPokemonModel`, `InventoryController`/`inventory.routes.ts`
 (ampliados en TR.1), `InventoryView.ts`, `PokemonDetailModal.ts`.
 
 **Dependencias:** →T9.1, →T9.2, →T6.1. **Paralelizable:** no.
+
+### ✅ Resolución (lo realmente hecho)
+
+Ver [`32-EVOLUTION.md`](32-EVOLUTION.md) §T9.3. `OwnedPokemonModel.evolve`;
+`GET .../evolution` (resuelve por instancia) + `POST .../evolve` (valida requisito, consume
+piedra, cambia especie); botón **✨ EVOLUCIONAR** en la ficha (o el requisito si no cumple),
+refresca inventario. game-service 124/124.
 
 ## 🎟️ T9.4 — Evolución in-match
 
@@ -1516,14 +1536,22 @@ batalla (gastando recursos), para dar la vuelta a un combate.
 **Dudas resueltas (D13):** evolución in-match; candies pasan a tener uso real.
 
 **Criterios de aceptación:**
-- [ ] Se puede evolucionar en partida cumpliendo el coste; el sprite cambia sin recargar.
-- [ ] Tests de la acción y del consumo de recursos.
+- [x] Se puede evolucionar en partida cumpliendo el coste (candies); el sprite cambia sin recargar.
+- [x] Tests de la acción y del consumo de recursos.
 
 **Investigación:** `GameAction` union (`GameActionService.ts:7-13`), `this.resources`
 (`GameService.ts:35`, `collectTurnResources` L550-558, nunca se decrementan), sprite por
 nombre (`net/PokeSprites.ts`, `EntityView` lee `occupant.name`).
 
 **Dependencias:** →T9.1. **Paralelizable:** no.
+
+### ✅ Resolución (lo realmente hecho)
+
+Ver [`32-EVOLUTION.md`](32-EVOLUTION.md) §T9.4. Acción `evolve` (rutas local+online);
+`GameActionService.resolveEvolve` (async: catálogo+plantilla, persiste `ownedId`);
+`GameService.evolvePiece` (coste 4 candies por tipo, gate de nivel, stats sin curar, consume
+acción, evento `evolve`); hotkey **V** + flash ✨ (sprite cambia solo). **Épica 9 completa.**
+game-service 129/129.
 
 ---
 

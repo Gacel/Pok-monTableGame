@@ -2,6 +2,7 @@ import { showMainMenu } from '../../main';
 import { apiFetch } from '../../net/api';
 import { getSprite } from '../../net/PokeSprites';
 import { authState } from '../../auth/AuthState';
+import { stoneLabelEs } from '@transcendence/shared';
 import { FONT, hubPanel, panelTitle, panelCard, menuButton, backButton } from './panel';
 import { gachaAudio } from './GachaAudio';
 
@@ -14,6 +15,15 @@ const BALLS = [
   { key: 'master', name: 'MASTERBALL', sprite: 'master-ball.png', price: 10000 },
 ];
 
+/** Piedras evolutivas a la venta (mismo precio que el catálogo del servidor, T9.2). */
+const STONES = [
+  { key: 'fire-stone', price: 3000 },
+  { key: 'water-stone', price: 3000 },
+  { key: 'thunder-stone', price: 3000 },
+  { key: 'leaf-stone', price: 3000 },
+  { key: 'moon-stone', price: 3000 },
+];
+
 const TIER_LABEL: Record<number, string> = { 1: 'COMÚN', 2: 'RARO', 3: 'ÉPICO', 4: 'LEGENDARIO' };
 const TIER_COLOR: Record<number, string> = { 1: '#9ca3af', 2: '#60a5fa', 3: '#c084fc', 4: '#fbbf24' };
 
@@ -24,7 +34,7 @@ const TIER_COLOR: Record<number, string> = { 1: '#9ca3af', 2: '#60a5fa', 3: '#c0
  */
 export class ShopMenuView {
   private container: HTMLElement;
-  private step: 'root' | 'balls' | 'opening' | 'sky_cinematic' | 'fullscreen_reveal' | 'reveal' = 'root';
+  private step: 'root' | 'balls' | 'stones' | 'opening' | 'sky_cinematic' | 'fullscreen_reveal' | 'reveal' = 'root';
   private openingBall: string | null = null;
   private notice = '';
   private busy = false;
@@ -45,6 +55,7 @@ export class ShopMenuView {
 
   public render() {
     if (this.step === 'balls') return this.renderBalls();
+    if (this.step === 'stones') return this.renderStones();
     if (this.step === 'opening') return this.renderOpening();
     if (this.step === 'sky_cinematic') return this.renderSkyCinematic();
     if (this.step === 'fullscreen_reveal') return this.renderFullscreenReveal();
@@ -60,6 +71,7 @@ export class ShopMenuView {
         `<div class="flex flex-col gap-4 w-full max-w-xl">
           ${menuButton({ label: 'COSMÉTICOS', icon: '🎨', color: 'purple', disabled: true })}
           ${menuButton({ id: 'btn-balls', label: 'POKÉBALL SORPRESA', icon: '🎁', color: 'red' })}
+          ${menuButton({ id: 'btn-stones', label: 'PIEDRAS EVOLUTIVAS', icon: '💎', sublabel: 'Evoluciona a tus Pokémon · 3000 🪙', color: 'blue' })}
           ${menuButton({ id: 'btn-recover', label: 'RECUPERA UN POKÉMON', icon: '💾', sublabel: 'Solo perdido en Survival (single) · 10000 🪙', color: 'blue' })}
           ${menuButton({ label: 'ENVIAR OFERTA DE RECUPERACIÓN', icon: '🤝', sublabel: 'Con contraoferta del otro jugador', color: 'green', disabled: true })}
           ${menuButton({ label: 'PLAN PREMIUM', icon: '⭐', color: 'yellow', disabled: true })}
@@ -74,8 +86,71 @@ export class ShopMenuView {
       this.step = 'balls';
       this.render();
     });
+    document.getElementById('btn-stones')?.addEventListener('click', () => {
+      this.step = 'stones';
+      this.render();
+    });
     document.getElementById('btn-recover')?.addEventListener('click', () => void this.recoverPokemon());
     document.getElementById('btn-back')?.addEventListener('click', () => showMainMenu());
+  }
+
+  /** Tienda de PIEDRAS evolutivas (T9.2). */
+  private renderStones() {
+    const coins = this.coins();
+    const card = (s: (typeof STONES)[number]) => {
+      const afford = coins >= s.price && !this.busy;
+      return `
+      <button data-stone="${s.key}" ${afford ? '' : 'disabled'} class="stone-card flex flex-col items-center justify-between gap-2 rounded border-4 border-gray-800 shadow-[4px_4px_0_#000] transition-all ${
+        afford ? 'bg-white hover:bg-yellow-100 active:mt-1' : 'bg-gray-300 opacity-60 cursor-not-allowed'
+      }" style="padding:16px 12px;">
+        <img src="${BALL_SPRITE}/${s.key}.png" alt="${s.key}" class="w-16 h-16 object-contain" style="image-rendering: pixelated;" />
+        <span class="text-black text-center" style="${FONT} font-size:8px;">${stoneLabelEs(s.key)}</span>
+        <span class="text-gray-700" style="${FONT} font-size:10px;">${s.price} 🪙</span>
+      </button>`;
+    };
+
+    this.container.innerHTML = hubPanel(
+      `
+      ${panelTitle('PIEDRAS EVOLUTIVAS')}
+      <p class="text-white text-center mb-3" style="${FONT} font-size:11px;">Tu saldo: <span class="text-yellow-300">${coins} 🪙</span></p>
+      ${panelCard(
+        `<div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 sm:gap-4 w-full max-w-3xl">${STONES.map(card).join('')}</div>
+         <p class="text-gray-500 text-center mt-4" style="${FONT} font-size:7px;">Úsalas desde el inventario para evolucionar a tus Pokémon (o consíguelas en los cofres).</p>`,
+        'flex flex-col items-center'
+      )}
+      ${backButton()}
+      `,
+      { minHeight: 600 }
+    );
+
+    this.container.querySelectorAll<HTMLButtonElement>('.stone-card').forEach((btn) => {
+      btn.addEventListener('click', () => void this.buyStone(btn.dataset.stone!));
+    });
+    document.getElementById('btn-back')?.addEventListener('click', () => {
+      this.step = 'root';
+      this.render();
+    });
+  }
+
+  /** Compra una piedra evolutiva (T9.2). */
+  private async buyStone(stone: string): Promise<void> {
+    if (this.busy) return;
+    this.busy = true;
+    try {
+      const res = await apiFetch('/api/shop/stone', { method: 'POST', body: JSON.stringify({ stone }) });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        if (authState.user) authState.user.coins = data.coins;
+        alert(`💎 Comprada: ${stoneLabelEs(stone)} · saldo ${data.coins} 🪙`);
+        this.render();
+      } else {
+        alert(data.error ?? 'No se pudo comprar');
+      }
+    } catch {
+      alert('Error de red al comprar');
+    } finally {
+      this.busy = false;
+    }
   }
 
   /** Recupera el último Pokémon perdido en Survival por 10000 🪙 (T8.3). */

@@ -5,13 +5,17 @@ import { EconomyService } from './EconomyService.js';
 import { ProgressionService } from './ProgressionService.js';
 import { CaptureService } from './CaptureService.js';
 import { RoomService } from './RoomService.js';
+import { PokemonService } from './PokemonService.js';
+import { OwnedPokemonModel } from '../models/OwnedPokemonModel.js';
 import { hub } from '../realtime/hub.js';
 import type { CaptureResult } from '@transcendence/shared';
+import type { Hex as HexT } from '@transcendence/shared';
 
 export type GameAction =
   | { type: 'move'; from: Hex; to: Hex }
   | { type: 'cast'; from: Hex; target: Hex; moveIndex: number }
   | { type: 'deploy'; pokemonId: string; hex: Hex }
+  | { type: 'evolve'; from: Hex }
   | { type: 'end_turn' }
   | { type: 'abandon' }
   | { type: 'forceStart' };
@@ -46,7 +50,32 @@ function run(ctx: ActionContext, action: GameAction): PlayResult {
       return isLocal ? game.abandon() : game.abandon(actor);
     case 'forceStart':
       return game.forceStart();
+    case 'evolve':
+      // Se resuelve de forma asíncrona (catálogo + plantilla) en `resolveEvolve`.
+      throw new Error('evolve se resuelve en apply()');
   }
+}
+
+/**
+ * Evolución IN-MATCH (T9.4): resuelve el catálogo de evolución y la plantilla destino (async,
+ * cache-first) y delega la mutación/coste en el engine. Persiste la nueva forma en la instancia
+ * (`ownedId`) si la pieza es un Pokémon propio (D13: la forma persiste en ambos flujos).
+ */
+async function resolveEvolve(ctx: ActionContext, from: HexT): Promise<PlayResult> {
+  const occ = ctx.game.getBoard().getOccupant(from);
+  if (!occ) return { ok: false, error: 'No hay ninguna pieza ahí', state: ctx.game.getStateDTO() };
+
+  const info = await PokemonService.getEvolution(occ.name ?? '');
+  if (!info) {
+    return { ok: false, error: 'Este Pokémon no evoluciona', state: ctx.game.getStateDTO() };
+  }
+  const tpl = await PokemonService.getTemplate(info.evolvesTo);
+  const result = ctx.game.evolvePiece(ctx.actor, from, info, tpl);
+  // Persiste la forma en el inventario si es una instancia propia (Survival/BR).
+  if (result.ok && occ.ownedId) {
+    await OwnedPokemonModel.evolve(occ.ownedId, info.evolvesTo).catch(() => {});
+  }
+  return result;
 }
 
 /**
@@ -57,9 +86,7 @@ function run(ctx: ActionContext, action: GameAction): PlayResult {
  */
 export const GameActionService = {
   async apply(ctx: ActionContext, action: GameAction): Promise<PlayResult> {
-
-
-    const result = run(ctx, action);
+    const result = action.type === 'evolve' ? await resolveEvolve(ctx, action.from) : run(ctx, action);
     if (!result.ok) return result;
 
     let captures: CaptureResult[] = [];

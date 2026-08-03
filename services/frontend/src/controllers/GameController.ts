@@ -512,6 +512,9 @@ export class GameController {
         case 'reveal':
           this.fxLayer.flash(ev.hex); // "!" de emboscada revelada (T1.2)
           break;
+        case 'evolve':
+          this.fxLayer.flash(ev.hex, '✨'); // evolución in-match (T9.4); el sprite cambia solo
+          break;
         case 'knockback':
         case 'dash':
           // Deslizamiento del sprite (T3.2/T3.4): se marca el id para que EntityView use
@@ -883,6 +886,28 @@ export class GameController {
     }
   }
 
+  /** Evolución in-match (T9.4): la pieza seleccionada evoluciona gastando candies. */
+  private async performEvolve(from: Hex): Promise<void> {
+    if (this.busy) return;
+    this.busy = true;
+    try {
+      const res = await apiFetch(this.apiPath('/evolve'), { method: 'POST', body: JSON.stringify({ from }) });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        this.state.selectedHex = null;
+        await this.preloadSprites(data.state as MatchState);
+        this.applyMatchState(data.state as MatchState);
+      } else {
+        this.hudView.flashToast(data.error ?? 'No se pudo evolucionar', '#dc2626');
+      }
+    } catch (err) {
+      console.error(err);
+      this.hudView.flashToast('Error de red');
+    } finally {
+      this.busy = false;
+    }
+  }
+
   private async resetGame(): Promise<void> {
     // Online no hay revancha in situ: se limpia la sesión y se vuelve al menú.
     if (this.session) {
@@ -1101,6 +1126,9 @@ export class GameController {
         if (['Q', 'W', 'E', 'R'].includes(key) && this.state.selectedHex) {
           const map: Record<string, number> = { Q: 0, W: 1, E: 2, R: 3 };
           this.state.activeMoveIndex = map[key];
+        } else if (key === 'V' && this.state.selectedHex && this.isMyTurn()) {
+          // Evolución in-match (T9.4): evoluciona la pieza seleccionada gastando candies.
+          void this.performEvolve(this.state.selectedHex);
         } else if (key === 'ESCAPE') {
           this.state.activeMoveIndex = null;
         }

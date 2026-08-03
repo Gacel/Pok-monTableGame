@@ -4,6 +4,9 @@ import { getMoveOptions, MoveOptions } from '../engine/movement.js';
 import { computeMoveDamage, calculateAoE, isAutocentered, autocenteredRadius } from '../engine/combat.js';
 import { terrainDamage, canEnter } from '../engine/environment.js';
 import { collectResources, PlayerResources } from '../engine/resources.js';
+import { scaledVitals } from '../engine/progression.js';
+import type { EvolutionInfo } from '../engine/evolution.js';
+import type { PokemonTemplate } from '../models/PokemonModel.js';
 import { BALL_LABEL, pickChestBall } from '@transcendence/shared';
 
 // Contratos de estado en @transcendence/shared (única fuente de verdad).
@@ -22,6 +25,18 @@ export interface PlayResult {
 
 const emptyResources = (): PlayerResources => ({ FIRE_CANDY: 0, WATER_CANDY: 0, GRASS_CANDY: 0 });
 const nameOf = (p: Pokemon) => (p.name ?? p.id).toUpperCase();
+
+/** Coste en candies de una evolución in-match (T9.4). */
+const EVOLVE_CANDY_COST = 4;
+const CANDY_LABEL: Record<keyof PlayerResources, string> = {
+  FIRE_CANDY: 'Fuego', WATER_CANDY: 'Agua', GRASS_CANDY: 'Planta',
+};
+/** Candy que consume una pieza según su tipo (solo hay 3 tipos de caramelo). */
+function candyForType(type: string): keyof PlayerResources {
+  if (type === 'FIRE') return 'FIRE_CANDY';
+  if (type === 'WATER' || type === 'ICE') return 'WATER_CANDY';
+  return 'GRASS_CANDY'; // GRASS/POISON/NORMAL/otros
+}
 
 /**
  * Capa SERVICIO/DOMINIO: partida autoritativa. Única fuente de verdad del estado.
@@ -658,9 +673,66 @@ export class GameService {
 
     caster.hasActed = true;
     caster.isHidden = false; // El ataque rompe el sigilo inmediatamente
-    
+
     this.updateStealthVisibility();
     this.checkWinCondition();
+    return { ok: true, state: this.getStateDTO() };
+  }
+
+  /**
+   * Evolución IN-MATCH (T9.4): la pieza en `from` evoluciona gastando **candies** (los
+   * recursos por fin tienen uso). Valida turno/propiedad, exige el nivel para las evoluciones
+   * por nivel (las de piedra/intercambio se resuelven con candies), sube stats a la forma
+   * destino sin curar, consume la acción del turno y emite el evento. `info`/`tpl` los resuelve
+   * la capa de servicio (async) y se los pasa ya listos.
+   */
+  evolvePiece(actor: string, from: Hex, info: EvolutionInfo, tpl: PokemonTemplate): PlayResult {
+    this.defeats = [];
+    this.events = [];
+    if (this.status !== 'active') {
+      return { ok: false, error: 'La partida no está activa', state: this.getStateDTO() };
+    }
+    if (actor !== this.currentPlayer) {
+      return { ok: false, error: 'No es tu turno', state: this.getStateDTO() };
+    }
+    const occ = this.board.getOccupant(from);
+    if (!occ) return { ok: false, error: 'No hay ninguna pieza ahí', state: this.getStateDTO() };
+    if (occ.playerId !== actor) return { ok: false, error: 'Esa pieza no es tuya', state: this.getStateDTO() };
+    if (occ.hasActed) return { ok: false, error: 'Esa pieza ya ha actuado en este turno', state: this.getStateDTO() };
+
+    // Las evoluciones por nivel exigen el nivel; las de piedra/intercambio, solo candies.
+    if (info.trigger === 'level' && (occ.level ?? 1) < (info.minLevel ?? Infinity)) {
+      return { ok: false, error: `Requiere nivel ${info.minLevel}`, state: this.getStateDTO() };
+    }
+
+    const candyKey = candyForType(occ.type);
+    const res = this.resources[actor] ?? emptyResources();
+    if ((res[candyKey] ?? 0) < EVOLVE_CANDY_COST) {
+      return {
+        ok: false,
+        error: `Necesitas ${EVOLVE_CANDY_COST} caramelos de ${CANDY_LABEL[candyKey]}`,
+        state: this.getStateDTO(),
+      };
+    }
+    res[candyKey] -= EVOLVE_CANDY_COST;
+    this.resources[actor] = res;
+
+    // Sube a la forma destino (stats escaladas por su nivel; no cura: HP tope al nuevo maxHp).
+    const prevName = nameOf(occ);
+    const vitals = scaledVitals(tpl, occ.level ?? 1);
+    occ.name = info.evolvesTo;
+    occ.type = tpl.type;
+    occ.size = tpl.size;
+    if (tpl.scale != null) occ.scale = tpl.scale;
+    occ.maxHp = vitals.maxHp;
+    occ.hp = Math.min(occ.hp, vitals.maxHp);
+    occ.atk = vitals.atk;
+    occ.def = vitals.def;
+    occ.hasActed = true;
+
+    this.events.push({ kind: 'evolve', pokemonId: occ.id, hex: from });
+    this.log.push(`✨ ${prevName} evolucionó a ${info.evolvesTo.toUpperCase()}!`);
+    this.updateStealthVisibility();
     return { ok: true, state: this.getStateDTO() };
   }
 
