@@ -50,3 +50,24 @@ game-service **121/121**, `tsc` limpio.
 **Verificación:** [`test/stones.test.ts`](../services/game-service/test/stones.test.ts) —
 catálogo (5 piedras, slugs, etiqueta ES, `isStone`) y acumulación en `owned_items` (kind
 `stone`). game-service **123/123**, `tsc` limpio, build + contenedores OK.
+
+## T9.3 — Evolución meta (inventario)
+
+**Qué añade:**
+- **Modelo** ([`OwnedPokemonModel.evolve(id, newForm)`](../services/game-service/src/models/OwnedPokemonModel.ts)):
+  `UPDATE name` conservando id/nivel/XP.
+- **Endpoints** ([`InventoryController`](../services/game-service/src/controllers/InventoryController.ts)):
+  - `GET /api/inventory/pokemon/:id/evolution` → resuelve la evolución de **esa instancia**
+    (`resolveEvolution` con su nivel + las piedras del inventario). Por instancia para no
+    disparar N llamadas a PokeAPI al abrir el inventario.
+  - `POST /api/inventory/pokemon/:id/evolve` → valida propiedad + requisito, **consume la
+    piedra** si aplica (`trigger:'stone'`), `evolve(id, target)` y cachea la plantilla destino.
+    Autoritativo (rechaza si no cumple, o si está en subasta/perdido).
+- **Ficha** ([`PokemonDetailModal`](../services/frontend/src/views/hub/PokemonDetailModal.ts)):
+  con `ownedId`, pide la evolución y muestra **✨ EVOLUCIONAR A …** (verde) si `canEvolve`, o
+  el **requisito** si no. Al evolucionar: aviso, cierra y **refresca el inventario**
+  (`onEvolved`). El intercambio (Kadabra…) se marca como requisito pero no evoluciona aquí.
+
+**Verificación:** [`test/evolveModel.test.ts`](../services/game-service/test/evolveModel.test.ts)
+— `evolve` cambia la especie conservando id/nivel/XP; la resolución ya está cubierta por T9.1.
+game-service **124/124**, `tsc` limpio, build + contenedores OK.

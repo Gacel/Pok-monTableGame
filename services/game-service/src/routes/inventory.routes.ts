@@ -58,4 +58,17 @@ export async function inventoryRoutes(app: FastifyInstance): Promise<void> {
     },
     InventoryController.giftItem
   );
+
+  // Evolución meta (T9.3): consulta si una instancia puede evolucionar, y la evoluciona.
+  const idParams = {
+    schema: {
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: { id: { type: 'string', minLength: 1, maxLength: 64 } },
+      },
+    },
+  };
+  app.get('/api/inventory/pokemon/:id/evolution', idParams, InventoryController.evolutionInfo);
+  app.post('/api/inventory/pokemon/:id/evolve', idParams, InventoryController.evolve);
 }
