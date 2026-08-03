@@ -1,5 +1,5 @@
 import type { PokemonType } from '../../models/Types';
-import type { GameMode } from '@transcendence/shared';
+import { type GameMode, typeLabelEs } from '@transcendence/shared';
 import { apiFetch } from '../../net/api';
 import { getSprite } from '../../net/PokeSprites';
 import { openPokemonDetail } from './PokemonDetailModal';
@@ -143,7 +143,7 @@ export class DraftView {
             style="border:3px solid ${border};">
             <img src="${this.sprites[p.name] ?? ''}" alt="${p.name}" class="w-14 h-14 object-contain" style="image-rendering:pixelated;" />
             <span class="text-[8px] text-white mt-0.5 uppercase font-bold" style="font-family:'Press Start 2P',monospace;">${p.name}</span>
-            <span class="text-[6px] mt-1 px-1.5 py-0.5 rounded font-bold" style="font-family:'Press Start 2P',monospace;background:${TYPE_COLOR[p.type] ?? '#666'};color:#000;">${p.type}</span>
+            <span class="text-[6px] mt-1 px-1.5 py-0.5 rounded font-bold" style="font-family:'Press Start 2P',monospace;background:${TYPE_COLOR[p.type] ?? '#666'};color:#000;">${typeLabelEs(p.type)}</span>
             ${selected ? '<span class="absolute top-1 right-1 text-yellow-400 text-sm animate-pulse">★</span>' : ''}
           </button>
           <span class="draft-info" role="button" tabindex="0" data-name="${p.name}" title="Ver ficha de ${p.name}"

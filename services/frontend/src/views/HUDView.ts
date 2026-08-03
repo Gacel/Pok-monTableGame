@@ -1,6 +1,6 @@
 import { GameState } from '../models/GameState';
 import type { Tile, PlayerResources, MatchState, BallKey } from '../models/Types';
-import { BALL_SPRITE, BALL_LABEL } from '@transcendence/shared';
+import { BALL_SPRITE, BALL_LABEL, typeLabelEs } from '@transcendence/shared';
 import { authState } from '../auth/AuthState';
 import { escapeHtml } from '../utils/html';
 
@@ -103,13 +103,7 @@ export class HUDView {
       const classIcon = m.damageClass === 'special' ? '🔮' : m.damageClass === 'status' ? '🛡️' : '⚔️';
       const moveName = m.displayName ? m.displayName.toUpperCase() : m.name.toUpperCase();
       
-      const typeTranslations: Record<string, string> = {
-        FIRE: 'FUEGO', WATER: 'AGUA', GRASS: 'PLANTA', ELECTRIC: 'ELÉCTRICO',
-        ICE: 'HIELO', FIGHTING: 'LUCHA', POISON: 'VENENO', GROUND: 'TIERRA',
-        FLYING: 'VOLADOR', PSYCHIC: 'PSÍQUICO', BUG: 'BICHO', ROCK: 'ROCA',
-        GHOST: 'FANTASMA', DRAGON: 'DRAGÓN', STEEL: 'ACERO', FAIRY: 'HADA', NORMAL: 'NORMAL'
-      };
-      const translatedType = typeTranslations[m.type] || m.type;
+      const translatedType = typeLabelEs(m.type);
 
       // Efecto táctico (T3.x): empuje 💨×N o dash 💫, visible en el botón y el tooltip.
       const tacticBadge = m.knockback ? `💨${m.knockback > 1 ? '×' + m.knockback : ''}` : m.dash ? '💫' : '';
@@ -157,7 +151,7 @@ export class HUDView {
         <div class="reserve-btn flex flex-col items-center justify-center p-2 rounded cursor-pointer border-2 transition-transform hover:scale-105 active:scale-95 min-w-[120px] h-28" style="background-color: ${typeColor}40; ${borderStyle}" data-reserve-id="${p.id}" title="Desplegar a ${p.name}">
           <img src="${spriteUrl}" class="w-12 h-12 object-contain mb-1" style="image-rendering: pixelated;" />
           <span class="text-white text-[8px] font-bold text-center w-full break-words" style="font-family: 'Press Start 2P', monospace; line-height: 1.2;">${(p.name??'').toUpperCase()}</span>
-          <span class="text-gray-300 text-[8px] mt-1 text-center">${p.type.toUpperCase()}</span>
+          <span class="text-gray-300 text-[8px] mt-1 text-center">${typeLabelEs(p.type)}</span>
         </div>
       `;
     }).join('');

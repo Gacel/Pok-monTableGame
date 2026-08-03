@@ -1,5 +1,6 @@
 import { apiFetch } from '../../net/api';
 import { getSprite } from '../../net/PokeSprites';
+import { typeLabelEs } from '@transcendence/shared';
 import { FONT, hubPanel, panelTitle, panelCard, backButton } from './panel';
 
 interface OwnedPokemon {
@@ -80,7 +81,7 @@ export class OwnedTeamPickerView {
         }" style="padding:6px;">
           <img src="${this.sprites[p.name] ?? ''}" alt="${p.name}" class="w-14 h-14 sm:w-16 sm:h-16 object-contain" style="image-rendering:pixelated;" />
           <span class="owned-card-name uppercase text-center leading-tight" style="${FONT} font-size:7px; color:${sel ? '#000' : '#fff'};">${p.name}</span>
-          <span style="${FONT} font-size:6px; color:${color};">${p.type} · Lv.${p.level}</span>
+          <span style="${FONT} font-size:6px; color:${color};">${typeLabelEs(p.type)} · Lv.${p.level}</span>
         </button>`;
       })
       .join('');

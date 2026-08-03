@@ -26,6 +26,19 @@ export const POKEMON_TYPES = [
 ] as const;
 export type PokemonType = (typeof POKEMON_TYPES)[number];
 
+/** Nombre del tipo en español (MAYÚSCULAS), para la UI. Fuente única. */
+export const POKEMON_TYPE_ES: Record<PokemonType, string> = {
+  FIRE: 'FUEGO', WATER: 'AGUA', GRASS: 'PLANTA', POISON: 'VENENO', FLYING: 'VOLADOR',
+  DRAGON: 'DRAGÓN', PSYCHIC: 'PSÍQUICO', NORMAL: 'NORMAL', ELECTRIC: 'ELÉCTRICO',
+  ICE: 'HIELO', FAIRY: 'HADA', BUG: 'BICHO', ROCK: 'ROCA', FIGHTING: 'LUCHA',
+  GHOST: 'FANTASMA', GROUND: 'TIERRA', STEEL: 'ACERO',
+};
+
+/** Etiqueta de tipo en español; devuelve el original si no se reconoce. */
+export function typeLabelEs(type: string): string {
+  return POKEMON_TYPE_ES[type as PokemonType] ?? type;
+}
+
 /** Tamaños de Pokémon (dicta si bloquean visión y casillas ocupadas). */
 export const POKEMON_SIZES = ['small', 'medium', 'large'] as const;
 export type PokemonSize = (typeof POKEMON_SIZES)[number];
