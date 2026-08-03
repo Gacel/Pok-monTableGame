@@ -51,7 +51,7 @@ export async function gameRoutes(app: FastifyInstance): Promise<void> {
             player2: teamSchema,
             player3: teamSchema,
             player4: teamSchema,
-            gameMode: { type: 'string', enum: ['ffa', 'teams', 'br', 'arena'] },
+            gameMode: { type: 'string', enum: ['ffa', 'teams', 'br', 'arena', 'survival'] },
           },
         },
       },

@@ -32,6 +32,15 @@ IA usa Pokémon **salvajes** (pool aleatorio, sin `ownedId`). Al derrotar a un s
 **Nota:** la captura, la pérdida y el robo son T8.2–T8.4; T8.1 deja el modo **jugable** (tu
 equipo real vs salvajes) y el andamiaje de atribución (`localMeta`).
 
+**Fix posterior (UX + arranque):**
+- El **schema** de `POST /api/game/start` no incluía `'survival'` en el enum de `gameMode`, así
+  que al pulsar ENTRAR devolvía **400 Bad Request**. Añadido `'survival'` al enum (`teamSchema`
+  ya admite los `ownedId` UUID sin límite de longitud).
+- El **picker de inventario** ([`OwnedTeamPickerView`](../services/frontend/src/views/hub/OwnedTeamPickerView.ts))
+  reescrito para **aprovechar el ancho** (rejilla hasta 8 columnas, sin `max-w-xl`) y actualizar
+  la selección **in-place** (toggle de clases + contador/botón), en vez de re-renderizar todo el
+  panel en cada clic — que reiniciaba la vista y el scroll.
+
 **Verificación:** `tsc` limpio en los 3 workspaces, build + contenedores OK. Smoke: el modo
 arranca desde el menú con el equipo del inventario. Los tests con lógica pura llegan con la
 captura (T8.2).
