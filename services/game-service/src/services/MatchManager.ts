@@ -13,6 +13,7 @@ import { PokemonTemplate } from '../models/PokemonModel.js';
 import { MatchModel } from '../models/MatchModel.js';
 import { OwnedPokemonModel } from '../models/OwnedPokemonModel.js';
 import { scaledVitals } from '../engine/progression.js';
+import { isGen1, randomGen1Names } from '../engine/gen1.js';
 
 /**
  * Plantilla de Pokémon augmentada con la identidad de una instancia del inventario
@@ -32,6 +33,8 @@ const MAP_RADIUS = Number(process.env.GAME_MAP_RADIUS ?? 20);
 /** ARENA: mapa ≥4x (R=42 → 5419 tiles ≈ 4.3x de los 1261 de R=20). */
 const ARENA_MAP_RADIUS = Number(process.env.GAME_ARENA_MAP_RADIUS ?? 42);
 const TEAM_SIZE = 3;
+/** Tamaño del pool de draft aleatorio (local/IA): 50 Pokémon Gen-1 distintos por draft. */
+const DRAFT_POOL_SIZE = 50;
 
 /**
  * Pool de Pokémon para el draft. Solo formas base: se han purgado las
@@ -84,11 +87,21 @@ export class MatchManager {
     return this.match;
   }
 
-  /** Devuelve (y cachea) las plantillas del pool de draft. */
+  /** Devuelve (y cachea) las plantillas del roster ESTABLE (draft online 1v1/2v2). */
   async getRoster(): Promise<PokemonTemplate[]> {
     if (this.rosterCache) return this.rosterCache;
     this.rosterCache = await Promise.all(ROSTER_NAMES.map((n) => PokemonService.getTemplate(n)));
     return this.rosterCache;
+  }
+
+  /**
+   * Pool de draft para partidas LOCALES y vs-IA: `n` Pokémon **aleatorios** de Gen 1,
+   * distintos cada draft (a diferencia del roster online, estable). Las plantillas se
+   * cachean (getTemplate), solo la selección es aleatoria.
+   */
+  async draftPool(n = DRAFT_POOL_SIZE): Promise<PokemonTemplate[]> {
+    const names = randomGen1Names(n);
+    return Promise.all(names.map((nm) => PokemonService.getTemplate(nm)));
   }
 
   /**
@@ -163,34 +176,35 @@ export class MatchManager {
     return GameService.create(DEFAULT_MATCH_ID, board, placements);
   }
 
-  /** Resuelve nombres del roster a plantillas, en orden player1..player4. */
+  /**
+   * Resuelve nombres del draft a plantillas, en orden player1..player4. Acepta cualquier
+   * especie **Gen 1** (el pool de draft local/IA es aleatorio entre los 151, no una lista
+   * fija), resolviéndola por PokeAPI (cache-first). Mantiene la regla de unicidad cruzada.
+   */
   private async resolveTeams(teams: Record<string, string[]>): Promise<PokemonTemplate[][]> {
-    const roster = await this.getRoster();
-    const byName = new Map(roster.map((p) => [p.name, p]));
-    const resolve = (names: string[]): PokemonTemplate[] =>
-      names.map((n) => {
-        const tpl = byName.get(n);
-        if (!tpl) throw new Error(`Pokémon fuera del roster: ${n}`);
-        return tpl;
-      });
-
     // Regla de draft: ningún Pokémon puede repetirse, ni dentro de un equipo ni
     // entre equipos. Validación autoritativa en el servidor (no confiar en la UI).
     const seen = new Set<string>();
     for (let i = 1; i <= 4; i++) {
       for (const n of teams[`player${i}`] ?? []) {
-        if (seen.has(n)) {
-          throw new Error(`Pokémon repetido en el draft: ${n}`);
-        }
+        if (seen.has(n)) throw new Error(`Pokémon repetido en el draft: ${n}`);
         seen.add(n);
       }
     }
+
+    const resolve = (names: string[]): Promise<PokemonTemplate[]> =>
+      Promise.all(
+        names.map((n) => {
+          if (!isGen1(n)) throw new Error(`Pokémon no válido: ${n}`);
+          return PokemonService.getTemplate(n);
+        })
+      );
 
     const teamArrays: PokemonTemplate[][] = [];
     for (let i = 1; i <= 4; i++) {
       const names = teams[`player${i}`];
       if (names && names.length > 0) {
-        teamArrays.push(resolve(names));
+        teamArrays.push(await resolve(names));
       }
     }
     if (teamArrays.length < 2) {

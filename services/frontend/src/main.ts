@@ -221,7 +221,7 @@ function showLocalDraft(config: LocalGameConfig) {
   draftLayer.classList.remove('hidden');
   const view = new DraftView(
     draftLayer,
-    { mode: 'local', players: config.players, gameMode: config.gameMode },
+    { mode: 'local', players: config.players, gameMode: config.gameMode, poolEndpoint: '/api/game/draft-pool' },
     (teams) => void onLocalDraftConfirmed(draftLayer, config, teams)
   );
   void view.render();
@@ -269,7 +269,7 @@ async function showSinglePlayerDraft(level: BotLevel) {
   draftLayer.classList.remove('hidden');
   const view = new DraftView(
     draftLayer,
-    { mode: 'online', playerLabel: 'TU EQUIPO' },
+    { mode: 'online', playerLabel: 'TU EQUIPO', poolEndpoint: '/api/game/draft-pool' },
     (teams) => void onSinglePlayerDraftConfirmed(draftLayer, level, teams[0] ?? [])
   );
   await view.render();
@@ -280,15 +280,16 @@ async function onSinglePlayerDraftConfirmed(
   level: BotLevel,
   humanTeam: string[]
 ) {
-  // La IA elige su equipo con su "inteligencia" (nivel) contra el equipo del jugador.
+  // La IA elige su equipo con su "inteligencia" (nivel) contra el equipo del jugador,
+  // del mismo pool aleatorio Gen-1 (draft-pool) que el humano.
   let aiTeam: string[] = [];
   try {
-    const res = await apiFetch('/api/game/roster');
+    const res = await apiFetch('/api/game/draft-pool');
     const data = await res.json();
     const roster = (data.roster ?? []) as RosterMon[];
     aiTeam = pickAiTeam(roster, humanTeam, level, Math.random);
   } catch {
-    /* sin roster: se maneja abajo */
+    /* sin pool: se maneja abajo */
   }
   if (aiTeam.length < 3) {
     alert('No se pudo formar el equipo de la IA');

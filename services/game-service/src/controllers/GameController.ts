@@ -101,9 +101,14 @@ export const GameController = {
     return matchManager.get().getStateDTO();
   },
 
-  /** Pool de Pokémon para el draft inicial (≥12). */
+  /** Roster ESTABLE para el draft online 1v1/2v2 (consistente entre jugadores). */
   async getRoster() {
     return { roster: await matchManager.getRoster() };
+  },
+
+  /** Pool de draft LOCAL/vs-IA: 50 Pokémon Gen-1 aleatorios, distintos cada draft. */
+  async getDraftPool() {
+    return { roster: await matchManager.draftPool() };
   },
 
   /**

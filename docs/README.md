@@ -53,6 +53,7 @@
 | 27 | [`27-GEN1_SCOPE.md`](27-GEN1_SCOPE.md) | Scope Gen 1 (Épica 5): clamp a los 151 (fuente única `gen1.ts`, loot pool de 151) — T5.1; catálogo de evolución pendiente. |
 | 28 | [`28-BOT_CAST_FIX.md`](28-BOT_CAST_FIX.md) | Fix de la IA (FIX-IA): ataques del bot por `/cast` (no `/move` ilegal), elección por alcance (`pickCastMove`), acercamiento y turno siempre avanza (no se congela). |
 | 29 | [`29-PROGRESSION_LEVELS.md`](29-PROGRESSION_LEVELS.md) | Progresión (Épica 6, completa): equipos por instancia `ownedId` con nivel real (T6.3), escalado de stats por nivel (T6.2), XP/level-up por instancia (T6.1) y UI de nivel/XP (T6.4). |
+| 30 | [`30-DRAFT_POOL.md`](30-DRAFT_POOL.md) | Draft con pool aleatorio (Épica 7, T7.1): local/IA draftean de 50 Gen-1 aleatorios por draft; online 1v1/2v2 con roster estable; BR/ARENA con inventario propio. Revisa D15 (draft mantenido, no eliminado). |
 
 ## Archivo (histórico, no numerado)
 
