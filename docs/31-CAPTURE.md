@@ -35,3 +35,27 @@ equipo real vs salvajes) y el andamiaje de atribución (`localMeta`).
 **Verificación:** `tsc` limpio en los 3 workspaces, build + contenedores OK. Smoke: el modo
 arranca desde el menú con el equipo del inventario. Los tests con lógica pura llegan con la
 captura (T8.2).
+
+## T8.2 — Captura al derrotar (backend)
+
+**Qué cambia:**
+- **`defeats`** (engine + [`MatchStateDTO`](../packages/shared/src/match.ts)) lleva ahora
+  `victimOwnedId?` (instancia de la víctima, si era propia → robo) y `victimName?` (especie →
+  capturar salvaje). Se rellena en los 3 KOs: cast, dash y knockback.
+- **Modelo** ([`OwnedPokemonModel.capture`](../services/game-service/src/models/OwnedPokemonModel.ts)):
+  crea una **nueva** instancia (`acquired_via='capture'`) para un salvaje (no transfiere:
+  los salvajes no tenían instancia). `transfer` (ya existía) roba una instancia rival.
+- **Servicio** ([`CaptureService.resolve(gameMode, slotUser, state)`](../services/game-service/src/services/CaptureService.ts)):
+  por cada KO con **ganador humano**:
+  - `survival` → si la víctima es **salvaje** (sin `ownedId`): `capture(ganador, especie)` 🎯.
+  - `br` → si la víctima es una **instancia** rival: `transfer(ownedId, ganador)` (robo, T8.4).
+  Devuelve `CaptureResult[]` (`{slot, name, kind:'capture'|'steal'}`) para el feedback.
+- **Wiring** ([`GameActionService`](../services/game-service/src/services/GameActionService.ts)):
+  en el path **local**, si `localMeta.gameMode === 'survival'`, resuelve capturas con
+  `slotUser = { player1: ownerUserId }` y difunde un mensaje `{ type:'capture', captures }`.
+  (El path **online/br** se engancha en T8.4.)
+
+**Verificación:** [`test/capture.test.ts`](../services/game-service/test/capture.test.ts) —
+Survival: captura el salvaje derrotado por el humano (nueva instancia, `acquired_via='capture'`);
+NO captura si el KO lo hace la IA, ni una instancia propia, ni en modos sin captura. BR: el
+ganador roba la instancia rival (cambia de dueño). game-service **113/113**, `tsc` limpio.
