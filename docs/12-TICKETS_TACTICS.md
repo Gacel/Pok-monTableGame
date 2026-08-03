@@ -1573,15 +1573,22 @@ con mis amigos de forma segura, para completar mi colección y evolucionar por i
 **Dudas resueltas (D17):** sistema de intercambio propio, sobre amigos/escrow.
 
 **Criterios de aceptación:**
-- [ ] Dos amigos pueden intercambiar Pokémon+objetos+monedas con confirmación por ambos.
-- [ ] El escrow impide perder lo ofertado si el trato se cancela.
-- [ ] Tests del flujo y del escrow.
+- [x] Dos amigos pueden intercambiar Pokémon+objetos+monedas con confirmación por ambos.
+- [x] El escrow impide perder lo ofertado si el trato se cancela.
+- [x] Tests del flujo y del escrow.
 
 **Investigación:** `FriendModel`/`FriendController` (amistad), `AuctionService` (patrón
 escrow), `OwnedPokemonModel`/`ItemModel`/`UserModel.addCoins`, "regalar" post-TR.1
 (`531d6f5`), `CommunityMenuView` step `gift`.
 
 **Dependencias:** →TR.1. **Paralelizable:** sí (parte).
+
+### ✅ Resolución (lo realmente hecho)
+
+Ver [`33-TRADING.md`](33-TRADING.md) §T10.1. Tabla `trades` + escrow `owned_pokemon.trade_id`;
+`TradeService` (propose escrowa lo ofertado, accept cruza propiedades, cancel reembolsa);
+`TradeController` + rutas `GET/POST /api/trades`, `.../accept`, `.../cancel`. game-service
+135/135.
 
 ## 🎟️ T10.2 — UI de intercambio (frontend)
 

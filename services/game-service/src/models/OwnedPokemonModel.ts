@@ -14,6 +14,8 @@ export interface OwnedPokemonRecord {
   acquired_via: string;
   /** Id de la subasta en la que está retenida (escrow); null si está libre. */
   auction_id?: string | null;
+  /** Id del intercambio en el que está retenida (escrow, T10.1); null si está libre. */
+  trade_id?: string | null;
   /** Marca de baja por pérdida en Survival (T8.3); null = viva/en inventario. */
   lost_at?: string | null;
   created_at?: string;
@@ -23,10 +25,10 @@ export interface OwnedPokemonRecord {
 export const OwnedPokemonModel = {
   async listByUser(userId: string): Promise<OwnedPokemonRecord[]> {
     const db = await getDb();
-    // Excluye instancias en subasta (escrow) y las PERDIDAS en Survival (lost_at):
+    // Excluye instancias en subasta o intercambio (escrow) y las PERDIDAS en Survival:
     // no aparecen en inventario ni pueden usarse en equipos.
     return db.all<OwnedPokemonRecord[]>(
-      'SELECT * FROM owned_pokemon WHERE user_id = ? AND auction_id IS NULL AND lost_at IS NULL ORDER BY created_at',
+      'SELECT * FROM owned_pokemon WHERE user_id = ? AND auction_id IS NULL AND trade_id IS NULL AND lost_at IS NULL ORDER BY created_at',
       userId
     );
   },
@@ -144,7 +146,27 @@ export const OwnedPokemonModel = {
     const rows = await this.findManyByIds(ids);
     if (rows.length !== ids.length) return false;
     return rows.every(
-      (r) => r.user_id === userId && (r.auction_id ?? null) === null && (r.lost_at ?? null) === null
+      (r) =>
+        r.user_id === userId &&
+        (r.auction_id ?? null) === null &&
+        (r.trade_id ?? null) === null &&
+        (r.lost_at ?? null) === null
+    );
+  },
+
+  /** Marca (o libera) una instancia como escrow de un intercambio (T10.1). */
+  async setTrade(id: string, tradeId: string | null): Promise<void> {
+    const db = await getDb();
+    await db.run('UPDATE owned_pokemon SET trade_id = ? WHERE id = ?', tradeId, id);
+  },
+
+  /** Completa un intercambio: pasa la instancia al receptor y libera el escrow (T10.1). */
+  async completeTrade(id: string, toUserId: string): Promise<void> {
+    const db = await getDb();
+    await db.run(
+      "UPDATE owned_pokemon SET user_id = ?, trade_id = NULL, acquired_via = 'trade', is_starter = 0 WHERE id = ?",
+      toUserId,
+      id
     );
   },
 
