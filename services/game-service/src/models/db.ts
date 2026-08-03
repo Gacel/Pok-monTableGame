@@ -183,6 +183,19 @@ async function openAndMigrate(): Promise<Database> {
       winner_id      TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_auctions_status ON auctions(status, expires_at);
+
+    -- Intercambios entre amigos (T10.1). offer = lo que da el proponente (escrowado);
+    -- request = lo que pide al destinatario (se valida/mueve al aceptar).
+    CREATE TABLE IF NOT EXISTS trades (
+      id           TEXT PRIMARY KEY,
+      from_user    TEXT NOT NULL,
+      to_user      TEXT NOT NULL,
+      offer_json   TEXT NOT NULL,
+      request_json TEXT NOT NULL,
+      status       TEXT NOT NULL DEFAULT 'pending',  -- pending|completed|cancelled
+      created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_trades_users ON trades(to_user, from_user, status);
   `);
 
   // Escrow de Pokémon en subasta: bloquea la instancia sin perder metadatos.
@@ -200,6 +213,10 @@ async function openAndMigrate(): Promise<Database> {
   // Pérdida en Survival (T8.3): marca de baja (soft-delete); null = viva/en inventario.
   if (!opCols.some((c: { name: string }) => c.name === 'lost_at')) {
     await db.exec(`ALTER TABLE owned_pokemon ADD COLUMN lost_at TEXT`);
+  }
+  // Escrow de intercambio (T10.1): retiene la instancia ofertada hasta aceptar/cancelar.
+  if (!opCols.some((c: { name: string }) => c.name === 'trade_id')) {
+    await db.exec(`ALTER TABLE owned_pokemon ADD COLUMN trade_id TEXT`);
   }
 
   // Migración defensiva: columna `email` en users (si la tabla ya existía).

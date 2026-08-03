@@ -1573,15 +1573,22 @@ con mis amigos de forma segura, para completar mi colección y evolucionar por i
 **Dudas resueltas (D17):** sistema de intercambio propio, sobre amigos/escrow.
 
 **Criterios de aceptación:**
-- [ ] Dos amigos pueden intercambiar Pokémon+objetos+monedas con confirmación por ambos.
-- [ ] El escrow impide perder lo ofertado si el trato se cancela.
-- [ ] Tests del flujo y del escrow.
+- [x] Dos amigos pueden intercambiar Pokémon+objetos+monedas con confirmación por ambos.
+- [x] El escrow impide perder lo ofertado si el trato se cancela.
+- [x] Tests del flujo y del escrow.
 
 **Investigación:** `FriendModel`/`FriendController` (amistad), `AuctionService` (patrón
 escrow), `OwnedPokemonModel`/`ItemModel`/`UserModel.addCoins`, "regalar" post-TR.1
 (`531d6f5`), `CommunityMenuView` step `gift`.
 
 **Dependencias:** →TR.1. **Paralelizable:** sí (parte).
+
+### ✅ Resolución (lo realmente hecho)
+
+Ver [`33-TRADING.md`](33-TRADING.md) §T10.1. Tabla `trades` + escrow `owned_pokemon.trade_id`;
+`TradeService` (propose escrowa lo ofertado, accept cruza propiedades, cancel reembolsa);
+`TradeController` + rutas `GET/POST /api/trades`, `.../accept`, `.../cancel`. game-service
+135/135.
 
 ## 🎟️ T10.2 — UI de intercambio (frontend)
 
@@ -1592,12 +1599,19 @@ intercambios desde Comunidad y desde el inventario.
 REGALO", ya funcional tras TR.1) y opción en el `ContextMenu` del inventario.
 
 **Criterios de aceptación:**
-- [ ] Se puede montar una oferta (Pokémon/objetos/monedas), enviarla y aceptarla desde la UI.
+- [x] Se puede montar una oferta (Pokémon + monedas), enviarla y aceptarla/cancelarla desde la UI.
 
 **Investigación:** `CommunityMenuView.ts` (step `gift`/`dm`), `ContextMenu.ts` (post-TR.1),
 `net/api.ts`.
 
 **Dependencias:** →T10.1. **Paralelizable:** no.
+
+### ✅ Resolución (lo realmente hecho)
+
+Ver [`33-TRADING.md`](33-TRADING.md) §T10.2. Menú contextual **🔄 Intercambiar** en el inventario
+(ofrece el Pokémon + pide monedas a un amigo); panel **INTERCAMBIOS** en Comunidad (aceptar/
+cancelar los pendientes). MVP: un Pokémon por monedas (pedir un Pokémon concreto = follow-up).
+**Épica 10 completa; roadmap del doc 12 cerrado.**
 
 ## 🎟️ T10.3 — Evoluciones por intercambio
 
@@ -1611,12 +1625,18 @@ instancia intercambiada evoluciona por intercambio y aplicarlo.
 Graveler→Golem, Haunter→Gengar.
 
 **Criterios de aceptación:**
-- [ ] Intercambiar un Kadabra lo convierte en Alakazam para quien lo recibe.
-- [ ] Tests de las 4 evoluciones por intercambio.
+- [x] Intercambiar un Kadabra lo convierte en Alakazam para quien lo recibe.
+- [x] Tests de las evoluciones por intercambio.
 
 **Investigación:** T9.1 (resolución), T10.1 (completar trade).
 
 **Dependencias:** →T10.1, →T9.1. **Paralelizable:** no.
+
+### ✅ Resolución (lo realmente hecho)
+
+Ver [`33-TRADING.md`](33-TRADING.md) §T10.3. `TradeService.applyTradeEvolution` (enganchado en
+`accept`): las instancias movidas que evolucionan por `trigger:'trade'` (Kadabra/Machoke/
+Graveler/Haunter) evolucionan al completar el intercambio. game-service 138/138.
 
 ---
 
