@@ -6,6 +6,7 @@ import { openPokemonDetail } from './PokemonDetailModal';
 import { openContextMenu } from './ContextMenu';
 import { AuctionApi } from '../../net/AuctionApi';
 import { escapeHtml } from '../../utils/html';
+import { stoneLabelEs } from '@transcendence/shared';
 import type { PokemonType } from '../../models/Types';
 
 interface InvPokemon {
@@ -341,9 +342,12 @@ export class InventoryView {
 
   private itemCell(it: InvItem): string {
     const isBall = it.kind === 'pokeball';
-    const img = isBall
+    const isStone = it.kind === 'stone';
+    // Bolas y piedras son objetos de PokeAPI: mismo path de sprites de items.
+    const img = isBall || isStone
       ? `<img src="${BALL_SPRITE}/${it.itemKey}.png" alt="${it.itemKey}" class="w-11 h-11 object-contain" style="image-rendering:pixelated;" />`
       : `<div class="w-11 h-11 flex items-center justify-center" style="font-size:24px;">${it.kind === 'cosmetic' ? '🎨' : '📦'}</div>`;
+    const label = isStone ? stoneLabelEs(it.itemKey) : it.itemKey;
     // Solo las bolas tienen acciones (Abrir/Vender/Regalar) → celda interactiva.
     const interactive = isBall
       ? `item-cell cursor-pointer transition-colors hover:border-yellow-400 hover:bg-gray-700`
@@ -353,7 +357,7 @@ export class InventoryView {
     return `
       <div class="${interactive} flex flex-col items-center rounded border-2 border-gray-700 bg-gray-800" ${dataAttrs} ${title} style="padding:4px;">
         ${img}
-        <span class="uppercase text-white truncate" style="${FONT} font-size:6px; max-width:100%;">${it.itemKey}</span>
+        <span class="uppercase text-white truncate" style="${FONT} font-size:6px; max-width:100%;">${label}</span>
         <span class="text-yellow-300" style="${FONT} font-size:6px;">x${it.qty}</span>
       </div>`;
   }

@@ -39,6 +39,20 @@ export function typeLabelEs(type: string): string {
   return POKEMON_TYPE_ES[type as PokemonType] ?? type;
 }
 
+/** Nombre en español de las piedras evolutivas de Gen 1 (slug PokeAPI → etiqueta). Fuente única. */
+export const STONE_LABEL_ES: Record<string, string> = {
+  'fire-stone': 'Piedra Fuego',
+  'water-stone': 'Piedra Agua',
+  'thunder-stone': 'Piedra Trueno',
+  'leaf-stone': 'Piedra Hoja',
+  'moon-stone': 'Piedra Lunar',
+};
+
+/** Etiqueta de piedra en español; devuelve el slug si no se reconoce. */
+export function stoneLabelEs(key: string): string {
+  return STONE_LABEL_ES[key] ?? key;
+}
+
 /** Tamaños de Pokémon (dicta si bloquean visión y casillas ocupadas). */
 export const POKEMON_SIZES = ['small', 'medium', 'large'] as const;
 export type PokemonSize = (typeof POKEMON_SIZES)[number];

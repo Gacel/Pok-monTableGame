@@ -4,10 +4,13 @@ import type { PlayResult } from './GameService.js';
 import { RoomService } from './RoomService.js';
 import { UserModel } from '../models/UserModel.js';
 import { ItemModel } from '../models/ItemModel.js';
+import { STONES, STONE_KIND } from './stones.js';
 
 /** Monedas: 500 por Pokémon vencido; pool de 1000×perdedores repartido entre ganadores. */
 const COINS_PER_KO = 500;
 const WIN_POOL_PER_LOSER = 1000;
+/** Probabilidad de que un cofre, además de la bola, contenga una piedra evolutiva (T9.2). */
+const STONE_DROP_CHANCE = 0.35;
 
 /**
  * Capa SERVICIO: economía de partida. Antes vivía dentro de OnlineGameController
@@ -43,7 +46,14 @@ export const EconomyService = {
     for (const r of state.rewards ?? []) {
       const uid = bySlot.get(r.slot as PlayerSlot);
       if (!uid) continue;
-      for (const ball of r.balls) await ItemModel.add(uid, 'pokeball', BALL_SPRITE[ball], 1);
+      for (const ball of r.balls) {
+        await ItemModel.add(uid, 'pokeball', BALL_SPRITE[ball], 1);
+        // Reutiliza el cofre-botín para dropear una piedra evolutiva (T9.2).
+        if (Math.random() < STONE_DROP_CHANCE) {
+          const stone = STONES[Math.floor(Math.random() * STONES.length)]!;
+          await ItemModel.add(uid, STONE_KIND, stone.key, 1);
+        }
+      }
     }
   },
 };

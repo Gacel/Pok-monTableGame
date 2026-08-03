@@ -17,5 +17,19 @@ export async function shopRoutes(app: FastifyInstance): Promise<void> {
     },
     ShopController.buy
   );
+  app.get('/api/shop/stones', ShopController.stones);
+  app.post(
+    '/api/shop/stone',
+    {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['stone'],
+          properties: { stone: { type: 'string', maxLength: 24 } },
+        },
+      },
+    },
+    ShopController.buyStone
+  );
   app.post('/api/shop/recover-pokemon', ShopController.recoverPokemon);
 }

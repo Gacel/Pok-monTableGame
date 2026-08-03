@@ -1475,14 +1475,21 @@ y comprándolas, para evolucionar a mis Pokémon.
 **Dudas resueltas (D16):** drops post-combate + tienda; reutiliza cofres.
 
 **Criterios de aceptación:**
-- [ ] Las piedras aparecen como botín en cofres y en la tienda.
-- [ ] Se acumulan en el inventario de objetos.
-- [ ] Tests del catálogo/otorgamiento.
+- [x] Las piedras aparecen como botín en cofres (35%) y en la tienda (3000 🪙).
+- [x] Se acumulan en el inventario de objetos (kind `stone`, con sprite y etiqueta ES).
+- [x] Tests del catálogo/otorgamiento.
 
 **Investigación:** `owned_items`/`ItemModel`, sistema de cofres (post-TR.1: `f6a6134`),
 `ShopController`.
 
 **Dependencias:** →T5.2, →TR.1. **Paralelizable:** parcial.
+
+### ✅ Resolución (lo realmente hecho)
+
+Ver [`32-EVOLUTION.md`](32-EVOLUTION.md) §T9.2. `services/stones.ts` (5 piedras Gen 1);
+`GET /api/shop/stones` + `POST /api/shop/stone` + sección en la tienda; drop 35% en cofres
+(`EconomyService`); inventario muestra piedras con sprite PokeAPI + etiqueta ES compartida.
+game-service 123/123.
 
 ## 🎟️ T9.3 — Evolución meta en el hub
 

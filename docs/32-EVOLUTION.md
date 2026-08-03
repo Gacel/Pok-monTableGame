@@ -26,3 +26,27 @@ queda para un follow-up.
 — Charmander (nivel: solo evoluciona al llegar a 16), Vulpix (piedra: solo con `fire-stone`),
 Kadabra (intercambio: no evoluciona aquí), forma final (no evoluciona), etiqueta de piedra.
 game-service **121/121**, `tsc` limpio.
+
+## T9.2 — Piedras evolutivas: drops + tienda
+
+**Qué añade:**
+- **Catálogo** ([`services/stones.ts`](../services/game-service/src/services/stones.ts)):
+  las **5 piedras Gen 1** (`fire/water/thunder/leaf/moon-stone`, slug PokeAPI) como objetos
+  (`owned_items`, kind `stone`), precio 3000. Etiqueta ES desde la fuente única compartida
+  (`STONE_LABEL_ES`/`stoneLabelEs` en shared; `engine/evolution.STONE_ES` re-exporta de ahí).
+- **Tienda** ([`ShopController`](../services/game-service/src/controllers/ShopController.ts)):
+  `GET /api/shop/stones` (lista) y `POST /api/shop/stone` (compra: valida saldo, resta
+  monedas, `ItemModel.add(uid,'stone',key)`). Sección **PIEDRAS EVOLUTIVAS** en
+  [`ShopMenuView`](../services/frontend/src/views/hub/ShopMenuView.ts).
+- **Drops** ([`EconomyService`](../services/game-service/src/services/EconomyService.ts)):
+  reutiliza el **cofre-botín** — al conceder la bola de un cofre, un **35 %** de probabilidad
+  de soltar además una piedra aleatoria (`ItemModel.add`).
+- **Inventario** ([`InventoryView`](../services/frontend/src/views/hub/InventoryView.ts)): las
+  piedras se muestran con su **sprite de item de PokeAPI** (mismo path que las bolas) y su
+  etiqueta ES.
+
+**Nota:** *usar* la piedra para evolucionar (consumirla) es **T9.3** (meta) / **T9.4** (in-match).
+
+**Verificación:** [`test/stones.test.ts`](../services/game-service/test/stones.test.ts) —
+catálogo (5 piedras, slugs, etiqueta ES, `isStone`) y acumulación en `owned_items` (kind
+`stone`). game-service **123/123**, `tsc` limpio, build + contenedores OK.
