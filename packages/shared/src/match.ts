@@ -45,8 +45,9 @@ export interface CaptureResult {
   slot: string;
   /** Especie capturada/robada. */
   name: string;
-  /** `capture` = salvaje capturado (Survival); `steal` = instancia robada a un rival (BR). */
-  kind: 'capture' | 'steal';
+  /** `capture` = salvaje capturado (Survival); `steal` = instancia robada a un rival (BR);
+   *  `lost` = instancia PROPIA perdida al caer (Survival). */
+  kind: 'capture' | 'steal' | 'lost';
 }
 
 /** Estado autoritativo de la partida (DTO que difunde el servidor). */

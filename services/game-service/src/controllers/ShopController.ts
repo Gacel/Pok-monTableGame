@@ -8,6 +8,9 @@ interface BuyBody {
   ball?: string;
 }
 
+/** Precio de recuperar un Pokémon perdido en Survival (T8.3). */
+const RECOVER_PRICE = 10000;
+
 function userId(request: FastifyRequest): string | null {
   return (request as FastifyRequest & { userId?: string }).userId ?? null;
 }
@@ -58,5 +61,34 @@ export const ShopController = {
     await OwnedPokemonModel.grantMany(uid, [name], 'shop', isShiny);
 
     return { success: true, pokemon: { name, tier, isShiny }, coins: user.coins - ball.price };
+  },
+
+  /**
+   * Recupera el ÚLTIMO Pokémon perdido en Survival (T8.3) por 10000 🪙. Autoritativo:
+   * exige saldo y que exista un Pokémon perdido; resta monedas y lo devuelve al inventario.
+   */
+  async recoverPokemon(request: FastifyRequest, reply: FastifyReply) {
+    const uid = userId(request);
+    if (!uid) return reply.code(401).send({ success: false, error: 'No autenticado' });
+
+    const user = await UserModel.findById(uid);
+    if (!user) return reply.code(404).send({ success: false, error: 'Usuario no encontrado' });
+    if (!(await OwnedPokemonModel.hasLost(uid))) {
+      return reply.code(400).send({ success: false, error: 'No tienes ningún Pokémon perdido' });
+    }
+    if (user.coins < RECOVER_PRICE) {
+      return reply.code(402).send({ success: false, error: 'Monedas insuficientes', coins: user.coins });
+    }
+
+    const recovered = await OwnedPokemonModel.recoverLast(uid);
+    if (!recovered) {
+      return reply.code(400).send({ success: false, error: 'No tienes ningún Pokémon perdido' });
+    }
+    await UserModel.addCoins(uid, -RECOVER_PRICE);
+    return {
+      success: true,
+      pokemon: { name: recovered.name, level: recovered.level },
+      coins: user.coins - RECOVER_PRICE,
+    };
   },
 };

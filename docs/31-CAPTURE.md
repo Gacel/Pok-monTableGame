@@ -59,3 +59,24 @@ captura (T8.2).
 Survival: captura el salvaje derrotado por el humano (nueva instancia, `acquired_via='capture'`);
 NO captura si el KO lo hace la IA, ni una instancia propia, ni en modos sin captura. BR: el
 ganador roba la instancia rival (cambia de dueño). game-service **113/113**, `tsc` limpio.
+
+## T8.3 — Pérdida permanente + recuperación en tienda (Survival)
+
+**Qué cambia:**
+- **Soft-delete** `owned_pokemon.lost_at` (migración + `CREATE`): `null` = viva; timestamp =
+  perdida. `listByUser` y `allOwnedBy` **excluyen** las perdidas (no aparecen en inventario ni
+  en equipos).
+- **Modelo** ([`OwnedPokemonModel`](../services/game-service/src/models/OwnedPokemonModel.ts)):
+  `markLost(id)`, `hasLost(userId)`, `recoverLast(userId)` (quita `lost_at` del último perdido).
+- **Pérdida** ([`CaptureService`](../services/game-service/src/services/CaptureService.ts)): en
+  Survival, si cae una instancia **propia** del humano (la mata la IA), se marca perdida y se
+  emite un `CaptureResult` `kind:'lost'` (feedback). La captura y la pérdida conviven en la
+  misma resolución.
+- **Recuperación** ([`ShopController.recoverPokemon`](../services/game-service/src/controllers/ShopController.ts),
+  `POST /api/shop/recover-pokemon`): por **10000 🪙** restaura el **último** Pokémon perdido
+  (valida saldo y que exista alguno; resta monedas). Botón **RECUPERA UN POKÉMON** habilitado
+  en [`ShopMenuView`](../services/frontend/src/views/hub/ShopMenuView.ts).
+
+**Verificación:** `capture.test.ts` — `markLost`/`recoverLast` (retira y devuelve; no reutilizable
+en equipos mientras perdida); en Survival la IA que mata mi instancia la pierde (`kind:'lost'`)
+mientras yo capturo lo que derroto. game-service **116/116**, `tsc` limpio, contenedores OK.
