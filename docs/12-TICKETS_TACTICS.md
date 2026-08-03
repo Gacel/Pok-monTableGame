@@ -1505,14 +1505,21 @@ inventario cuando cumplen el requisito (nivel o piedra), de forma permanente.
 **Dudas resueltas (D13):** evolución meta persistente.
 
 **Criterios de aceptación:**
-- [ ] Un Pokémon que cumple requisito puede evolucionar desde el inventario (persistente).
-- [ ] Consume la piedra correspondiente / valida el nivel.
-- [ ] Tests del flujo meta.
+- [x] Un Pokémon que cumple requisito puede evolucionar desde el inventario (persistente).
+- [x] Consume la piedra correspondiente / valida el nivel.
+- [x] Tests del flujo meta.
 
 **Investigación:** `OwnedPokemonModel`, `InventoryController`/`inventory.routes.ts`
 (ampliados en TR.1), `InventoryView.ts`, `PokemonDetailModal.ts`.
 
 **Dependencias:** →T9.1, →T9.2, →T6.1. **Paralelizable:** no.
+
+### ✅ Resolución (lo realmente hecho)
+
+Ver [`32-EVOLUTION.md`](32-EVOLUTION.md) §T9.3. `OwnedPokemonModel.evolve`;
+`GET .../evolution` (resuelve por instancia) + `POST .../evolve` (valida requisito, consume
+piedra, cambia especie); botón **✨ EVOLUCIONAR** en la ficha (o el requisito si no cumple),
+refresca inventario. game-service 124/124.
 
 ## 🎟️ T9.4 — Evolución in-match
 

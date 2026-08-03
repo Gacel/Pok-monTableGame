@@ -123,6 +123,8 @@ export class InventoryView {
       def: p.def,
       spriteUrl: this.sprites[`${p.name}-${!!p.isShiny}`],
       isShiny: !!p.isShiny,
+      ownedId: p.id, // habilita la evolución meta (T9.3)
+      onEvolved: () => void this.render(), // refresca el inventario tras evolucionar
     });
   }
 

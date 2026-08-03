@@ -6,6 +6,8 @@ import { UserModel } from '../models/UserModel.js';
 import { FriendModel } from '../models/FriendModel.js';
 import { PokemonService } from '../services/PokemonService.js';
 import { scaledVitals, xpToNext } from '../engine/progression.js';
+import { resolveEvolution } from '../engine/evolution.js';
+import { STONE_KIND } from '../services/stones.js';
 import { BALLS, rollTier, pickFromTier } from '../services/loot.js';
 import { LOOT_POOL_TIERS } from '../services/lootPool.js';
 
@@ -180,5 +182,60 @@ export const InventoryController = {
     const ok = await ItemModel.transfer(uid, toUserId, kind, itemKey, 1);
     if (!ok) return reply.code(400).send({ success: false, error: 'No tienes ese objeto' });
     return { success: true };
+  },
+
+  /**
+   * Resolución de evolución de UNA instancia (T9.3): si puede evolucionar ya, a qué forma y
+   * con qué requisito, en su contexto (nivel + piedras del inventario). Para la ficha.
+   */
+  async evolutionInfo(request: FastifyRequest<{ Params: GiftParams }>, reply: FastifyReply) {
+    const uid = userId(request);
+    if (!uid) return reply.code(401).send({ success: false, error: 'No autenticado' });
+    const rec = await OwnedPokemonModel.findById(String(request.params?.id ?? ''));
+    if (!rec || rec.user_id !== uid) {
+      return reply.code(404).send({ success: false, error: 'Pokémon no encontrado' });
+    }
+    const info = await PokemonService.getEvolution(rec.name);
+    const stones = new Set(
+      (await ItemModel.listByUser(uid)).filter((i) => i.kind === STONE_KIND).map((i) => i.item_key)
+    );
+    const evo = resolveEvolution(info, { level: rec.level, items: stones });
+    return {
+      success: true,
+      evolution: { canEvolve: evo.canEvolve, target: evo.target, requirement: evo.requirement, trigger: evo.trigger },
+    };
+  },
+
+  /**
+   * Evoluciona una instancia propia (T9.3): valida el requisito (nivel/piedra), consume la
+   * piedra si aplica y cambia la especie de forma persistente. Autoritativo.
+   */
+  async evolve(request: FastifyRequest<{ Params: GiftParams }>, reply: FastifyReply) {
+    const uid = userId(request);
+    if (!uid) return reply.code(401).send({ success: false, error: 'No autenticado' });
+    const rec = await OwnedPokemonModel.findById(String(request.params?.id ?? ''));
+    if (!rec || rec.user_id !== uid) {
+      return reply.code(404).send({ success: false, error: 'Pokémon no encontrado' });
+    }
+    if ((rec.auction_id ?? null) !== null || (rec.lost_at ?? null) !== null) {
+      return reply.code(400).send({ success: false, error: 'Ese Pokémon no está disponible' });
+    }
+
+    const info = await PokemonService.getEvolution(rec.name);
+    const stones = new Set(
+      (await ItemModel.listByUser(uid)).filter((i) => i.kind === STONE_KIND).map((i) => i.item_key)
+    );
+    const evo = resolveEvolution(info, { level: rec.level, items: stones });
+    if (!evo.canEvolve || !evo.target) {
+      return reply.code(400).send({ success: false, error: `No cumple el requisito: ${evo.requirement}` });
+    }
+
+    // Consume la piedra correspondiente (trigger stone).
+    if (evo.trigger === 'stone' && info?.item) {
+      await ItemModel.add(uid, STONE_KIND, info.item, -1);
+    }
+    await OwnedPokemonModel.evolve(rec.id, evo.target);
+    await PokemonService.getTemplate(evo.target); // asegura la plantilla destino en caché
+    return { success: true, from: rec.name, evolvedTo: evo.target };
   },
 };

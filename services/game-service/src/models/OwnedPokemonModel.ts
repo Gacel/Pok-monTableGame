@@ -74,6 +74,12 @@ export const OwnedPokemonModel = {
     }
   },
 
+  /** Evoluciona una instancia a `newForm` (T9.3): cambia la especie conservando id/nivel/XP. */
+  async evolve(id: string, newForm: string): Promise<void> {
+    const db = await getDb();
+    await db.run('UPDATE owned_pokemon SET name = ? WHERE id = ?', newForm.toLowerCase(), id);
+  },
+
   /**
    * Captura un Pokémon SALVAJE (Survival, T8.2): crea una **nueva** instancia para el usuario
    * (no transfiere: los salvajes no tienen instancia previa). Devuelve el id creado.
