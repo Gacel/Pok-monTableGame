@@ -52,3 +52,28 @@ intercambio.
 — un Kadabra intercambiado llega como **Alakazam** a quien lo recibe; funciona también en el
 lado pedido (Machoke→Machamp); los de otro disparador (Pikachu, piedra) no cambian.
 game-service **138/138**, `tsc` limpio, contenedor OK.
+
+## T10.2 — UI de intercambio
+
+- **Proponer** desde el inventario ([`InventoryView`](../services/frontend/src/views/hub/InventoryView.ts)):
+  menú contextual **🔄 Intercambiar** en un Pokémon → diálogo que **ofrece** esa instancia a un
+  **amigo** y le **pide N monedas** (`POST /api/trades`). Reutiliza el picker de amigos del
+  "regalar".
+- **Gestionar** desde Comunidad ([`CommunityMenuView`](../services/frontend/src/views/hub/CommunityMenuView.ts)):
+  botón **INTERCAMBIOS** → panel con los pendientes (entrantes/salientes, con lo ofertado y lo
+  pedido). Entrantes: **ACEPTAR** / RECHAZAR; salientes: **CANCELAR** (`.../accept`,
+  `.../cancel`). Al aceptar, el escrow y lo pedido se cruzan (y disparan las evoluciones por
+  intercambio de T10.3).
+
+**Alcance (MVP):** la oferta de la UI es *un Pokémon a cambio de monedas* (el backend soporta
+Pokémon+objetos+monedas en ambos lados). **Pedir un Pokémon concreto del amigo** requiere ver su
+inventario (endpoint aparte) → follow-up.
+
+**Verificación:** `tsc` limpio, build + contenedor OK. Se puede montar una oferta desde el
+inventario, verla y aceptarla/cancelarla desde Comunidad.
+
+---
+
+**Épica 10 cerrada** (T10.1 → T10.3 → T10.2). Intercambio con escrow entre amigos, UI de
+oferta/gestión y las 4 evoluciones por intercambio de Gen 1. **Con esto se completa el roadmap
+del doc 12** (Épicas 0–10 + A + G + fixes).

@@ -1599,12 +1599,19 @@ intercambios desde Comunidad y desde el inventario.
 REGALO", ya funcional tras TR.1) y opción en el `ContextMenu` del inventario.
 
 **Criterios de aceptación:**
-- [ ] Se puede montar una oferta (Pokémon/objetos/monedas), enviarla y aceptarla desde la UI.
+- [x] Se puede montar una oferta (Pokémon + monedas), enviarla y aceptarla/cancelarla desde la UI.
 
 **Investigación:** `CommunityMenuView.ts` (step `gift`/`dm`), `ContextMenu.ts` (post-TR.1),
 `net/api.ts`.
 
 **Dependencias:** →T10.1. **Paralelizable:** no.
+
+### ✅ Resolución (lo realmente hecho)
+
+Ver [`33-TRADING.md`](33-TRADING.md) §T10.2. Menú contextual **🔄 Intercambiar** en el inventario
+(ofrece el Pokémon + pide monedas a un amigo); panel **INTERCAMBIOS** en Comunidad (aceptar/
+cancelar los pendientes). MVP: un Pokémon por monedas (pedir un Pokémon concreto = follow-up).
+**Épica 10 completa; roadmap del doc 12 cerrado.**
 
 ## 🎟️ T10.3 — Evoluciones por intercambio
 
