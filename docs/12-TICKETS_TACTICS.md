@@ -1397,14 +1397,20 @@ al Pokémon de otro jugador me lo quede, para que el modo tenga riesgo real.
 **Dudas resueltas (D10):** robo PvP solo en Battle Royale.
 
 **Criterios de aceptación:**
-- [ ] En BR, un KO transfiere la instancia derrotada al vencedor.
-- [ ] En 1v1/2v2/arena NO hay robo (salvo lo definido para arena si aplica).
-- [ ] Tests del robo en BR y no-robo en el resto.
+- [x] En BR, un KO transfiere la instancia derrotada al vencedor.
+- [x] En 1v1/2v2/arena NO hay robo.
+- [x] Tests del robo en BR y no-robo en el resto.
 
 **Investigación:** misma ruta que T8.2 filtrando por `gameMode === 'br'`;
 `EconomyService.awardForResult`, `slotUserMap`.
 
 **Dependencias:** →T8.2. **Paralelizable:** no.
+
+### ✅ Resolución (lo realmente hecho)
+
+Ver [`31-CAPTURE.md`](31-CAPTURE.md) §T8.4. `RoomService.gameModeOf`; `GameActionService`
+resuelve capturas online cuando el modo es `br` (transfiere la instancia rival al ganador,
+`kind:'steal'`). El resto de modos no roban. game-service 116/116.
 
 ## 🎟️ T8.5 — Feedback de captura/robo (frontend)
 

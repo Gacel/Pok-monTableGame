@@ -4,6 +4,7 @@ import { matchManager } from './MatchManager.js';
 import { EconomyService } from './EconomyService.js';
 import { ProgressionService } from './ProgressionService.js';
 import { CaptureService } from './CaptureService.js';
+import { RoomService } from './RoomService.js';
 import { hub } from '../realtime/hub.js';
 import type { CaptureResult } from '@transcendence/shared';
 
@@ -74,6 +75,11 @@ export const GameActionService = {
       await matchManager.persistMatch(ctx.matchId);
       await EconomyService.awardForResult(ctx.matchId, result);
       await ProgressionService.awardMatchXp(result.state); // XP a las instancias propias (T6.1)
+      // Robo PvP: en Battle Royale, un KO transfiere la instancia rival al ganador (T8.4).
+      if ((await RoomService.gameModeOf(ctx.matchId)) === 'br') {
+        const slotUser = new Map<string, string | null>(await RoomService.slotUserMap(ctx.matchId));
+        captures = await CaptureService.resolve('br', slotUser, result.state);
+      }
     }
 
     hub.broadcastPersonalized(ctx.room, (sCtx) => ({ type: 'state', state: ctx.game.getStateDTO(sCtx.slot ?? undefined) }));
