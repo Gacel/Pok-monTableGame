@@ -99,7 +99,11 @@ export async function gameRoutes(app: FastifyInstance): Promise<void> {
     },
     GameController.cast
   );
-
+  app.post(
+    '/api/game/evolve',
+    { schema: { body: { type: 'object', required: ['from'], properties: { from: hexSchema } } } },
+    GameController.evolve
+  );
 
   app.post('/api/game/end-turn', GameController.endTurn);
   app.post('/api/game/force-start', GameController.forceStart);
@@ -163,6 +167,11 @@ export async function gameRoutes(app: FastifyInstance): Promise<void> {
       },
     },
     OnlineGameController.cast
+  );
+  app.post(
+    '/api/game/:matchId/evolve',
+    { schema: { params: matchParamsSchema, body: { type: 'object', required: ['from'], properties: { from: hexSchema } } } },
+    OnlineGameController.evolve
   );
 
   app.post(

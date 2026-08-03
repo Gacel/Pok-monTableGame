@@ -71,3 +71,33 @@ catálogo (5 piedras, slugs, etiqueta ES, `isStone`) y acumulación en `owned_it
 **Verificación:** [`test/evolveModel.test.ts`](../services/game-service/test/evolveModel.test.ts)
 — `evolve` cambia la especie conservando id/nivel/XP; la resolución ya está cubierta por T9.1.
 game-service **124/124**, `tsc` limpio, build + contenedores OK.
+
+## T9.4 — Evolución in-match
+
+**Qué añade:** una pieza evoluciona **durante la batalla** gastando **candies** — los recursos
+(`FIRE/WATER/GRASS_CANDY`) por fin tienen uso real.
+- **Acción** `evolve` en el `GameAction` union; ruta `POST /api/game/evolve` (local) y
+  `POST /api/game/:matchId/evolve` (online).
+- **Resolución async** ([`GameActionService.resolveEvolve`](../services/game-service/src/services/GameActionService.ts)):
+  resuelve el catálogo (`getEvolution`) + la plantilla destino (`getTemplate`, cache-first) y
+  delega en el engine. Si la pieza es una **instancia propia** (`ownedId`), **persiste** la
+  nueva forma en el inventario (D13: la forma persiste en ambos flujos).
+- **Engine** ([`GameService.evolvePiece`](../services/game-service/src/services/GameService.ts)):
+  valida turno/propiedad/`hasActed`; las evoluciones **por nivel** exigen el nivel, las de
+  **piedra/intercambio** solo candies (`candyForType` mapea el tipo → caramelo, coste **4**);
+  sube stats a la forma destino escaladas por nivel (**sin curar**: HP tope al nuevo maxHp),
+  consume la acción del turno y emite el evento `evolve`.
+- **Frontend**: hotkey **V** sobre la pieza seleccionada → `performEvolve`; el evento `evolve`
+  hace un flash ✨ y el **sprite cambia solo** (lookup por nombre en `EntityView` +
+  `preloadSprites`). Errores (candies/nivel) por toast.
+
+**Verificación:** [`test/evolveInMatch.test.ts`](../services/game-service/test/evolveInMatch.test.ts)
+— evoluciona gastando candies y sube stats sin curar (consume la acción); rechaza sin candies;
+las de nivel exigen el nivel; no puedes evolucionar la pieza de otro; piedra/intercambio no
+exigen nivel. game-service **129/129**, `tsc` limpio, build + contenedores OK.
+
+---
+
+**Épica 9 cerrada** (T9.1 → T9.4). Resolución fiel a PokeAPI; piedras como drops/tienda;
+evolución meta (inventario, consume piedra/valida nivel) e in-match (candies), ambas
+persistentes. Habilita la Épica 10 (intercambio + evoluciones por intercambio).

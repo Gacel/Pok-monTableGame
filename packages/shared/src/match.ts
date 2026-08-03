@@ -17,7 +17,8 @@ export type TurnEventKind =
   | 'reveal'
   | 'knockback'
   | 'dash'
-  | 'capture';
+  | 'capture'
+  | 'evolve';
 
 /**
  * Evento puntual de una acción/turno, para feedback visual (números flotantes,

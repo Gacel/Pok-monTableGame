@@ -1536,14 +1536,22 @@ batalla (gastando recursos), para dar la vuelta a un combate.
 **Dudas resueltas (D13):** evolución in-match; candies pasan a tener uso real.
 
 **Criterios de aceptación:**
-- [ ] Se puede evolucionar en partida cumpliendo el coste; el sprite cambia sin recargar.
-- [ ] Tests de la acción y del consumo de recursos.
+- [x] Se puede evolucionar en partida cumpliendo el coste (candies); el sprite cambia sin recargar.
+- [x] Tests de la acción y del consumo de recursos.
 
 **Investigación:** `GameAction` union (`GameActionService.ts:7-13`), `this.resources`
 (`GameService.ts:35`, `collectTurnResources` L550-558, nunca se decrementan), sprite por
 nombre (`net/PokeSprites.ts`, `EntityView` lee `occupant.name`).
 
 **Dependencias:** →T9.1. **Paralelizable:** no.
+
+### ✅ Resolución (lo realmente hecho)
+
+Ver [`32-EVOLUTION.md`](32-EVOLUTION.md) §T9.4. Acción `evolve` (rutas local+online);
+`GameActionService.resolveEvolve` (async: catálogo+plantilla, persiste `ownedId`);
+`GameService.evolvePiece` (coste 4 candies por tipo, gate de nivel, stats sin curar, consume
+acción, evento `evolve`); hotkey **V** + flash ✨ (sprite cambia solo). **Épica 9 completa.**
+game-service 129/129.
 
 ---
 
