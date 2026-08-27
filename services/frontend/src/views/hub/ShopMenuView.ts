@@ -94,19 +94,28 @@ export class ShopMenuView {
     document.getElementById('btn-back')?.addEventListener('click', () => showMainMenu());
   }
 
-  /** Tienda de PIEDRAS evolutivas (T9.2). */
+  /** Tienda de PIEDRAS evolutivas (T9.2, T11.7 qty). */
   private renderStones() {
     const coins = this.coins();
     const card = (s: (typeof STONES)[number]) => {
       const afford = coins >= s.price && !this.busy;
       return `
-      <button data-stone="${s.key}" ${afford ? '' : 'disabled'} class="stone-card flex flex-col items-center justify-between gap-2 rounded border-4 border-gray-800 shadow-[4px_4px_0_#000] transition-all ${
-        afford ? 'bg-white hover:bg-yellow-100 active:mt-1' : 'bg-gray-300 opacity-60 cursor-not-allowed'
+      <div class="stone-card flex flex-col items-center justify-between gap-2 rounded border-4 border-gray-800 shadow-[4px_4px_0_#000] ${
+        afford ? 'bg-white' : 'bg-gray-300 opacity-60'
       }" style="padding:16px 12px;">
         <img src="${BALL_SPRITE}/${s.key}.png" alt="${s.key}" class="w-16 h-16 object-contain" style="image-rendering: pixelated;" />
         <span class="text-black text-center" style="${FONT} font-size:8px;">${stoneLabelEs(s.key)}</span>
         <span class="text-gray-700" style="${FONT} font-size:10px;">${s.price} 🪙</span>
-      </button>`;
+        <div class="flex items-center gap-1 mt-1">
+          <button data-stone="${s.key}" data-delta="-1" class="stone-qty-btn w-6 h-6 rounded bg-gray-700 text-white" style="${FONT} font-size:10px;">-</button>
+          <span data-stone-qty="${s.key}" class="text-black" style="${FONT} font-size:10px; min-width:20px; text-align:center;">1</span>
+          <button data-stone="${s.key}" data-delta="1" class="stone-qty-btn w-6 h-6 rounded bg-gray-700 text-white" style="${FONT} font-size:10px;">+</button>
+        </div>
+        <span data-stone-total="${s.key}" class="text-gray-600" style="${FONT} font-size:8px;">${s.price} 🪙</span>
+        <button data-buy-stone="${s.key}" data-price="${s.price}" ${afford ? '' : 'disabled'} class="stone-buy-btn mt-1 px-3 py-1 rounded border-b-4 ${
+          afford ? 'bg-green-600 hover:bg-green-500 text-white border-green-800 active:border-b-0' : 'bg-gray-400 text-gray-600 border-gray-500 cursor-not-allowed'
+        }" style="${FONT} font-size:8px;">COMPRAR</button>
+      </div>`;
     };
 
     this.container.innerHTML = hubPanel(
@@ -123,8 +132,32 @@ export class ShopMenuView {
       { minHeight: 600 }
     );
 
-    this.container.querySelectorAll<HTMLButtonElement>('.stone-card').forEach((btn) => {
-      btn.addEventListener('click', () => void this.buyStone(btn.dataset.stone!));
+    const qtys: Record<string, number> = {};
+    for (const s of STONES) qtys[s.key] = 1;
+
+    this.container.querySelectorAll<HTMLButtonElement>('.stone-qty-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const key = btn.dataset.stone!;
+        const delta = Number(btn.dataset.delta);
+        qtys[key] = Math.max(1, Math.min(10, (qtys[key] ?? 1) + delta));
+        const qtyEl = this.container.querySelector(`[data-stone-qty="${key}"]`);
+        if (qtyEl) qtyEl.textContent = String(qtys[key]);
+        const stone = STONES.find(s => s.key === key);
+        const totalEl = this.container.querySelector(`[data-stone-total="${key}"]`);
+        if (totalEl && stone) totalEl.textContent = `${stone.price * qtys[key]} 🪙`;
+        const buyBtn = this.container.querySelector<HTMLButtonElement>(`[data-buy-stone="${key}"]`);
+        if (buyBtn && stone) {
+          const canAfford = coins >= stone.price * qtys[key] && !this.busy;
+          buyBtn.disabled = !canAfford;
+        }
+      });
+    });
+
+    this.container.querySelectorAll<HTMLButtonElement>('.stone-buy-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const key = btn.dataset.buyStone!;
+        void this.buyStone(key, qtys[key] ?? 1);
+      });
     });
     document.getElementById('btn-back')?.addEventListener('click', () => {
       this.step = 'root';
@@ -132,16 +165,16 @@ export class ShopMenuView {
     });
   }
 
-  /** Compra una piedra evolutiva (T9.2). */
-  private async buyStone(stone: string): Promise<void> {
+  /** Compra una piedra evolutiva (T9.2, T11.7 qty). */
+  private async buyStone(stone: string, qty = 1): Promise<void> {
     if (this.busy) return;
     this.busy = true;
     try {
-      const res = await apiFetch('/api/shop/stone', { method: 'POST', body: JSON.stringify({ stone }) });
+      const res = await apiFetch('/api/shop/stone', { method: 'POST', body: JSON.stringify({ stone, qty }) });
       const data = await res.json();
       if (res.ok && data.success) {
         if (authState.user) authState.user.coins = data.coins;
-        alert(`💎 Comprada: ${stoneLabelEs(stone)} · saldo ${data.coins} 🪙`);
+        alert(`💎 ${qty}× ${stoneLabelEs(stone)} comprada(s) · saldo ${data.coins} 🪙`);
         this.render();
       } else {
         alert(data.error ?? 'No se pudo comprar');

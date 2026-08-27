@@ -314,6 +314,17 @@ visible antes de confirmar.
 
 **Dependencias:** ninguna. **Paralelizable:** sí.
 
+### ✅ Resolución (lo realmente hecho)
+
+- [x] El backend acepta `qty` en el body y cobra `qty × price` si hay saldo suficiente.
+- [x] El frontend muestra el selector de cantidad y el precio total.
+- [x] Comprar 3 piedras añade 3 al inventario en una sola petición.
+- [x] Con `qty` inválido o fuera de rango [1, 10], el servidor responde 400.
+- [x] Sin `qty`, el comportamiento es idéntico al actual (qty=1).
+
+**Implementación:** Backend: `qty` validado [1, 10] en `buyStone`, `totalPrice = price × qty`.
+Frontend: +/- botones por piedra, precio total dinámico, botón COMPRAR separado.
+
 ---
 
 ## 🎟️ T11.8 — Inventario: panel del entrenador más compacto
