@@ -184,6 +184,15 @@ el draft aleatorio usa plantillas y no tiene isShiny (no aplica).
 
 **Dependencias:** ninguna. **Paralelizable:** sí.
 
+### ✅ Resolución (lo realmente hecho)
+
+- [x] En el picker de equipo propio, los Pokémon shiny muestran su sprite dorado y el badge ✨.
+- [x] Los no-shiny muestran el sprite normal (sin regresión).
+- [x] El draft aleatorio (local/IA) no se ve afectado.
+
+**Implementación:** `OwnedTeamPickerView` añade `isShiny` a la interfaz, usa `spriteKey`
+(name + `-shiny`) para cachear sprites separados, y pasa `isShiny` a `getSprite`.
+
 ---
 
 ## 🎟️ T11.5 — Inventario: ocultar objetos con 0 unidades
