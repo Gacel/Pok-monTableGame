@@ -19,3 +19,13 @@ Se añade un div HP bar flotante por cada pieza con ocupante visible:
 - **Niebla de guerra:** opacity 0.4 (coherente con sprite/label/base); no se renderiza
   si la pieza está completamente oculta (filtro `hiddenAllySlots`).
 - **Limpieza:** el prefijo `hp-` se añade al regex de limpieza de nodos huérfanos.
+
+## T11.2 — Cámara sigue al Pokémon activo (turno rival)
+
+**Archivos:** `services/frontend/src/controllers/GameController.ts`
+
+- En `dispatchEvents`, eventos `knockback`/`dash` llaman a `centerOnTile` en el hex
+  del evento si no es el turno local (`!isMyTurn()`) y no hay paneo manual activo
+  (`panKeys.size === 0`).
+- En `applyMatchState`, el centrado por cambio de turno (rama no-deployment) se
+  condiciona a `panKeys.size === 0` para no interrumpir paneo con teclado.

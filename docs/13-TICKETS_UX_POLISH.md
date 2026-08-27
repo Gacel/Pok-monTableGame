@@ -91,6 +91,16 @@ el jugador controla la cámara); el paneo manual tiene prioridad.
 
 **Dependencias:** ninguna. **Paralelizable:** sí.
 
+### ✅ Resolución (lo realmente hecho)
+
+- [x] Cuando la IA / rival mueve una pieza, la cámara la sigue.
+- [x] Cuando la IA / rival lanza un ataque (dash/knockback), la cámara sigue la acción.
+- [x] Si el jugador está paneando con teclado, el auto-centrado no interrumpe.
+
+**Implementación:** `dispatchEvents` centra en el hex de eventos knockback/dash si
+`!isMyTurn()` y `panKeys.size === 0`. `applyMatchState` ya centra en cambio de turno;
+se añade guardia de `panKeys` para no interrumpir paneo manual.
+
 ---
 
 ## 🎟️ T11.3 — Audio de combate: sonido de golpe y muerte
