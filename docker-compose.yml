@@ -1,6 +1,15 @@
 # docker-compose.yml — orquestación total (ver docs/02-LOCAL_DEV.md)
-# Fase 0: solo el servicio temporal `hello` para validar el pipeline.
-# A medida que avance el plan se añadirán: gateway, vault, auth-service, etc.
+# A medida que avance el plan se añadirán: vault, auth-service, etc.
+#
+# NOTA sobre healthchecks: se declaran AQUÍ y no en los Dockerfile porque podman
+# descarta el HEALTHCHECK de las imágenes en formato OCI ("Healthcheck is not
+# supported for OCI image format and will be ignored"), mientras que sí respeta
+# el declarado en compose. Docker honra ambos.
+#
+# NOTA sobre puertos de host: se parametrizan con HOST_* porque (a) podman
+# rootless no puede bindear <1024 sin bajar ip_unprivileged_port_start y (b) en
+# el servidor de despliegue 3000/3001 están ocupados por otros servicios. Los
+# defaults funcionan sin definir nada en .env.
 
 services:
   hello:
@@ -10,6 +19,12 @@ services:
     environment:
       PORT: 3000
       LOG_LEVEL: info
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:3000/health']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     networks:
       - transcendence-net
     restart: unless-stopped
@@ -18,11 +33,36 @@ services:
       context: ./gateway
     container_name: transcendence-gateway
     ports:
-      - "80:80"
-      - "443:443"
+      - "${HOST_GATEWAY_HTTP:-8080}:80"
+      - "${HOST_GATEWAY_HTTPS:-8443}:443"
+    environment:
+      # Puerto HTTPS público real. El entrypoint 98-public-port.sh ajusta con él
+      # el redirect HTTP->HTTPS, que si no perdería el puerto ($host no lo
+      # incluye) y mandaría al :443, donde en local no escucha nadie.
+      PUBLIC_HTTPS_PORT: ${HOST_GATEWAY_HTTPS:-8443}
     volumes:
       - letsencrypt:/etc/letsencrypt
       - certbot_webroot:/var/www/certbot:ro
+    # Recarga periódica de nginx. Cuando certbot renueva el certificado escribe
+    # ficheros nuevos, pero nginx sigue sirviendo el que tiene cargado en memoria
+    # hasta recibir SIGHUP. Sin este bucle, el certificado renovado no se
+    # aplicaría hasta el siguiente reinicio del contenedor.
+    command:
+      - /bin/sh
+      - -c
+      - |
+        while :; do sleep 6h & wait $${!}; nginx -s reload; done &
+        nginx -g "daemon off;"
+    healthcheck:
+      # Vía HTTPS interno (:443 dentro del contenedor) contra /health, que nginx
+      # proxya a hello. OJO: se usa 'localhost' y no 127.0.0.1 porque nginx enruta
+      # por server_name; con Host 127.0.0.1 no casa ningún bloque y cae en el
+      # default server (zi.irishawk.com), que devuelve 404.
+      test: ['CMD', 'wget', '-qO-', '--no-check-certificate', 'https://localhost/health']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     depends_on:
       - hello
       - game-service
@@ -33,6 +73,14 @@ services:
   certbot:
     image: certbot/certbot
     container_name: transcendence-certbot
+    # Detrás de un profile: solo arranca con `--profile certbot`. En un entorno
+    # local sin dominio público resolviendo a este host entraría en un bucle de
+    # renovaciones fallidas. En el servidor de producción SÍ debe estar levantado
+    # para que el certificado no caduque a los 90 días.
+    #
+    # La emisión INICIAL no la hace este servicio (`certbot renew` no emite nada
+    # si no hay certificado previo): usa `./dev.sh cert`.
+    profiles: ["certbot"]
     restart: unless-stopped
     volumes:
       - letsencrypt:/etc/letsencrypt
@@ -53,6 +101,12 @@ services:
       LOG_LEVEL: info
     volumes:
       - game-data:/app/services/game-service/data
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:3001/health']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     networks:
       - transcendence-net
     restart: unless-stopped
@@ -62,6 +116,13 @@ services:
       context: .
       dockerfile: services/frontend/Dockerfile
     container_name: transcendence-frontend
+    healthcheck:
+      # El dev server de Vite no expone /health; basta con que sirva la raíz.
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:5173/']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     networks:
       - transcendence-net
     restart: unless-stopped

@@ -7,13 +7,13 @@
 services:
   hello:
     ports:
-      - '3000:3000'
+      - '${HOST_HELLO:-13000}:3000'
     volumes:
       - ./services/_hello/src:/app/src
     command: ['npm', 'run', 'dev']
   game-service:
     ports:
-      - '3001:3001'
+      - '${HOST_GAME:-13001}:3001'
     volumes:
       - ./services/game-service/src:/app/services/game-service/src
       - ./services/game-service/data:/app/services/game-service/data
@@ -23,7 +23,7 @@ services:
     command: ['npm', 'run', 'dev']
   frontend:
     ports:
-      - '5173:5173'
+      - '${HOST_FRONTEND:-15173}:5173'
     volumes:
       - ./services/frontend/src:/app/services/frontend/src
       - ./services/frontend/public:/app/services/frontend/public
