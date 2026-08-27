@@ -358,6 +358,15 @@ cuadrícula de Pokémon/objetos se expande con `flex-1`.
 
 **Dependencias:** ninguna. **Paralelizable:** sí.
 
+### ✅ Resolución (lo realmente hecho)
+
+- [x] En pantallas medianas/grandes, el panel del entrenador ocupa ≤230px y la cuadrícula el resto.
+- [x] La cuadrícula de Pokémon muestra más columnas que antes.
+- [x] En móvil, el layout sigue siendo usable (columna única con scroll).
+
+**Implementación:** `md:w-1/3` → `md:w-56` (224px, `flex-shrink-0`), min-height
+reducido a `min(30vh, 200px)`, sprite y textos más compactos.
+
 ---
 
 ## 🎟️ T11.9 — Tienda: selector y confirmación para recuperar Pokémon
