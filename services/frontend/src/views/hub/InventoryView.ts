@@ -429,8 +429,9 @@ export class InventoryView {
     const pokeGrid = pokemon.length
       ? pokemon.map((p) => this.pokemonCell(p)).join('')
       : `<p class="text-gray-400" style="${FONT} font-size:9px;">Sin Pokémon todavía.</p>`;
-    const itemGrid = items.length
-      ? items.map((it) => this.itemCell(it)).join('')
+    const visibleItems = items.filter(it => it.qty > 0);
+    const itemGrid = visibleItems.length
+      ? visibleItems.map((it) => this.itemCell(it)).join('')
       : `<p class="text-gray-400" style="${FONT} font-size:9px;">Sin objetos todavía.</p>`;
 
     this.container.innerHTML = `
@@ -448,7 +449,7 @@ export class InventoryView {
                  <img src="${this.trainerSprite()}" alt="entrenador" class="pixelated block mx-auto" style="width:clamp(120px,30vw,220px);height:clamp(120px,30vw,220px);object-fit:contain;image-rendering:pixelated;" />
                  <span class="text-black" style="${FONT} font-size:16px;">${u?.username ?? ''}</span>
                  <span class="text-gray-600" style="${FONT} font-size:11px;">Lv. ${u?.level ?? 1} · 🪙 ${u?.coins ?? 0}</span>
-                 <span class="text-gray-500" style="${FONT} font-size:9px;">${pokemon.length} Pokémon · ${items.length} objetos</span>
+                 <span class="text-gray-500" style="${FONT} font-size:9px;">${pokemon.length} Pokémon · ${visibleItems.length} objetos</span>
                </div>`,
               'flex-1 flex w-full'
             )}
