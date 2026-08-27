@@ -52,7 +52,7 @@ services:
       - -c
       - |
         while :; do sleep 6h & wait $${!}; nginx -s reload; done &
-        nginx -g "daemon off;"
+        exec nginx -g "daemon off;"
     healthcheck:
       # Vía HTTPS interno (:443 dentro del contenedor) contra /health, que nginx
       # proxya a hello. OJO: se usa 'localhost' y no 127.0.0.1 porque nginx enruta
