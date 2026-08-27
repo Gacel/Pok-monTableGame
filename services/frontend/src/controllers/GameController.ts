@@ -471,7 +471,7 @@ export class GameController {
            const centerTile = newState.tiles.find(t => t.hex.q === centerQ && t.hex.r === centerR) || newState.tiles.find(t => t.hex.q === zones[0].q && t.hex.r === zones[0].r);
            this.centerOnTile(centerTile, animateCamera && !!oldPlayer);
         }
-      } else {
+      } else if (this.panKeys.size === 0) {
         const targetTile = this.state.getLastInteractedTile(newState.currentPlayer);
         this.centerOnTile(targetTile, animateCamera && !!oldPlayer);
       }
@@ -517,9 +517,11 @@ export class GameController {
           break;
         case 'knockback':
         case 'dash':
-          // Deslizamiento del sprite (T3.2/T3.4): se marca el id para que EntityView use
-          // una transición de posición larga en el render que lo mueve a su nuevo hex.
           if (ev.pokemonId) this.state.slidingIds.add(ev.pokemonId);
+          if (!this.isMyTurn() && this.panKeys.size === 0) {
+            const evTile = state.tiles.find(t => t.hex.q === ev.hex!.q && t.hex.r === ev.hex!.r);
+            this.centerOnTile(evTile);
+          }
           break;
         // capture → su ticket (T8.5).
         default:
