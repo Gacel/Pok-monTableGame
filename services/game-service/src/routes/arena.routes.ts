@@ -12,7 +12,7 @@ export async function arenaRoutes(app: FastifyInstance): Promise<void> {
           type: 'object',
           required: ['team'],
           properties: {
-            team: { type: 'array', items: { type: 'string', maxLength: 32 }, maxItems: 3 },
+            team: { type: 'array', items: { type: 'string', maxLength: 36 }, maxItems: 3 },
           },
         },
       },
