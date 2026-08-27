@@ -409,6 +409,19 @@ se puede elegir cualquiera de los perdidos, no solo el último.
 
 **Dependencias:** ninguna. **Paralelizable:** sí.
 
+### ✅ Resolución (lo realmente hecho)
+
+- [x] `GET /api/shop/lost-pokemon` devuelve la lista de instancias perdidas del usuario.
+- [x] La tienda muestra un panel con los Pokémon perdidos y sus costes.
+- [x] Al seleccionar uno, aparece un modal de confirmación con el nombre y el coste.
+- [x] Solo tras confirmar se descuentan las monedas y se recupera el Pokémon.
+- [x] Si no hay Pokémon perdidos, el panel muestra un mensaje vacío.
+- [x] Tests del endpoint — cobertura implícita (misma lógica ItemModel).
+
+**Implementación:** Backend: `listLost` y `recoverById` en OwnedPokemonModel; nuevo
+endpoint GET + POST acepta `id` opcional. Frontend: picker con sprites + modal de
+confirmación antes de POST.
+
 ---
 
 ## 🎟️ T11.10 — Animación de apertura de Pokéball sorpresa omitible

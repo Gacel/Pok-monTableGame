@@ -186,6 +186,25 @@ export const OwnedPokemonModel = {
     return (row?.n ?? 0) > 0;
   },
 
+  async listLost(userId: string): Promise<OwnedPokemonRecord[]> {
+    const db = await getDb();
+    return db.all<OwnedPokemonRecord[]>(
+      'SELECT * FROM owned_pokemon WHERE user_id = ? AND lost_at IS NOT NULL ORDER BY lost_at DESC, rowid DESC',
+      userId
+    );
+  },
+
+  async recoverById(id: string, userId: string): Promise<OwnedPokemonRecord | null> {
+    const db = await getDb();
+    const row = await db.get<OwnedPokemonRecord>(
+      'SELECT * FROM owned_pokemon WHERE id = ? AND user_id = ? AND lost_at IS NOT NULL',
+      id, userId
+    );
+    if (!row) return null;
+    await db.run('UPDATE owned_pokemon SET lost_at = NULL WHERE id = ?', row.id);
+    return { ...row, lost_at: null };
+  },
+
   /**
    * Recupera el ÚLTIMO Pokémon perdido del usuario (Survival, T8.3): quita `lost_at` y lo
    * devuelve al inventario. Devuelve el registro recuperado, o `null` si no había ninguno.

@@ -186,17 +186,95 @@ export class ShopMenuView {
     }
   }
 
-  /** Recupera el último Pokémon perdido en Survival por 10000 🪙 (T8.3). */
   private async recoverPokemon() {
     if (this.busy) return;
     this.busy = true;
     try {
-      const res = await apiFetch('/api/shop/recover-pokemon', { method: 'POST' });
+      const res = await apiFetch('/api/shop/lost-pokemon');
+      const data = await res.json();
+      const lost: Array<{ id: string; name: string; level: number; price: number }> = data.pokemon ?? [];
+      if (lost.length === 0) {
+        alert('No tienes Pokémon perdidos.');
+        this.busy = false;
+        return;
+      }
+      const sprites: Record<string, string> = {};
+      await Promise.all(lost.map(async (p) => { sprites[p.name] = await getSprite(p.name); }));
+      this.showLostPicker(lost, sprites);
+    } catch {
+      alert('Error de red');
+    } finally {
+      this.busy = false;
+    }
+  }
+
+  private showLostPicker(lost: Array<{ id: string; name: string; level: number; price: number }>, sprites: Record<string, string>) {
+    const cards = lost.map(p => `
+      <button data-recover-id="${p.id}" class="recover-card flex flex-col items-center gap-1 rounded border-4 border-gray-800 bg-white hover:bg-yellow-100 active:mt-1 shadow-[4px_4px_0_#000]" style="padding:12px 8px;">
+        <img src="${sprites[p.name] ?? ''}" alt="${p.name}" class="w-14 h-14 object-contain" style="image-rendering:pixelated;" />
+        <span class="text-black text-center" style="${FONT} font-size:8px;">${p.name.toUpperCase()}</span>
+        <span class="text-gray-600" style="${FONT} font-size:7px;">Lv.${p.level}</span>
+        <span class="text-yellow-600" style="${FONT} font-size:8px;">${p.price} 🪙</span>
+      </button>
+    `).join('');
+
+    this.container.innerHTML = hubPanel(
+      `${panelTitle('RECUPERAR POKÉMON')}
+       <p class="text-white text-center mb-3" style="${FONT} font-size:11px;">Tu saldo: <span class="text-yellow-300">${this.coins()} 🪙</span></p>
+       ${panelCard(
+         `<div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 sm:gap-3 w-full max-w-3xl">${cards}</div>`,
+         'flex flex-col items-center'
+       )}
+       ${backButton()}`,
+      { minHeight: 400 }
+    );
+
+    this.container.querySelectorAll<HTMLButtonElement>('.recover-card').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.recoverId!;
+        const p = lost.find(x => x.id === id);
+        if (p) this.showRecoverConfirm(p);
+      });
+    });
+    document.getElementById('btn-back')?.addEventListener('click', () => {
+      this.step = 'root';
+      this.render();
+    });
+  }
+
+  private showRecoverConfirm(p: { id: string; name: string; level: number; price: number }) {
+    const overlay = document.createElement('div');
+    overlay.className = 'fixed inset-0 z-[300] flex items-center justify-center p-4';
+    overlay.style.background = 'rgba(0,0,0,0.72)';
+    overlay.innerHTML = `
+      <div class="bg-gray-900 rounded-xl border-4 border-white p-6 text-center" style="max-width:340px; box-shadow:0 0 0 4px #000, 0 0 30px rgba(0,0,0,0.8);">
+        <p class="text-white mb-4" style="${FONT} font-size:12px;">¿Recuperar a <span class="text-yellow-300">${p.name.toUpperCase()}</span> (Lv.${p.level}) por <span class="text-yellow-300">${p.price} 🪙</span>?</p>
+        <div class="flex gap-3 justify-center">
+          <button id="recover-confirm" class="px-4 py-2 rounded bg-green-600 hover:bg-green-500 text-white border-b-4 border-green-800 active:border-b-0" style="${FONT} font-size:10px;">CONFIRMAR</button>
+          <button id="recover-cancel" class="px-4 py-2 rounded bg-red-600 hover:bg-red-500 text-white border-b-4 border-red-800 active:border-b-0" style="${FONT} font-size:10px;">CANCELAR</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+
+    overlay.querySelector('#recover-confirm')?.addEventListener('click', async () => {
+      overlay.remove();
+      await this.doRecover(p.id);
+    });
+    overlay.querySelector('#recover-cancel')?.addEventListener('click', () => overlay.remove());
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+  }
+
+  private async doRecover(id: string) {
+    if (this.busy) return;
+    this.busy = true;
+    try {
+      const res = await apiFetch('/api/shop/recover-pokemon', { method: 'POST', body: JSON.stringify({ id }) });
       const data = await res.json();
       if (res.ok && data.success) {
         if (authState.user) authState.user.coins = data.coins;
         const p = data.pokemon ?? {};
         alert(`💾 Recuperado: ${String(p.name ?? '').toUpperCase()} (Lv.${p.level ?? 1}) · saldo ${data.coins} 🪙`);
+        this.step = 'root';
         this.render();
       } else {
         alert(data.error ?? 'No se pudo recuperar');
