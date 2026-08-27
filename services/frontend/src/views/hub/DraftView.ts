@@ -1,5 +1,5 @@
-import type { MovementPattern, PokemonType } from '../../models/Types';
-import type { GameMode } from '@transcendence/shared';
+import type { PokemonType } from '../../models/Types';
+import { type GameMode, typeLabelEs } from '@transcendence/shared';
 import { apiFetch } from '../../net/api';
 import { getSprite } from '../../net/PokeSprites';
 import { openPokemonDetail } from './PokemonDetailModal';
@@ -7,7 +7,6 @@ import { openPokemonDetail } from './PokemonDetailModal';
 interface RosterEntry {
   name: string;
   type: PokemonType;
-  movementPattern: MovementPattern;
   hp: number;
   maxHp: number;
   atk: number;
@@ -16,8 +15,8 @@ interface RosterEntry {
 
 /** Configuración del draft: local secuencial (N jugadores) u online (solo tú). */
 export type DraftConfig =
-  | { mode: 'local'; players: number; gameMode: GameMode }
-  | { mode: 'online'; playerLabel: string; reserved?: string[] };
+  | { mode: 'local'; players: number; gameMode: GameMode; poolEndpoint?: string }
+  | { mode: 'online'; playerLabel: string; reserved?: string[]; poolEndpoint?: string };
 
 const TEAM_SIZE = 3;
 
@@ -39,11 +38,7 @@ const TYPE_COLOR: Record<string, string> = {
   FAIRY: '#f472b6',
 };
 
-const PATTERN_LABEL: Record<MovementPattern, string> = {
-  FLYING: 'Volador · Alfil',
-  TANK: 'Tanque · Rey',
-  SPEEDSTER: 'Velocista · Caballo',
-};
+
 
 /**
  * Capa VISTA: pantalla de draft.
@@ -73,7 +68,8 @@ export class DraftView {
   async render(): Promise<void> {
     this.container.innerHTML = this.loadingHtml('Cargando Pokémon…');
     try {
-      const res = await apiFetch('/api/game/roster');
+      // Local/vs-IA usan un pool ALEATORIO de 50 (draft-pool); online 1v1/2v2, el roster estable.
+      const res = await apiFetch(this.config.poolEndpoint ?? '/api/game/roster');
       const data = await res.json();
       this.roster = (data.roster ?? []) as RosterEntry[];
       await this.preloadSprites();
@@ -147,8 +143,7 @@ export class DraftView {
             style="border:3px solid ${border};">
             <img src="${this.sprites[p.name] ?? ''}" alt="${p.name}" class="w-14 h-14 object-contain" style="image-rendering:pixelated;" />
             <span class="text-[8px] text-white mt-0.5 uppercase font-bold" style="font-family:'Press Start 2P',monospace;">${p.name}</span>
-            <span class="text-[6px] mt-1 px-1.5 py-0.5 rounded font-bold" style="font-family:'Press Start 2P',monospace;background:${TYPE_COLOR[p.type] ?? '#666'};color:#000;">${p.type}</span>
-            <span class="text-[5.5px] text-gray-300 mt-0.5" style="font-family:'Press Start 2P',monospace;">${PATTERN_LABEL[p.movementPattern]}</span>
+            <span class="text-[6px] mt-1 px-1.5 py-0.5 rounded font-bold" style="font-family:'Press Start 2P',monospace;background:${TYPE_COLOR[p.type] ?? '#666'};color:#000;">${typeLabelEs(p.type)}</span>
             ${selected ? '<span class="absolute top-1 right-1 text-yellow-400 text-sm animate-pulse">★</span>' : ''}
           </button>
           <span class="draft-info" role="button" tabindex="0" data-name="${p.name}" title="Ver ficha de ${p.name}"
@@ -215,7 +210,6 @@ export class DraftView {
     openPokemonDetail({
       name: p.name,
       type: p.type,
-      movementPattern: p.movementPattern,
       hp: p.hp,
       atk: p.atk,
       def: p.def,

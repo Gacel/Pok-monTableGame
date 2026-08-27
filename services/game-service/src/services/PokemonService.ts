@@ -1,6 +1,14 @@
 import { PokemonModel, PokemonTemplate } from '../models/PokemonModel.js';
 import { MoveModel, MoveRow } from '../models/MoveModel.js';
-import { MovementPattern, PokemonMove, PokemonType } from '../engine/board.js';
+import { PokemonMove, PokemonType } from '../engine/board.js';
+import { getMoveShape } from '../engine/moveShapes.js';
+import { selectMoves } from '../engine/moveSelection.js';
+import { getKnockback, isDash } from '../engine/moveTactics.js';
+import { sizeForSpecies, visualScale } from '../engine/sizes.js';
+import { isAirborne } from '../engine/airborne.js';
+import { EvolutionModel } from '../models/EvolutionModel.js';
+import { parseEvolutionChain } from '../engine/evolution.js';
+import type { EvolutionInfo, EvolutionChainResponse } from '../engine/evolution.js';
 
 interface PokeApiStat {
   base_stat: number;
@@ -28,10 +36,12 @@ interface PokeApiMove {
   type?: { name?: string };
   damage_class?: { name?: string };
   effect_entries?: { short_effect?: string; language?: { name?: string } }[];
+  target?: { name?: string };
+  names?: { name: string; language: { name: string } }[];
 }
 
 /** Nº de movimientos del learnset que consideramos para curar (acota los fetch). */
-const CANDIDATE_CAP = 14;
+const CANDIDATE_CAP = 18; // candidatos hidratados; margen para no perder moves emblemáticos (TA.2)
 /** Ataques mostrados en la fase de combate. */
 const CURATED_COUNT = 4;
 /** Timeout por petición a PokeAPI (evita colgar el arranque si la API va lenta). */
@@ -66,15 +76,10 @@ function typeFromPokeApi(primaryType: string): PokemonType {
   return 'NORMAL';
 }
 
-function patternFromType(type: PokemonType): MovementPattern {
-  if (['FIRE', 'FLYING', 'DRAGON', 'PSYCHIC'].includes(type)) return 'FLYING';
-  if (['GRASS', 'ELECTRIC', 'FAIRY'].includes(type)) return 'SPEEDSTER';
-  return 'TANK'; // WATER, POISON, NORMAL, ICE
-}
 
-/** Movimiento básico gratuito: garantiza que siempre se puede atacar sin candies. */
+
 function fallbackMove(type: PokemonType): PokemonMove {
-  return { name: 'golpe', type, power: 45, damageClass: 'physical', accuracy: 100, pp: 35 };
+  return { name: 'golpe', type, power: 45, damageClass: 'physical', accuracy: 100, pp: 35, range: 1, aoe: 'single' };
 }
 
 /** Extrae el learnset de la respuesta de PokeAPI (nombre + método/nivel principal). */
@@ -99,7 +104,14 @@ function learnsetFrom(data: PokeApiResponse) {
 export const PokemonService = {
   async getTemplate(name: string): Promise<PokemonTemplate> {
     const cached = await PokemonModel.findByName(name);
-    if (cached) return cached;
+    if (cached) {
+      // Tamaño/escala por especie (T4.1/T4.8): se aplican también al template cacheado
+      // (los guardados antes de esta mecánica tenían size 'medium' y sin escala).
+      cached.size = sizeForSpecies(name);
+      cached.scale = visualScale(name);
+      cached.airborne = isAirborne(name);
+      return cached;
+    }
 
     try {
       const data = await fetchJson<PokeApiResponse>(
@@ -118,7 +130,10 @@ export const PokemonService = {
         atk,
         def,
         type,
-        movementPattern: patternFromType(type),
+        speed: Math.max(2, Math.floor(statOf(data, 'speed', 60) / 20)),
+        size: sizeForSpecies(name),
+        scale: visualScale(name),
+        airborne: isAirborne(name),
       };
       await PokemonModel.save(tpl, data);
       // Importa el learnset completo (barato: viene en la misma respuesta).
@@ -133,10 +148,39 @@ export const PokemonService = {
         atk: 50,
         def: 40,
         type: 'GRASS',
-        movementPattern: 'TANK',
+        speed: 3,
+        size: sizeForSpecies(name),
+        scale: visualScale(name),
+        airborne: isAirborne(name),
       };
       await PokemonModel.save(tpl);
       return tpl;
+    }
+  },
+
+  /**
+   * Catálogo de evolución por especie (T5.2): cache-first en SQLite; en fallo consulta
+   * `/pokemon-species/{name}` (para la URL de la cadena) y `/evolution-chain/{id}`, y
+   * parsea *fiel a PokeAPI*. Devuelve `null` si la especie no evoluciona.
+   */
+  async getEvolution(name: string): Promise<EvolutionInfo | null> {
+    const cached = await EvolutionModel.find(name);
+    if (cached) return cached.info;
+    try {
+      const species = await fetchJson<{ evolution_chain?: { url?: string } }>(
+        `https://pokeapi.co/api/v2/pokemon-species/${name.toLowerCase()}`
+      );
+      const url = species.evolution_chain?.url;
+      if (!url) {
+        await EvolutionModel.save(name, null);
+        return null;
+      }
+      const chain = await fetchJson<EvolutionChainResponse>(url);
+      const info = parseEvolutionChain(chain, name);
+      await EvolutionModel.save(name, info);
+      return info;
+    } catch {
+      return null; // no se cachea el fallo: se reintentará
     }
   },
 
@@ -155,6 +199,8 @@ export const PokemonService = {
         damageClass: (data.damage_class?.name as MoveRow['damageClass']) ?? null,
         shortEffect:
           data.effect_entries?.find((e) => e.language?.name === 'en')?.short_effect ?? null,
+        target: data.target?.name ?? null,
+        displayName: data.names?.find((n) => n.language?.name === 'es')?.name ?? null,
       };
       await MoveModel.saveMove(row, data);
       return row;
@@ -188,12 +234,9 @@ export const PokemonService = {
         .filter((m): m is MoveRow => !!m)
         .filter((m) => (m.power ?? 0) > 0);
 
-      const sorted = details.sort((a, b) => {
-        const stabA = a.type === pokeType ? 1 : 0;
-        const stabB = b.type === pokeType ? 1 : 0;
-        if (stabB !== stabA) return stabB - stabA;
-        return (b.power ?? 0) - (a.power ?? 0);
-      });
+      // Selección por heurística: STAB + potencia + bonus a emblemáticos, con variedad
+      // (máx 2 por tipo) — TA.2.
+      const chosen = selectMoves(details, pokeType, CURATED_COUNT);
 
       const toMove = (m: MoveRow): PokemonMove => {
         const mv: PokemonMove = {
@@ -201,20 +244,30 @@ export const PokemonService = {
           type: m.type,
           power: m.power ?? 0,
           damageClass: (m.damageClass ?? 'physical') as PokemonMove['damageClass'],
+          range: 1,
+          aoe: 'single',
         };
+        if (m.displayName != null) mv.displayName = m.displayName;
         if (m.accuracy != null) mv.accuracy = m.accuracy;
         if (m.pp != null) mv.pp = m.pp;
+
+        // Forma/alcance por catálogo híbrido (lista curada + defaults) — TA.1.
+        const shape = getMoveShape(m);
+        mv.range = shape.range;
+        mv.aoe = shape.aoe;
+        if (shape.radius != null) mv.radius = shape.radius;
+
+        // Efecto de empuje (knockback) por lista curada — T3.1.
+        const kb = getKnockback(m.name);
+        if (kb != null) mv.knockback = kb;
+
+        // Dash (embestida en línea) por lista curada — T3.3.
+        if (isDash(m.name)) mv.dash = true;
+
         return mv;
       };
 
-      const picked: PokemonMove[] = [];
-      const seen = new Set<string>();
-      for (const m of sorted) {
-        if (picked.length >= CURATED_COUNT) break;
-        if (seen.has(m.name)) continue;
-        seen.add(m.name);
-        picked.push(toMove(m));
-      }
+      const picked: PokemonMove[] = chosen.map(toMove);
 
       // Garantiza al menos un ataque físico gratuito.
       if (!picked.some((m) => m.damageClass === 'physical')) {

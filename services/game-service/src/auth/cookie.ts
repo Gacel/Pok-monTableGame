@@ -5,7 +5,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
  *
  * El JWT viaja en una cookie `HttpOnly` (inaccesible a JavaScript → inmune a robo
  * por XSS) `SameSite=Lax` + `Secure`. Antes viajaba en `localStorage` y en la
- * query string; ver docs/audit/SECURITY_AUDIT.md (frontend #2/#3).
+ * query string; ver docs/archive/SECURITY_AUDIT.md (frontend #2/#3).
  *
  * `Secure` se puede desactivar con `COOKIE_SECURE=false` SOLO para dev por http
  * (localhost:5173 sin gateway). En producción (tras el gateway HTTPS) debe ir a true.

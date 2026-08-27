@@ -18,7 +18,7 @@
 
       <!-- CAPA DE MENÚS (HUB) — a tamaño REAL del dispositivo (fuera del lienzo
            escalado) para que los breakpoints responsive de Tailwind respondan al
-           viewport real. Scroll propio en pantallas bajas. Ver docs/RESPONSIVE.md. -->
+           viewport real. Scroll propio en pantallas bajas. Ver docs/10-RESPONSIVE.md. -->
       <div id="hub-layer" class="absolute inset-0 z-[80] flex flex-col items-center bg-gray-900 overflow-y-auto overscroll-contain transition-opacity duration-500"></div>
 
       <!-- CAPA DE DRAFT (selección de equipos) — también a tamaño real. -->
@@ -40,7 +40,7 @@
 
           <!-- NOTA: #hub-layer y #draft-layer se movieron a nivel de #app (tamaño real
                del dispositivo). Aquí solo queda el TABLERO, que sí usa el lienzo
-               1600×1000 escalado. Ver docs/RESPONSIVE.md. -->
+               1600×1000 escalado. Ver docs/10-RESPONSIVE.md. -->
 
           <!-- Game Layer -->
           <div id="game-layer" class="absolute inset-0 z-10 hidden bg-black flex overflow-hidden">
@@ -52,6 +52,10 @@
                    (altos, según la Y) de los sprites quedan CONTENIDOS aquí y no se
                    cuelan por encima del HUD (z-40/z-50) ni de los overlays. -->
               <div id="entities-layer" class="absolute inset-0 pointer-events-none z-30"></div>
+              <!-- Capa de efectos de feedback (números flotantes, flashes, tweens).
+                   Separada de entities-layer (que borra hijos que no son ocupantes).
+                   Va después en el DOM con z-30 → pinta sobre los sprites, bajo el HUD. -->
+              <div id="fx-layer" class="absolute inset-0 pointer-events-none z-30"></div>
 
               <!-- HUD SUPERIOR (P1 y P2) -->
               <div id="hud-container" class="absolute top-0 left-0 w-full p-4 flex justify-between items-start pointer-events-none z-50">
@@ -147,15 +151,21 @@
               </div>
 
               <!-- BARRA DE TURNO Y BOTÓN FINALIZAR TURNO (INFERIOR CENTRO) -->
-              <div class="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-4 z-50 pointer-events-auto">
-                <div id="turn-banner" class="hidden bg-black bg-opacity-80 border-2 border-yellow-400 rounded-lg px-4 py-2 text-center shadow-lg">
-                  <div id="turn-player" class="text-[10px] text-yellow-400" style="font-family: 'Press Start 2P', monospace;">TURNO</div>
-                  <div id="turn-number" class="text-[8px] text-gray-300 mt-1" style="font-family: 'Press Start 2P', monospace;">Turno 1</div>
+              <div class="absolute bottom-4 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 z-50 pointer-events-auto">
+                <div id="action-panel" class="hidden flex gap-2 mb-2 p-2 bg-gray-900 bg-opacity-90 border-2 border-gray-700 rounded-lg shadow-lg pointer-events-auto">
+                  <!-- Movimientos inyectados aquí por HUDView -->
                 </div>
+                
+                <div class="flex items-center gap-4">
+                  <div id="turn-banner" class="hidden bg-black bg-opacity-80 border-2 border-yellow-400 rounded-lg px-4 py-2 text-center shadow-lg">
+                    <div id="turn-player" class="text-[10px] text-yellow-400" style="font-family: 'Press Start 2P', monospace;">TURNO</div>
+                    <div id="turn-number" class="text-[8px] text-gray-300 mt-1" style="font-family: 'Press Start 2P', monospace;">Turno 1</div>
+                  </div>
 
-                <button id="btn-end-turn" class="bg-gradient-to-r from-yellow-500 to-red-600 hover:from-yellow-400 hover:to-red-500 text-black font-bold text-xs px-6 py-3 rounded-lg border-2 border-yellow-300 shadow-[0_0_15px_rgba(234,179,8,0.5)] cursor-pointer transition-all duration-200 hover:scale-105 active:scale-95 uppercase tracking-wider" style="font-family: 'Press Start 2P', monospace;">
-                  FINALIZAR TURNO ▶
-                </button>
+                  <button id="btn-end-turn" class="bg-gradient-to-r from-yellow-500 to-red-600 hover:from-yellow-400 hover:to-red-500 text-black font-bold text-xs px-6 py-3 rounded-lg border-2 border-yellow-300 shadow-[0_0_15px_rgba(234,179,8,0.5)] cursor-pointer transition-all duration-200 hover:scale-105 active:scale-95 uppercase tracking-wider" style="font-family: 'Press Start 2P', monospace;">
+                    FINALIZAR TURNO ▶
+                  </button>
+                </div>
               </div>
 
               <!-- Toast feedback -->
@@ -166,10 +176,14 @@
 
               <!-- Win overlay -->
               <div id="win-overlay" class="absolute inset-0 hidden items-center justify-center bg-black bg-opacity-80 z-[60]">
-                <div class="bg-blue-900 border-4 border-yellow-400 rounded-lg p-8 text-center shadow-2xl">
+                <div class="bg-blue-900 border-4 border-yellow-400 rounded-lg p-8 text-center shadow-2xl" style="max-width:min(440px,92vw);">
                   <div class="text-2xl text-yellow-400 mb-4" style="font-family: 'Press Start 2P', monospace; text-shadow: 2px 2px 0 #000;">¡VICTORIA!</div>
-                  <div id="win-text" class="text-xs text-white mb-6" style="font-family: 'Press Start 2P', monospace;"></div>
-                  <button id="btn-rematch" class="bg-green-600 hover:bg-green-500 text-white text-xs px-6 py-3 rounded border-b-4 border-green-800 active:border-b-0 active:mt-1" style="font-family: 'Press Start 2P', monospace;">REVANCHA</button>
+                  <div id="win-text" class="text-xs text-white mb-4" style="font-family: 'Press Start 2P', monospace;"></div>
+                  <div id="win-rewards" class="mb-6"></div>
+                  <div class="flex flex-wrap gap-3 justify-center">
+                    <button id="btn-rematch" class="bg-green-600 hover:bg-green-500 text-white text-xs px-6 py-3 rounded border-b-4 border-green-800 active:border-b-0 active:mt-1" style="font-family: 'Press Start 2P', monospace;">REVANCHA</button>
+                    <button id="btn-win-menu" class="bg-gray-700 hover:bg-gray-600 text-white text-xs px-6 py-3 rounded border-b-4 border-gray-900 active:border-b-0 active:mt-1" style="font-family: 'Press Start 2P', monospace;">◀ MENÚ</button>
+                  </div>
                 </div>
               </div>
             </div>

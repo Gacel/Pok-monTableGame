@@ -192,7 +192,7 @@ function resizeGameArea() {
  * Muestra el aviso "gira el dispositivo" SOLO cuando el tablero está activo y el
  * dispositivo está en vertical y es estrecho (móvil). El tablero 16:10 no es
  * jugable en portrait; los menús sí reflowan y no necesitan aviso.
- * Ver docs/RESPONSIVE.md.
+ * Ver docs/10-RESPONSIVE.md.
  */
 function updateRotateOverlay() {
   const overlay = document.getElementById('rotate-overlay');
@@ -221,7 +221,7 @@ function showLocalDraft(config: LocalGameConfig) {
   draftLayer.classList.remove('hidden');
   const view = new DraftView(
     draftLayer,
-    { mode: 'local', players: config.players, gameMode: config.gameMode },
+    { mode: 'local', players: config.players, gameMode: config.gameMode, poolEndpoint: '/api/game/draft-pool' },
     (teams) => void onLocalDraftConfirmed(draftLayer, config, teams)
   );
   void view.render();
@@ -269,7 +269,7 @@ async function showSinglePlayerDraft(level: BotLevel) {
   draftLayer.classList.remove('hidden');
   const view = new DraftView(
     draftLayer,
-    { mode: 'online', playerLabel: 'TU EQUIPO' },
+    { mode: 'online', playerLabel: 'TU EQUIPO', poolEndpoint: '/api/game/draft-pool' },
     (teams) => void onSinglePlayerDraftConfirmed(draftLayer, level, teams[0] ?? [])
   );
   await view.render();
@@ -280,15 +280,16 @@ async function onSinglePlayerDraftConfirmed(
   level: BotLevel,
   humanTeam: string[]
 ) {
-  // La IA elige su equipo con su "inteligencia" (nivel) contra el equipo del jugador.
+  // La IA elige su equipo con su "inteligencia" (nivel) contra el equipo del jugador,
+  // del mismo pool aleatorio Gen-1 (draft-pool) que el humano.
   let aiTeam: string[] = [];
   try {
-    const res = await apiFetch('/api/game/roster');
+    const res = await apiFetch('/api/game/draft-pool');
     const data = await res.json();
     const roster = (data.roster ?? []) as RosterMon[];
     aiTeam = pickAiTeam(roster, humanTeam, level, Math.random);
   } catch {
-    /* sin roster: se maneja abajo */
+    /* sin pool: se maneja abajo */
   }
   if (aiTeam.length < 3) {
     alert('No se pudo formar el equipo de la IA');
@@ -306,6 +307,66 @@ async function onSinglePlayerDraftConfirmed(
     }
   } catch {
     alert('Error de red al iniciar la partida');
+    return;
+  }
+  draftLayer.classList.add('hidden');
+  enterGame(null, { player2: level });
+}
+
+// ------------------------------------------------------- SURVIVAL (vs IA, stakes)
+// Llevas tu EQUIPO PROPIO (inventario); la IA usa salvajes. Capturas lo que derrotas y
+// pierdes de verdad a los tuyos (T8.x). El humano es P1; la IA (salvaje), P2.
+
+export function startSurvival(level: BotLevel) {
+  hubLayer.classList.add('opacity-0');
+  setTimeout(() => {
+    hubLayer.style.display = 'none';
+    showSurvivalPicker(level);
+  }, 500);
+}
+
+function showSurvivalPicker(level: BotLevel) {
+  hideSidebar();
+  const draftLayer = document.getElementById('draft-layer') as HTMLElement;
+  draftLayer.classList.remove('hidden');
+  const picker = new OwnedTeamPickerView(draftLayer, {
+    title: 'SURVIVAL · TU EQUIPO',
+    pick: 3,
+    onBack: () => {
+      draftLayer.classList.add('hidden');
+      showSinglePlayerMenu();
+    },
+    onConfirm: (ownedIds) => void onSurvivalConfirmed(draftLayer, level, ownedIds),
+  });
+  void picker.render();
+}
+
+async function onSurvivalConfirmed(draftLayer: HTMLElement, level: BotLevel, ownedIds: string[]) {
+  // Equipo SALVAJE de la IA: 3 del pool aleatorio Gen-1 (sin ownedId → capturables).
+  let aiTeam: string[] = [];
+  try {
+    const res = await apiFetch('/api/game/draft-pool');
+    const data = await res.json();
+    aiTeam = pickAiTeam((data.roster ?? []) as RosterMon[], [], level, Math.random);
+  } catch {
+    /* sin pool: se maneja abajo */
+  }
+  if (aiTeam.length < 3) {
+    alert('No se pudo formar el equipo salvaje');
+    return;
+  }
+  try {
+    const res = await apiFetch('/api/game/start', {
+      method: 'POST',
+      body: JSON.stringify({ player1: ownedIds, player2: aiTeam, gameMode: 'survival' }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      alert(data.error ?? 'No se pudo iniciar Survival');
+      return;
+    }
+  } catch {
+    alert('Error de red al iniciar Survival');
     return;
   }
   draftLayer.classList.add('hidden');
@@ -339,12 +400,12 @@ export function startArena() {
     title: 'ARENA · TU EQUIPO',
     pick: 3,
     onBack: () => showMultiplayerMenu(),
-    onConfirm: (names) => {
+    onConfirm: (ids) => {
       void (async () => {
         try {
           const res = await apiFetch('/api/arena/join', {
             method: 'POST',
-            body: JSON.stringify({ team: names }),
+            body: JSON.stringify({ team: ids }),
           });
           const data = await res.json();
           if (res.ok && data.room) {
@@ -391,9 +452,9 @@ function showOnlineDraft(room: RoomInfo) {
       title: 'BATTLE ROYALE · TU EQUIPO',
       pick: 3,
       onBack: () => draftLayer.classList.add('hidden'),
-      onConfirm: (names) => {
+      onConfirm: (ids) => {
         draftLayer.classList.add('hidden');
-        submitOnlineTeam(room, names);
+        submitOnlineTeam(room, ids);
       },
     });
     void picker.render();

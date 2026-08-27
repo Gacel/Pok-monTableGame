@@ -1,4 +1,4 @@
-import { showPlayMenu, startSinglePlayer } from '../../main';
+import { showPlayMenu, startSinglePlayer, startSurvival } from '../../main';
 import type { BotLevel } from '../../controllers/botStrategy';
 import { FONT, hubPanel, panelTitle, panelCard, menuButton, backButton } from './panel';
 
@@ -32,7 +32,7 @@ export class SinglePlayerMenuView {
           ${menuButton({ id: 'btn-ai-2', label: 'IA NORMAL', icon: '🔵', color: 'blue' })}
           ${menuButton({ id: 'btn-ai-3', label: 'IA DIFÍCIL', icon: '🟠', color: 'yellow' })}
           ${menuButton({ label: 'IA HARDCORE', icon: '🔴', color: 'red', lock: '1000 monedas (logro)' })}
-          ${menuButton({ label: 'SURVIVAL MODE', icon: '💀', color: 'purple', disabled: true, extraClass: 'col-span-1 sm:col-span-2' })}
+          ${menuButton({ id: 'btn-survival', label: 'SURVIVAL MODE', icon: '💀', sublabel: 'Tu equipo · captura y pérdida REAL', color: 'purple', extraClass: 'col-span-1 sm:col-span-2' })}
         </div>`,
         'flex flex-col items-center'
       )}
@@ -44,6 +44,7 @@ export class SinglePlayerMenuView {
     document.getElementById('btn-ai-1')?.addEventListener('click', () => this.startVsAI(1));
     document.getElementById('btn-ai-2')?.addEventListener('click', () => this.startVsAI(2));
     document.getElementById('btn-ai-3')?.addEventListener('click', () => this.startVsAI(3));
+    document.getElementById('btn-survival')?.addEventListener('click', () => startSurvival(2));
     document.getElementById('btn-back')?.addEventListener('click', () => showPlayMenu());
   }
 }

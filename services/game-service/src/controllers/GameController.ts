@@ -1,15 +1,55 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
-import type { GameMode } from '@transcendence/shared';
+import type { GameMode, MatchStateDTO } from '@transcendence/shared';
+import { BALL_SPRITE } from '@transcendence/shared';
 import { matchManager } from '../services/MatchManager.js';
 import { PokemonService } from '../services/PokemonService.js';
+import { MoveModel } from '../models/MoveModel.js';
+import { UserModel } from '../models/UserModel.js';
+import { ItemModel } from '../models/ItemModel.js';
 import { hub, LOCAL_ROOM } from '../realtime/hub.js';
 import { Hex } from '../engine/hex.js';
 import { GameActionService, GameAction } from '../services/GameActionService.js';
 import { isHex } from '../utils/hex.js';
 
+/** Slot del usuario logueado en partidas LOCAL (hot-seat / vs IA): siempre P1. */
+const LOCAL_USER_SLOT = 'player1';
+
+function reqUserId(request: FastifyRequest): string | null {
+  return (request as FastifyRequest & { userId?: string }).userId ?? null;
+}
+
+/**
+ * Recompensa LOCAL (hot-seat / vs IA): el online/arena la da EconomyService, pero
+ * el modo local no pasa por ahí. Si el usuario logueado (P1) gana, se le acreditan
+ * las monedas (500×KOs + pool de victoria) y las bolas conseguidas en el cofre.
+ */
+async function awardLocal(state: MatchStateDTO, userId: string): Promise<void> {
+  if (state.status !== 'finished' || !state.winner) return;
+  const winners = state.winner.split(' & ');
+  if (!winners.includes(LOCAL_USER_SLOT)) return;
+
+  const kos = state.kos?.[LOCAL_USER_SLOT] ?? 0;
+  const losers = Math.max(0, state.players.length - winners.length);
+  const winShare = winners.length > 0 ? Math.floor((1000 * losers) / winners.length) : 0;
+  const coins = 500 * kos + winShare;
+  if (coins > 0) await UserModel.addCoins(userId, coins);
+
+  const reward = state.rewards?.find((r) => r.slot === LOCAL_USER_SLOT);
+  for (const ball of reward?.balls ?? []) await ItemModel.add(userId, 'pokeball', BALL_SPRITE[ball], 1);
+}
+
 interface MoveBody {
   from?: Hex;
   to?: Hex;
+}
+interface DeployBody {
+  pokemonId?: string;
+  hex?: Hex;
+}
+interface CastBody {
+  from?: Hex;
+  target?: Hex;
+  moveIndex?: number;
 }
 interface OptionsQuery {
   q?: string;
@@ -18,11 +58,7 @@ interface OptionsQuery {
 interface PokedexParams {
   name?: string;
 }
-interface CombatBody {
-  action?: string;
-  moveName?: string;
-  targetId?: string;
-}
+
 interface StartBody {
   player1?: unknown;
   player2?: unknown;
@@ -32,13 +68,15 @@ interface StartBody {
 }
 
 /** Ejecuta una acción LOCAL (hot-seat) por el pipeline único. El actor es el jugador de turno. */
-async function applyLocal(action: GameAction) {
+async function applyLocal(action: GameAction, userId?: string | null) {
   const game = matchManager.get();
   const actor = game.getStateDTO().currentPlayer;
   const result = await GameActionService.apply(
     { game, actor, isLocal: true, room: LOCAL_ROOM },
     action
   );
+  // Recompensa al usuario logueado si acaba de ganar (local no pasa por EconomyService).
+  if (result.ok && userId) await awardLocal(result.state, userId);
   return result.ok
     ? { success: true, state: result.state }
     : { success: false, error: result.error, state: result.state };
@@ -46,7 +84,8 @@ async function applyLocal(action: GameAction) {
 
 function asNameArray(v: unknown): string[] | null {
   if (!Array.isArray(v)) return null;
-  if (!v.every((x) => typeof x === 'string' && x.length > 0 && x.length <= 32)) return null;
+  // 40 admite tanto nombres de especie (cortos) como ownedId (UUID de 36, Survival).
+  if (!v.every((x) => typeof x === 'string' && x.length > 0 && x.length <= 40)) return null;
   return v as string[];
 }
 
@@ -63,9 +102,14 @@ export const GameController = {
     return matchManager.get().getStateDTO();
   },
 
-  /** Pool de Pokémon para el draft inicial (≥12). */
+  /** Roster ESTABLE para el draft online 1v1/2v2 (consistente entre jugadores). */
   async getRoster() {
     return { roster: await matchManager.getRoster() };
+  },
+
+  /** Pool de draft LOCAL/vs-IA: 50 Pokémon Gen-1 aleatorios, distintos cada draft. */
+  async getDraftPool() {
+    return { roster: await matchManager.draftPool() };
   },
 
   /**
@@ -81,13 +125,22 @@ export const GameController = {
       return reply.code(400).send({ success: false, error: 'Nombre inválido' });
     }
     const tpl = await PokemonService.getTemplate(name);
-    const moves = await PokemonService.getCuratedMoves(name, tpl.type);
+    const curated = await PokemonService.getCuratedMoves(name, tpl.type);
+    // Enriquece cada ataque con su descripción corta YA cacheada en la tabla
+    // `moves` (findMove es una lectura de SQLite: NO genera llamadas a PokeAPI).
+    const moves = await Promise.all(
+      curated.map(async (m) => {
+        const row = await MoveModel.findMove(m.name);
+        return { ...m, shortEffect: row?.shortEffect ?? null };
+      })
+    );
     return {
       success: true,
       pokemon: {
         name: tpl.name,
         type: tpl.type,
-        movementPattern: tpl.movementPattern,
+        speed: tpl.speed,
+        size: tpl.size,
         hp: tpl.hp,
         maxHp: tpl.maxHp,
         atk: tpl.atk,
@@ -133,9 +186,14 @@ export const GameController = {
       return reply.code(400).send({ success: false, error: 'Se necesitan al menos 2 jugadores' });
     }
     const gm = request.body?.gameMode;
-    const gameMode = (gm === 'teams' || gm === 'arena' || gm === 'br' ? gm : 'ffa') as GameMode;
+    const gameMode = (gm === 'teams' || gm === 'arena' || gm === 'br' || gm === 'survival' ? gm : 'ffa') as GameMode;
+    // Survival: el player1 son ownedId (equipo propio del humano); se atribuye al usuario que
+    // inicia (para capturas/pérdidas). El resto de modos locales usan draft (nombres).
+    if (gameMode === 'survival' && !reqUserId(request)) {
+      return reply.code(401).send({ success: false, error: 'Debes iniciar sesión para jugar Survival' });
+    }
     try {
-      const game = await matchManager.startMatch(teams, gameMode);
+      const game = await matchManager.startMatch(teams, gameMode, reqUserId(request));
       hub.broadcast(LOCAL_ROOM, { type: 'state', state: game.getStateDTO() });
       return { success: true, state: game.getStateDTO() };
     } catch (e) {
@@ -148,35 +206,52 @@ export const GameController = {
     if (!isHex(from) || !isHex(to)) {
       return reply.code(400).send({ success: false, error: 'Coordenadas from/to inválidas' });
     }
-    return applyLocal({ type: 'move', from, to });
+    return applyLocal({ type: 'move', from, to }, reqUserId(request));
   },
 
-  /** Acción dentro del combate interactivo (ATACAR/HABILIDAD/OBJETO/HUIR). */
-  async combatAction(request: FastifyRequest<{ Body: CombatBody }>) {
-    const action = String(request.body?.action ?? '');
-    const moveName =
-      typeof request.body?.moveName === 'string' ? request.body.moveName.slice(0, 40) : undefined;
-    const targetId =
-      typeof request.body?.targetId === 'string' ? request.body.targetId.slice(0, 40) : undefined;
-    return applyLocal({ type: 'combat_action', action, moveName, targetId });
+  async deploy(request: FastifyRequest<{ Body: DeployBody }>, reply: FastifyReply) {
+    const { pokemonId, hex } = request.body ?? {};
+    if (typeof pokemonId !== 'string' || !isHex(hex)) {
+      return reply.code(400).send({ success: false, error: 'Parámetros inválidos' });
+    }
+    return applyLocal({ type: 'deploy', pokemonId, hex });
   },
 
-  /** Cierra la fase de resultado del combate y devuelve al tablero. */
-  async combatContinue() {
-    return applyLocal({ type: 'combat_continue' });
+  async cast(request: FastifyRequest<{ Body: CastBody }>, reply: FastifyReply) {
+    const { from, target, moveIndex } = request.body ?? {};
+    if (!isHex(from) || !isHex(target) || typeof moveIndex !== 'number') {
+      return reply.code(400).send({ success: false, error: 'Parámetros inválidos' });
+    }
+    return applyLocal({ type: 'cast', from, target, moveIndex });
   },
 
-  async reset() {
-    const game = await matchManager.reset();
-    hub.broadcast(LOCAL_ROOM, { type: 'state', state: game.getStateDTO() });
-    return { success: true, state: game.getStateDTO() };
+  /** Evolución in-match (T9.4): la pieza en `from` evoluciona gastando candies. */
+  async evolve(request: FastifyRequest<{ Body: { from?: unknown } }>, reply: FastifyReply) {
+    const from = request.body?.from;
+    if (!isHex(from)) return reply.code(400).send({ success: false, error: 'Coordenada from inválida' });
+    return applyLocal({ type: 'evolve', from }, reqUserId(request));
   },
 
-  async endTurn() {
-    return applyLocal({ type: 'end_turn' });
+  async forceStart() {
+    return applyLocal({ type: 'forceStart' });
   },
 
-  async abandon() {
-    return applyLocal({ type: 'abandon' });
+  async reset(_request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const game = await matchManager.reset();
+      hub.broadcast(LOCAL_ROOM, { type: 'state', state: game.getStateDTO() });
+      return { success: true, state: game.getStateDTO() };
+    } catch (e) {
+      // p.ej. en Survival, si perdiste un Pokémon del equipo ya no puedes repetir con los mismos.
+      return reply.code(400).send({ success: false, error: (e as Error).message });
+    }
+  },
+
+  async endTurn(request: FastifyRequest) {
+    return applyLocal({ type: 'end_turn' }, reqUserId(request));
+  },
+
+  async abandon(request: FastifyRequest) {
+    return applyLocal({ type: 'abandon' }, reqUserId(request));
   },
 };

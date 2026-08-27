@@ -157,9 +157,9 @@ export const RoomService = {
     if (!shapeOk) throw new RoomError(400, `Elige ${DRAFT_TEAM_SIZE} Pokémon distintos`);
 
     if (OWNED_TEAM_MODES.includes(row.game_mode)) {
-      // BR: cada jugador usa sus PROPIOS Pokémon (sin unicidad cruzada).
-      const owned = new Set((await OwnedPokemonModel.listByUser(userId)).map((p) => p.name));
-      if (!team.every((n) => owned.has(n))) {
+      // BR/ARENA: cada jugador lleva sus PROPIAS instancias (equipos por `ownedId`, T6.3);
+      // `team` son ids de owned_pokemon. Validación de propiedad autoritativa por id.
+      if (!(await OwnedPokemonModel.allOwnedBy(userId, team))) {
         throw new RoomError(400, 'Solo puedes usar Pokémon de tu inventario');
       }
     } else {
@@ -183,7 +183,7 @@ export const RoomService = {
       for (const p of players) teams[p.slot] = p.team!;
       const game = await matchManager.createGame(matchId, teams, row.game_mode);
       hub.broadcast(matchId, { type: 'room', room: toRoomInfo(await loadRoom(matchId), null) });
-      hub.broadcast(matchId, { type: 'state', state: game.getStateDTO() });
+      hub.broadcastPersonalized(matchId, (ctx) => ({ type: 'state', state: game.getStateDTO(ctx.slot ?? undefined) }));
     } else {
       hub.broadcast(matchId, { type: 'room', room: toRoomInfo(await loadRoom(matchId), null) });
     }
@@ -248,6 +248,12 @@ export const RoomService = {
     return new Map(parseRoomPlayers(row).map((p) => [p.slot, p.userId]));
   },
 
+  /** Modo de juego de una sala online (para el robo PvP en BR, T8.4). */
+  async gameModeOf(matchId: string): Promise<GameMode | null> {
+    const row = await MatchModel.findRoom(matchId);
+    return (row?.game_mode as GameMode) ?? null;
+  },
+
   // --------------------------------------------------------------- ARENA (mundo vivo)
 
   /** Garantiza la fila + el mundo de la ARENA (persistente, estado `active`). */
@@ -293,8 +299,8 @@ export const RoomService = {
       new Set(team).size === team.length;
     if (!shape) throw new RoomError(400, `Elige ${DRAFT_TEAM_SIZE} Pokémon distintos`);
 
-    const owned = new Set((await OwnedPokemonModel.listByUser(userId)).map((p) => p.name));
-    if (!team.every((n) => owned.has(n))) {
+    // ARENA: equipo por instancia (`ownedId`, T6.3); validación de propiedad por id.
+    if (!(await OwnedPokemonModel.allOwnedBy(userId, team))) {
       throw new RoomError(400, 'Solo puedes usar Pokémon de tu inventario');
     }
 

@@ -1,4 +1,4 @@
-# Makefile — atajos de desarrollo local (ver docs/LOCAL_DEV.md)
+# Makefile — atajos de desarrollo local (ver docs/02-LOCAL_DEV.md)
 # Uso: make up | make down | make logs s=hello | make sh s=hello
 
 COMPOSE := docker compose

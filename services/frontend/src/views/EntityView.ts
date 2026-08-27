@@ -20,43 +20,88 @@ export class EntityView {
     // VICTORIA) ocultamos los sprites del tablero: su z-index dinámico es alto
     // (basado en la Y de pantalla) y si no se colarían por encima del overlay.
     const status = this.state.match?.status;
-    if (status === 'combat' || status === 'finished') {
+    if (status === 'finished') {
       this.entitiesLayer.style.display = 'none';
       return;
     }
     this.entitiesLayer.style.display = '';
 
-    const sortedTiles = [...this.state.currentTiles].sort((a, b) => {
-      const pA = this.boardView.hexToPixel(a.hex.q, a.hex.r);
-      const pB = this.boardView.hexToPixel(b.hex.q, b.hex.r);
-      return pA.y - pB.y;
-    });
-
+    // No hace falta ordenar por Y: el apilamiento lo da el z-index dinámico que se
+    // fija por sprite (según su Y de pantalla). Ordenar las ~5400 casillas de ARENA
+    // en cada frame (con 2 hexToPixel por comparación) era puro desperdicio.
     const currentOccupantIds = new Set<string>();
 
-    for (const tile of sortedTiles) {
-      if (tile.occupant && tile.occupant.name && this.state.pokeGifs[tile.occupant.name]) {
-          const occupantId = tile.occupant.id;
-          currentOccupantIds.add(occupantId);
-          
-          const { x, y } = this.boardView.hexToPixel(tile.hex.q, tile.hex.r);
-          let screenX = x + this.state.cameraOffset.x;
-          let screenY = y + this.state.cameraOffset.y;
-          
-          // Apply zoom around center (same as Canvas)
-          const cx = this.boardView.CENTER_X;
-          const cy = this.boardView.CENTER_Y;
-          screenX = (screenX - cx) * this.state.zoom + cx;
-          screenY = (screenY - cy) * this.state.zoom + cy;
+    // Al mover la cámara, los sprites se reposicionan SIN transición de left/top para
+    // que queden clavados sobre el mapa (si no, la transición CSS los hace "bailar").
+    // En reposo se conserva la transición para que los movimientos hex→hex se deslicen.
+    const moving = this.state.cameraMoving;
+    const baseTr = moving
+      ? 'width 0.1s linear, height 0.1s linear'
+      : 'left 0.1s linear, top 0.1s linear, width 0.1s linear, height 0.1s linear';
+    const imgTr = moving
+      ? 'transform 0.15s ease-in-out'
+      : 'left 0.1s linear, top 0.1s linear, transform 0.15s ease-in-out';
+    const lblTr = moving ? 'none' : 'left 0.1s linear, top 0.1s linear';
+    // Transiciones "slide" (empuje/dash, T3.2/T3.4): más largas para que el sprite se
+    // deslice de forma visible a su nuevo hex. No aplican mientras se mueve la cámara.
+    const slideImgTr = 'left 0.28s ease-out, top 0.28s ease-out, transform 0.15s ease-in-out';
+    const slideBaseTr = 'left 0.28s ease-out, top 0.28s ease-out, width 0.1s linear, height 0.1s linear';
+    const slideLblTr = 'left 0.28s ease-out, top 0.28s ease-out';
 
-          const sSize = this.boardView.HEX_SIZE * 1.5 * this.state.zoom; 
+    // Un `large` ocupa 7 hexes (centro + vecinos): se renderiza UNA vez en el centro
+    // (centroide de sus casillas), no una por casilla. Precalculamos el centro por id.
+    const centers = new Map<string, { q: number; r: number }>();
+    {
+      const acc = new Map<string, { sq: number; sr: number; n: number }>();
+      for (const t of this.state.currentTiles) {
+        if (!t.occupant) continue;
+        const a = acc.get(t.occupant.id) ?? { sq: 0, sr: 0, n: 0 };
+        a.sq += t.hex.q; a.sr += t.hex.r; a.n += 1;
+        acc.set(t.occupant.id, a);
+      }
+      for (const [id, a] of acc) centers.set(id, { q: Math.round(a.sq / a.n), r: Math.round(a.sr / a.n) });
+    }
+
+    for (const tile of this.state.currentTiles) {
+      if (tile.occupant && tile.occupant.name && this.state.pokeGifs[tile.occupant.name]) {
+          // Ocultación local desde la perspectiva del humano (vs-IA): un Pokémon oculto
+          // de un slot que NO es del equipo humano no se renderiza. `hiddenAllySlots`
+          // es null en online (server censura) y en hot-seat (pantalla compartida).
+          const allies = this.state.hiddenAllySlots;
+          if (tile.occupant.isHidden && allies && !allies.includes(tile.occupant.playerId)) {
+            continue;
+          }
+
+          const occupantId = tile.occupant.id;
+          // Solo se dibuja en la casilla CENTRO (evita 7 dibujos para un large).
+          const center = centers.get(occupantId);
+          if (center && (tile.hex.q !== center.q || tile.hex.r !== center.r)) continue;
+          currentOccupantIds.add(occupantId);
+
+          // Transición de este sprite: "slide" larga si se está desplazando (empuje/dash).
+          const sliding = !moving && this.state.slidingIds.has(occupantId);
+          const oBaseTr = sliding ? slideBaseTr : baseTr;
+          const oImgTr = sliding ? slideImgTr : imgTr;
+          const oLblTr = sliding ? slideLblTr : lblTr;
+
+          const { x: screenX, y: screenY } = this.boardView.hexToScreen(tile.hex);
+
+          // Escala visual continua por especie (T4.8): de las dimensiones reales; cada
+          // Pokémon su tamaño (no el bucket small/medium/large uniforme).
+          const sizeMult = tile.occupant.scale ?? 1;
+          const sSize = this.boardView.HEX_SIZE * 1.5 * this.state.zoom * sizeMult;
+
+          // En agua el sprite se hunde: se recorta el tercio inferior, así que se baja
+          // para que la parte visible quede CENTRADA en la loseta (si no, parece muy
+          // arriba). `waterSink` desplaza sprite/label hacia abajo.
+          const onWater = tile.biome === 'WATER';
+          const waterSink = onWater ? sSize * 0.24 : 0;
 
           let base = document.getElementById(`base-${occupantId}`) as HTMLDivElement;
           if (!base) {
             base = document.createElement('div');
             base.id = `base-${occupantId}`;
             base.className = 'absolute rounded-full pointer-events-none';
-            base.style.transition = 'left 0.1s linear, top 0.1s linear, width 0.1s linear, height 0.1s linear';
             base.style.boxShadow = '0 0 12px currentColor';
             this.entitiesLayer.appendChild(base);
           }
@@ -80,6 +125,7 @@ export class EntityView {
 
           const baseW = sSize * 0.85;
           const baseH = sSize * 0.38;
+          base.style.transition = oBaseTr;
           base.style.width = `${baseW}px`;
           base.style.height = `${baseH}px`;
           base.style.left = `${screenX - baseW / 2}px`;
@@ -93,44 +139,88 @@ export class EntityView {
             img.src = this.state.pokeGifs[tile.occupant.name];
             img.className = 'absolute';
             img.style.imageRendering = 'pixelated';
-            img.style.transition = 'left 0.1s linear, top 0.1s linear, transform 0.15s ease-in-out';
             this.entitiesLayer.appendChild(img);
           }
-          
+
+          img.style.transition = oImgTr;
           img.style.width = `${sSize}px`;
           img.style.height = `${sSize}px`;
           img.style.left = `${screenX - sSize/2}px`;
-          img.style.top = `${screenY - sSize/1.1}px`;
+          img.style.top = `${screenY - sSize/1.1 + waterSink}px`;
           img.style.zIndex = Math.floor(screenY).toString();
 
           const facing = tile.occupant.facing ?? ((tile.hex.q + tile.hex.r / 2 < 0) ? 'right' : 'left');
           img.style.transform = facing === 'right' ? 'scaleX(-1)' : 'scaleX(1)';
-          
+
+          // Medio sumergido en agua: los 2/3 superiores del sprite visibles, con una
+          // línea de flotación suave (máscara con degradado). El óvalo/base se oculta
+          // (queda bajo el agua). El agua del canvas queda por debajo.
+          const waterMask = 'linear-gradient(to bottom, #000 0 62%, rgba(0,0,0,0.25) 70%, transparent 80%)';
+          img.style.setProperty('-webkit-mask-image', onWater ? waterMask : 'none');
+          img.style.setProperty('mask-image', onWater ? waterMask : 'none');
+          base.style.display = onWater ? 'none' : '';
+
+          // Línea de flotación (agua contra el cuerpo) justo donde empieza a difuminar.
+          let wl = document.getElementById(`wl-${occupantId}`) as HTMLDivElement;
+          if (!wl) {
+            wl = document.createElement('div');
+            wl.id = `wl-${occupantId}`;
+            wl.className = 'absolute pointer-events-none';
+            wl.style.borderRadius = '50%';
+            wl.style.background =
+              'linear-gradient(to right, transparent, rgba(173,216,230,0.9) 20%, rgba(255,255,255,0.95) 50%, rgba(173,216,230,0.9) 80%, transparent)';
+            wl.style.boxShadow = '0 0 4px rgba(135,206,250,0.85)';
+            this.entitiesLayer.appendChild(wl);
+          }
+          if (onWater) {
+            const wlW = sSize * 0.62;
+            const wlY = screenY - sSize * 0.05; // ≈ inicio del difuminado de la máscara
+            wl.style.display = 'block';
+            wl.style.transition = oLblTr;
+            wl.style.width = `${wlW}px`;
+            wl.style.height = `${Math.max(2, 3 * this.state.zoom)}px`;
+            wl.style.left = `${screenX - wlW / 2}px`;
+            wl.style.top = `${wlY}px`;
+            wl.style.zIndex = (Math.floor(screenY) + 1).toString();
+          } else {
+            wl.style.display = 'none';
+          }
+
           let label = document.getElementById(`lbl-${occupantId}`) as HTMLDivElement;
           if (!label) {
             label = document.createElement('div');
             label.id = `lbl-${occupantId}`;
-            label.textContent = tile.occupant.playerId;
             label.className = 'absolute text-white font-bold drop-shadow-md';
             label.style.fontFamily = '"Press Start 2P", monospace';
             label.style.transform = 'translate(-50%, -100%)';
             label.style.textShadow = '1px 1px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000';
-            label.style.transition = 'left 0.1s linear, top 0.1s linear';
             this.entitiesLayer.appendChild(label);
           }
-          
+          // Nombre del jugador (username / "Jugador N" / "IA"), no el slot crudo.
+          label.textContent = this.state.labelFor(tile.occupant.playerId);
+
+          label.style.transition = oLblTr;
           label.style.fontSize = `${8 * this.state.zoom}px`;
           label.style.left = `${screenX}px`;
-          label.style.top = `${screenY - sSize/1.1 - (10 * this.state.zoom)}px`;
+          label.style.top = `${screenY - sSize/1.1 - (10 * this.state.zoom) + waterSink}px`;
           label.style.zIndex = Math.floor(screenY + 1).toString();
+
+          const opacity = tile.occupant.isHidden ? '0.4' : '1';
+          img.style.opacity = opacity;
+          base.style.opacity = opacity;
+          label.style.opacity = opacity;
       }
     }
     
     Array.from(this.entitiesLayer.children).forEach(child => {
-       const id = child.id.replace('img-', '').replace('lbl-', '').replace('base-', '');
+       const id = child.id.replace('img-', '').replace('lbl-', '').replace('base-', '').replace('wl-', '');
        if (!currentOccupantIds.has(id)) {
            child.remove();
        }
     });
+
+    // El slide es de un solo render: consumido, se limpia (los siguientes renders usan
+    // la transición normal).
+    if (this.state.slidingIds.size) this.state.slidingIds.clear();
   }
 }

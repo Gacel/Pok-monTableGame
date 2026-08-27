@@ -21,6 +21,7 @@ export async function gameRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/game/state', GameController.getState);
   app.get('/api/game/moves', GameController.getMoveOptions);
   app.get('/api/game/roster', GameController.getRoster);
+  app.get('/api/game/draft-pool', GameController.getDraftPool);
 
   // Ficha de un Pokémon (inventario/draft). Ruta ESTÁTICA (`pokedex`) → tiene
   // precedencia sobre `/api/game/:matchId/...` en find-my-way, así que no colisiona.
@@ -50,7 +51,7 @@ export async function gameRoutes(app: FastifyInstance): Promise<void> {
             player2: teamSchema,
             player3: teamSchema,
             player4: teamSchema,
-            gameMode: { type: 'string', enum: ['ffa', 'teams', 'br', 'arena'] },
+            gameMode: { type: 'string', enum: ['ffa', 'teams', 'br', 'arena', 'survival'] },
           },
         },
       },
@@ -73,30 +74,39 @@ export async function gameRoutes(app: FastifyInstance): Promise<void> {
   );
 
   app.post(
-    '/api/game/combat/action',
+    '/api/game/deploy',
     {
       schema: {
         body: {
           type: 'object',
-          required: ['action'],
-          properties: {
-            action: {
-              type: 'string',
-              enum: ['ATACAR', 'HABILIDAD', 'OBJETO', 'HUIR', 'MOVE', 'TARGET'],
-            },
-            moveName: { type: 'string', maxLength: 40 },
-            targetId: { type: 'string', maxLength: 40 },
-          },
+          required: ['pokemonId', 'hex'],
+          properties: { pokemonId: { type: 'string' }, hex: hexSchema },
         },
       },
     },
-    GameController.combatAction
+    GameController.deploy
+  );
+  app.post(
+    '/api/game/cast',
+    {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['from', 'target', 'moveIndex'],
+          properties: { from: hexSchema, target: hexSchema, moveIndex: { type: 'integer' } },
+        },
+      },
+    },
+    GameController.cast
+  );
+  app.post(
+    '/api/game/evolve',
+    { schema: { body: { type: 'object', required: ['from'], properties: { from: hexSchema } } } },
+    GameController.evolve
   );
 
-  app.post('/api/game/combat/continue', GameController.combatContinue);
-
   app.post('/api/game/end-turn', GameController.endTurn);
-
+  app.post('/api/game/force-start', GameController.forceStart);
   app.post('/api/game/abandon', GameController.abandon);
 
   app.post('/api/game/reset', GameController.reset);
@@ -128,32 +138,42 @@ export async function gameRoutes(app: FastifyInstance): Promise<void> {
     },
     OnlineGameController.move
   );
+
   app.post(
-    '/api/game/:matchId/combat/action',
+    '/api/game/:matchId/deploy',
     {
       schema: {
         params: matchParamsSchema,
         body: {
           type: 'object',
-          required: ['action'],
-          properties: {
-            action: {
-              type: 'string',
-              enum: ['ATACAR', 'HABILIDAD', 'OBJETO', 'HUIR', 'MOVE', 'TARGET'],
-            },
-            moveName: { type: 'string', maxLength: 40 },
-            targetId: { type: 'string', maxLength: 40 },
-          },
+          required: ['pokemonId', 'hex'],
+          properties: { pokemonId: { type: 'string' }, hex: hexSchema },
         },
       },
     },
-    OnlineGameController.combatAction
+    OnlineGameController.deploy
+  );
+
+  app.post(
+    '/api/game/:matchId/cast',
+    {
+      schema: {
+        params: matchParamsSchema,
+        body: {
+          type: 'object',
+          required: ['from', 'target', 'moveIndex'],
+          properties: { from: hexSchema, target: hexSchema, moveIndex: { type: 'integer' } },
+        },
+      },
+    },
+    OnlineGameController.cast
   );
   app.post(
-    '/api/game/:matchId/combat/continue',
-    { schema: { params: matchParamsSchema } },
-    OnlineGameController.combatContinue
+    '/api/game/:matchId/evolve',
+    { schema: { params: matchParamsSchema, body: { type: 'object', required: ['from'], properties: { from: hexSchema } } } },
+    OnlineGameController.evolve
   );
+
   app.post(
     '/api/game/:matchId/end-turn',
     { schema: { params: matchParamsSchema } },

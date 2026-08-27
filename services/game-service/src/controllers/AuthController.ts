@@ -52,7 +52,7 @@ function userId(request: FastifyRequest): string | undefined {
  *
  * Registro real con **contraseña** (hash scrypt), IDs de usuario aleatorios
  * (UUID, no derivados del email) y sesión en **cookie HttpOnly**. Soporta 2FA
- * (TOTP) opcional. Ver docs/AUTH.md.
+ * (TOTP) opcional. Ver docs/08-AUTH.md.
  */
 export const AuthController = {
   /** Registro: Nombre, email, contraseña, edad y Estudiante42. */

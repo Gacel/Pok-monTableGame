@@ -13,7 +13,7 @@ import { FONT, hubPanel, panelCard, panelTitle, menuButton } from './panel';
  * Capa VISTA: menú principal (raíz del árbol). Secciones:
  * JUGAR · COMUNIDAD · TIENDA · CASA DE SUBASTAS. Configuración y Cerrar sesión
  * quedan como acciones secundarias. Disposición en lista vertical (estilo tienda).
- * Ver docs/FRONTEND_MENU.md §4-5.
+ * Ver docs/05-FRONTEND_MENU.md §4-5.
  */
 export class MainMenuView {
   private container: HTMLElement;

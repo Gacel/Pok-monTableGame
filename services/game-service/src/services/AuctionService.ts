@@ -6,7 +6,7 @@ import { ItemModel } from '../models/ItemModel.js';
 
 /**
  * Condiciones por duración: comisión (% del precio de venta, al vender) y tarifa
- * plana (si NO se vende, al expirar). Ver docs/AUCTIONS.md.
+ * plana (si NO se vende, al expirar). Ver docs/09-AUCTIONS.md.
  */
 export const AUCTION_TERMS: Record<number, { commission: number; unsoldFee: number }> = {
   12: { commission: 0.05, unsoldFee: 100 },

@@ -1,6 +1,6 @@
 import { Hex, hexAdd } from './hex.js';
 import { Board } from './board.js';
-import { canEnter } from './environment.js';
+import { getTerrainCost } from './environment.js';
 
 export const DIRECTIONS = [
   { q: 1, r: 0 }, { q: 1, r: -1 }, { q: 0, r: -1 },
@@ -45,98 +45,108 @@ export function getMoveOptions(
   const moves: Hex[] = [];
   const attacks: Hex[] = [];
 
-  const consider = (target: Hex): 'continue' | 'stop' => {
-    const tile = board.getTile(target);
-    if (!tile) return 'stop'; // fuera del tablero
-    const key = `${target.q},${target.r}`;
-    if (tile.occupant) {
-      if (!sameTeam(tile.occupant.playerId, pokemon.playerId)) {
-        if (!attackSet.has(key)) {
-          attackSet.add(key);
-          attacks.push(target);
-        }
+  const speed = pokemon.speed ?? 3;
+
+  // Los `large` ocupan 7 hexes: se rutea desde su CENTRO (centroide de su cuerpo) y un
+  // destino solo es válido si su HUELLA cabe ahí. `hex` puede ser cualquier casilla suya.
+  const ownHexes: Hex[] = [];
+  for (const t of board.tiles.values()) if (t.occupant?.id === pokemon.id) ownHexes.push(t.hex);
+  const isLarge = pokemon.size === 'large' && ownHexes.length > 1;
+  const center: Hex = isLarge
+    ? {
+        q: Math.round(ownHexes.reduce((a, h) => a + h.q, 0) / ownHexes.length),
+        r: Math.round(ownHexes.reduce((a, h) => a + h.r, 0) / ownHexes.length),
       }
-      return 'stop'; // enemigo o aliado bloquean el avance
+    : hex;
+
+  /** ¿Cabe la huella del Pokémon con el centro en `c`? (para `large`; medium siempre sí). */
+  const fits = (c: Hex): boolean => {
+    if (!isLarge) return true;
+    for (const oh of board.getOccupiedHexes(pokemon, c)) {
+      const t = board.getTile(oh);
+      if (!t) return false;
+      if (getTerrainCost(pokemon, t.biome) === Infinity) return false;
+      if (t.occupant && t.occupant.id !== pokemon.id) return false;
     }
-    if (canEnter(pokemon, tile.biome)) {
-      if (!moveSet.has(key)) {
-        moveSet.add(key);
-        moves.push(target);
-      }
-    }
-    return 'continue';
+    return true;
   };
 
-  // 1) Paso adyacente garantizado: TODOS los Pokémon siempre pueden mover o atacar a 1 baldosa de distancia.
-  for (const dir of DIRECTIONS) {
-    consider(hexAdd(hex, dir));
-  }
+  // Dijkstra para encontrar celdas alcanzables según el coste del terreno (PM)
+  // key -> coste mínimo acumulado
+  const costSoFar = new Map<string, number>();
+  // queue priorizada rudimentaria (el grid es pequeño)
+  const queue: { hex: Hex; cost: number }[] = [{ hex: center, cost: 0 }];
+  costSoFar.set(`${center.q},${center.r}`, 0);
 
-  if (pokemon.movementPattern === 'TANK') {
-    // Rey: casillas adyacentes (ya cubierto arriba, pero lo mantenemos por claridad del patrón)
-    for (const dir of DIRECTIONS) consider(hexAdd(hex, dir));
-  } else if (pokemon.movementPattern === 'SPEEDSTER') {
-    // Caballo: saltos fijos, ignora obstáculos en el camino
-    for (const jump of KNIGHT_JUMPS) consider(hexAdd(hex, jump));
-  } else if (pokemon.movementPattern === 'FLYING' || pokemon.type === 'FLYING') {
-    // Alfil/Reina: el tipo FLYING específico es el de mayor rango del juego (hasta 10 casillas en todas las direcciones y diagonales)
-    const maxSteps = pokemon.type === 'FLYING' ? 10 : 6;
-    const dirs = pokemon.type === 'FLYING' ? [...DIRECTIONS, ...DIAGONALS] : DIAGONALS;
-    for (const dir of dirs) {
-      let current = hexAdd(hex, dir);
-      let steps = 1;
-      while (steps <= maxSteps && consider(current) === 'continue') {
-        current = hexAdd(current, dir);
-        steps++;
-      }
-    }
-  }
+  while (queue.length > 0) {
+    // Extraer el de menor coste
+    queue.sort((a, b) => a.cost - b.cost);
+    const curr = queue.shift()!;
 
-  // 2) Bonus Agua: Si el Pokémon es de tipo WATER o está en una baldosa de agua y entra en agua,
-  // puede recorrer hasta +3 baldosas adicionales dentro de baldosas conectadas de agua.
-  if (pokemon.type === 'WATER' || board.getTile(hex)?.biome === 'WATER') {
-    const waterSeeds: { hex: Hex; dist: number }[] = [];
-    const startTile = board.getTile(hex);
-    if (startTile && startTile.biome === 'WATER') {
-      waterSeeds.push({ hex, dist: 0 });
-    }
-    for (const m of moves) {
-      const t = board.getTile(m);
-      if (t && t.biome === 'WATER') {
-        waterSeeds.push({ hex: m, dist: 0 });
-      }
-    }
+    if (curr.cost > speed) continue;
 
-    const visitedWater = new Set<string>(waterSeeds.map(s => `${s.hex.q},${s.hex.r}`));
-    const queue = [...waterSeeds];
+    for (const dir of DIRECTIONS) {
+      const nextHex = hexAdd(curr.hex, dir);
+      const nextKey = `${nextHex.q},${nextHex.r}`;
+      const nextTile = board.getTile(nextHex);
 
-    while (queue.length > 0) {
-      const curr = queue.shift()!;
-      if (curr.dist >= 3) continue;
+      if (!nextTile) continue;
 
-      for (const dir of DIRECTIONS) {
-        const nextHex = hexAdd(curr.hex, dir);
-        const nextKey = `${nextHex.q},${nextHex.r}`;
-        if (visitedWater.has(nextKey)) continue;
-        visitedWater.add(nextKey);
-
-        const nextTile = board.getTile(nextHex);
-        if (!nextTile || nextTile.biome !== 'WATER') continue; // solo dentro de agua
-
-        if (nextTile.occupant) {
-           if (!sameTeam(nextTile.occupant.playerId, pokemon.playerId)) {
-             if (!attackSet.has(nextKey)) {
-               attackSet.add(nextKey);
-               attacks.push(nextHex);
-             }
-           }
-        } else {
-          if (canEnter(pokemon, nextTile.biome)) {
-            if (!moveSet.has(nextKey)) {
-              moveSet.add(nextKey);
-              moves.push(nextHex);
+      if (nextTile.occupant) {
+        // Cuerpo PROPIO de un large: tránsito libre; destino válido si la huella cabe.
+        if (nextTile.occupant.id === pokemon.id) {
+          const stepCost = getTerrainCost(pokemon, nextTile.biome);
+          if (stepCost !== Infinity) {
+            const newCost = curr.cost + stepCost;
+            if (newCost <= speed && (!costSoFar.has(nextKey) || newCost < costSoFar.get(nextKey)!)) {
+              costSoFar.set(nextKey, newCost);
+              queue.push({ hex: nextHex, cost: newCost });
+              if (fits(nextHex) && !moveSet.has(nextKey)) {
+                moveSet.add(nextKey);
+                moves.push(nextHex);
+              }
             }
-            queue.push({ hex: nextHex, dist: curr.dist + 1 });
+          }
+          continue;
+        }
+        if (!sameTeam(nextTile.occupant.playerId, pokemon.playerId)) {
+          // Es un enemigo, podemos atacarle si está a rango 1 del inicio o de un paso legal.
+          // Wait, los ataques en un juego tactics suelen poder hacerse desde CUALQUIER
+          // casilla a la que te puedas mover. Para simplificar, si podemos movernos a la casilla
+          // anterior, el enemigo es un target de ataque.
+          // Como los ataques directos son rango 1, si curr.cost <= speed, el enemigo adyacente es atacable.
+          if (!attackSet.has(nextKey)) {
+            attackSet.add(nextKey);
+            attacks.push(nextHex);
+          }
+        }
+        // Fantasma (D1): atraviesa a todos (aliados y enemigos). Se expande el Dijkstra
+        // a través de la casilla ocupada para explorar más allá, pero NO se añade a
+        // `moves` (no puede terminar en casilla ocupada). Sin ataque de oportunidad.
+        if (pokemon.type === 'GHOST') {
+          const stepCost = getTerrainCost(pokemon, nextTile.biome);
+          if (stepCost !== Infinity) {
+            const newCost = curr.cost + stepCost;
+            if (newCost <= speed && (!costSoFar.has(nextKey) || newCost < costSoFar.get(nextKey)!)) {
+              costSoFar.set(nextKey, newCost);
+              queue.push({ hex: nextHex, cost: newCost });
+            }
+          }
+        }
+        continue; // No se puede terminar sobre otra pieza (ni la atraviesa un no-Fantasma).
+      }
+
+      const stepCost = getTerrainCost(pokemon, nextTile.biome);
+      if (stepCost === Infinity) continue;
+
+      const newCost = curr.cost + stepCost;
+      if (newCost <= speed) {
+        if (!costSoFar.has(nextKey) || newCost < costSoFar.get(nextKey)!) {
+          costSoFar.set(nextKey, newCost);
+          queue.push({ hex: nextHex, cost: newCost });
+          if (fits(nextHex) && !moveSet.has(nextKey)) {
+            moveSet.add(nextKey);
+            moves.push(nextHex);
           }
         }
       }

@@ -15,11 +15,16 @@ interface MoveBody {
   from?: Hex;
   to?: Hex;
 }
-interface CombatBody {
-  action?: string;
-  moveName?: string;
-  targetId?: string;
+interface DeployBody {
+  pokemonId?: string;
+  hex?: Hex;
 }
+interface CastBody {
+  from?: Hex;
+  target?: Hex;
+  moveIndex?: number;
+}
+
 interface OptionsQuery {
   q?: string;
   r?: string;
@@ -103,24 +108,32 @@ export const OnlineGameController = {
     return apply(actor, { type: 'move', from, to }, reply);
   },
 
-  async combatAction(
-    request: FastifyRequest<{ Params: MatchParams; Body: CombatBody }>,
-    reply: FastifyReply
-  ) {
+  async deploy(request: FastifyRequest<{ Params: MatchParams; Body: DeployBody }>, reply: FastifyReply) {
     const actor = await resolveActor(request, reply);
     if (!actor) return;
-    const action = String(request.body?.action ?? '');
-    const moveName =
-      typeof request.body?.moveName === 'string' ? request.body.moveName.slice(0, 40) : undefined;
-    const targetId =
-      typeof request.body?.targetId === 'string' ? request.body.targetId.slice(0, 40) : undefined;
-    return apply(actor, { type: 'combat_action', action, moveName, targetId }, reply);
+    const { pokemonId, hex } = request.body ?? {};
+    if (typeof pokemonId !== 'string' || !isHex(hex)) {
+      return reply.code(400).send({ success: false, error: 'Parámetros inválidos' });
+    }
+    return apply(actor, { type: 'deploy', pokemonId, hex }, reply);
   },
 
-  async combatContinue(request: FastifyRequest<{ Params: MatchParams }>, reply: FastifyReply) {
+  async cast(request: FastifyRequest<{ Params: MatchParams; Body: CastBody }>, reply: FastifyReply) {
     const actor = await resolveActor(request, reply);
     if (!actor) return;
-    return apply(actor, { type: 'combat_continue' }, reply);
+    const { from, target, moveIndex } = request.body ?? {};
+    if (!isHex(from) || !isHex(target) || typeof moveIndex !== 'number') {
+      return reply.code(400).send({ success: false, error: 'Parámetros inválidos' });
+    }
+    return apply(actor, { type: 'cast', from, target, moveIndex }, reply);
+  },
+
+  async evolve(request: FastifyRequest<{ Params: MatchParams; Body: { from?: unknown } }>, reply: FastifyReply) {
+    const actor = await resolveActor(request, reply);
+    if (!actor) return;
+    const from = request.body?.from;
+    if (!isHex(from)) return reply.code(400).send({ success: false, error: 'Coordenada from inválida' });
+    return apply(actor, { type: 'evolve', from }, reply);
   },
 
   async endTurn(request: FastifyRequest<{ Params: MatchParams }>, reply: FastifyReply) {

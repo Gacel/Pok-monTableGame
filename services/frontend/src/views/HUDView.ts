@@ -1,12 +1,30 @@
 import { GameState } from '../models/GameState';
-import type { Tile, PlayerResources } from '../models/Types';
+import type { Tile, PlayerResources, MatchState, BallKey } from '../models/Types';
+import { BALL_SPRITE, BALL_LABEL, typeLabelEs } from '@transcendence/shared';
 import { authState } from '../auth/AuthState';
 import { escapeHtml } from '../utils/html';
+
+/** Sprites de bolas (bitmap PokeAPI). */
+const BALL_ITEMS = 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items';
+const ballSpriteUrl = (b: BallKey): string => `${BALL_ITEMS}/${BALL_SPRITE[b]}.png`;
+
+/**
+ * Icono representativo por TIPO para los botones de ataque (barra QWER) — TA.5.
+ * Provisional con emoji; el arte definitivo (iconos estilo LoL, imagen de referencia
+ * aportada por el usuario) se dejará en `public/assets/icons/{tipo}.png` y sustituirá
+ * a estos emojis en un follow-up.
+ */
+const MOVE_TYPE_EMOJI: Record<string, string> = {
+  FIRE: '🔥', WATER: '💧', GRASS: '🌿', ELECTRIC: '⚡', ICE: '❄️', FIGHTING: '🥊',
+  POISON: '☠️', GROUND: '⛰️', FLYING: '🪽', PSYCHIC: '🔮', BUG: '🐛', ROCK: '🪨',
+  GHOST: '👻', DRAGON: '🐉', STEEL: '⚙️', FAIRY: '✨', NORMAL: '⭐',
+};
 
 /** Capa VISTA (frontend): pinta el HUD a partir del estado del servidor. */
 export class HUDView {
   private state: GameState;
   private toastTimer: number | null = null;
+  private deploymentTimerId: number | null = null;
 
   constructor(state: GameState) {
     this.state = state;
@@ -26,6 +44,132 @@ export class HUDView {
     this.updateTurnBanner();
     this.updateLog();
     this.updateWinOverlay();
+    this.updateActionPanel();
+  }
+
+  private updateActionPanel(): void {
+    const panel = document.getElementById('action-panel');
+    if (!panel) return;
+
+    const match = this.state.match;
+    const selectedHex = this.state.selectedHex;
+    
+    if (!match) {
+      panel.classList.add('hidden');
+      return;
+    }
+
+    if (match.status === 'deployment') {
+      this.renderDeploymentPanel(panel, match);
+      return;
+    }
+
+    if (!selectedHex) {
+      panel.classList.add('hidden');
+      return;
+    }
+
+    const tile = match.tiles.find((t) => t.hex.q === selectedHex.q && t.hex.r === selectedHex.r);
+    const occ = tile?.occupant;
+
+    // Solo mostramos si es del jugador actual y es su turno
+    if (!occ || occ.playerId !== match.currentPlayer) {
+      panel.classList.add('hidden');
+      return;
+    }
+
+    const isMe = this.state.mySlot === null || this.state.mySlot === match.currentPlayer;
+    if (!isMe) {
+      panel.classList.add('hidden');
+      return;
+    }
+
+    const moves = occ.moves ?? [];
+    if (moves.length === 0) {
+      panel.classList.add('hidden');
+      return;
+    }
+
+    panel.classList.remove('hidden');
+    
+    const keys = ['Q', 'W', 'E', 'R'];
+    panel.innerHTML = moves.slice(0, 4).map((m, i) => {
+      const typeColor = this.getTypeColor(m.type);
+      const isActive = this.state.activeMoveIndex === i;
+      const borderStyle = isActive ? `border-color: #fff; box-shadow: 0 0 10px ${typeColor}; scale: 1.1;` : `border-color: ${typeColor};`;
+      
+      // Icono principal: representativo del TIPO; badge secundario: clase (físico/especial/estado).
+      const typeEmoji = MOVE_TYPE_EMOJI[m.type] ?? '⭐';
+      const classIcon = m.damageClass === 'special' ? '🔮' : m.damageClass === 'status' ? '🛡️' : '⚔️';
+      const moveName = m.displayName ? m.displayName.toUpperCase() : m.name.toUpperCase();
+      
+      const translatedType = typeLabelEs(m.type);
+
+      // Efecto táctico (T3.x): empuje 💨×N o dash 💫, visible en el botón y el tooltip.
+      const tacticBadge = m.knockback ? `💨${m.knockback > 1 ? '×' + m.knockback : ''}` : m.dash ? '💫' : '';
+      const tacticTip = m.knockback ? ` | Empuje: ${m.knockback}` : m.dash ? ' | Dash' : '';
+
+      return `
+        <div class="move-btn relative flex flex-col items-center justify-center p-2 rounded cursor-pointer border-2 transition-transform hover:scale-105 active:scale-95 w-28 h-28" style="background-color: ${typeColor}40; ${borderStyle}" data-move-idx="${i}" title="Power: ${m.power || '-'} | Acc: ${m.accuracy || '-'} | Range: ${m.range || 1} | AoE: ${m.aoe || 'single'}${tacticTip}">
+          ${tacticBadge ? `<span class="absolute top-0.5 left-1 text-[11px]" title="${m.knockback ? 'Empuje' : 'Dash'}">${tacticBadge}</span>` : ''}
+          <span class="text-white text-[8px] font-bold mb-1" style="font-family: 'Press Start 2P', monospace;">[${keys[i]}]</span>
+          <div class="relative text-3xl leading-none mb-1">${typeEmoji}<span class="absolute -bottom-1 -right-2 text-[11px]">${classIcon}</span></div>
+          <span class="text-white text-[10px] font-bold text-center leading-tight overflow-hidden text-ellipsis" style="font-family: 'Press Start 2P', monospace; max-width: 100%; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">${moveName}</span>
+          <span class="text-gray-300 text-[8px] mt-1 text-center">${translatedType}</span>
+        </div>
+      `;
+    }).join('');
+  }
+
+  private renderDeploymentPanel(panel: HTMLElement, match: NonNullable<GameState['match']>): void {
+    const isMe = this.state.mySlot === null || this.state.mySlot === match.currentPlayer;
+    if (!isMe) {
+      panel.classList.add('hidden');
+      return;
+    }
+
+    const myReserve = match.reserve?.[match.currentPlayer] ?? [];
+    if (myReserve.length === 0) {
+      panel.classList.remove('hidden');
+      panel.innerHTML = `
+        <button id="ready-btn" class="px-6 py-4 bg-green-600 hover:bg-green-500 text-white font-bold rounded shadow-lg border-2 border-green-400 transition-transform hover:scale-105 active:scale-95" style="font-family: 'Press Start 2P', monospace;">
+          ¡LISTO!
+        </button>
+      `;
+      return;
+    }
+
+    panel.classList.remove('hidden');
+    
+    panel.innerHTML = myReserve.map((p) => {
+      const typeColor = this.getTypeColor(p.type);
+      const isActive = this.state.selectedReserveId === p.id;
+      const borderStyle = isActive ? `border-color: #fff; box-shadow: 0 0 10px ${typeColor}; scale: 1.1;` : `border-color: ${typeColor};`;
+      const spriteUrl = this.state.pokeGifs[p.name ?? ''] ?? '';
+      
+      return `
+        <div class="reserve-btn flex flex-col items-center justify-center p-2 rounded cursor-pointer border-2 transition-transform hover:scale-105 active:scale-95 min-w-[120px] h-28" style="background-color: ${typeColor}40; ${borderStyle}" data-reserve-id="${p.id}" title="Desplegar a ${p.name}">
+          <img src="${spriteUrl}" class="w-12 h-12 object-contain mb-1" style="image-rendering: pixelated;" />
+          <span class="text-white text-[8px] font-bold text-center w-full break-words" style="font-family: 'Press Start 2P', monospace; line-height: 1.2;">${(p.name??'').toUpperCase()}</span>
+          <span class="text-gray-300 text-[8px] mt-1 text-center">${typeLabelEs(p.type)}</span>
+        </div>
+      `;
+    }).join('');
+
+    // Attach event listeners manually (since it's dynamically rendered, we let GameController handle clicks, or we dispatch an event here)
+    // GameController listens to clicks on the document, but it's better if HUDView dispatches a custom event for reserve selection.
+    // Wait, GameController.ts uses data-move-idx, we can use a similar approach in GameController.ts to listen to data-reserve-id clicks.
+  }
+
+  private getTypeColor(type: string): string {
+    const colors: Record<string, string> = {
+      normal: '#A8A77A', fire: '#EE8130', water: '#6390F0', electric: '#F7D02C',
+      grass: '#7AC74C', ice: '#96D9D6', fighting: '#C22E28', poison: '#A33EA1',
+      ground: '#E2BF65', flying: '#A98FF3', psychic: '#F95587', bug: '#A6B91A',
+      rock: '#B6A136', ghost: '#735797', dragon: '#6F35FC', dark: '#705898',
+      steel: '#B7B7CE', fairy: '#D685AD'
+    };
+    return colors[type.toLowerCase()] || '#A8A77A';
   }
 
   private updateTurnBanner(): void {
@@ -52,10 +196,41 @@ export class HUDView {
 
     const label = this.state.labelFor(match.currentPlayer).toUpperCase();
     const isMe = this.state.mySlot !== null && this.state.mySlot === match.currentPlayer;
-    playerEl.textContent = isMe ? `TU TURNO · ${label}` : `TURNO: ${label}`;
-    playerEl.style.color = color;
-    banner.style.borderColor = color;
-    numberEl.textContent = `Turno ${match.turn}`;
+    
+    if (match.status === 'deployment') {
+      playerEl.textContent = isMe ? `TU TURNO · FASE DE DESPLIEGUE` : `FASE DE DESPLIEGUE`;
+      playerEl.style.color = '#fff';
+      banner.style.borderColor = '#fff';
+      this.startDeploymentTimer(numberEl, match.deploymentDeadline);
+    } else {
+      this.stopDeploymentTimer();
+      playerEl.textContent = isMe ? `TU TURNO · ${label}` : `TURNO: ${label}`;
+      playerEl.style.color = color;
+      banner.style.borderColor = color;
+      numberEl.textContent = `Turno ${match.turn}`;
+    }
+  }
+
+  private startDeploymentTimer(el: HTMLElement, deadline: number | undefined): void {
+    if (this.deploymentTimerId !== null) window.clearInterval(this.deploymentTimerId);
+    if (!deadline) {
+      el.textContent = '42s';
+      return;
+    }
+    const update = () => {
+      const remaining = Math.max(0, Math.floor((deadline - Date.now()) / 1000));
+      el.textContent = `Tiempo: ${remaining}s`;
+      if (remaining === 0) this.stopDeploymentTimer();
+    };
+    update();
+    this.deploymentTimerId = window.setInterval(update, 1000);
+  }
+
+  private stopDeploymentTimer(): void {
+    if (this.deploymentTimerId !== null) {
+      window.clearInterval(this.deploymentTimerId);
+      this.deploymentTimerId = null;
+    }
   }
 
   private updatePlayerHUD(
@@ -72,10 +247,13 @@ export class HUDView {
       const occ = tile.occupant;
 
       const nameEl = document.getElementById(`hud-${slot}-name`);
-      if (nameEl)
-        nameEl.textContent = occ.name
+      if (nameEl) {
+        const base = occ.name
           ? occ.name.toUpperCase()
           : this.state.labelFor(playerId).toUpperCase() || slot.toUpperCase();
+        // Nivel de la pieza en partida (T6.4): informativo junto al nombre.
+        nameEl.textContent = `${base} · Lv.${occ.level ?? 1}`;
+      }
 
       const avatarEl = document.getElementById(`hud-${slot}-avatar`) as HTMLImageElement | null;
       if (avatarEl && occ.name) avatarEl.src = this.state.pokeGifs[occ.name] ?? '';
@@ -117,9 +295,11 @@ export class HUDView {
       const teamEl = document.getElementById(`hud-${slot}-team`);
       if (teamEl && playerId) {
         const rightSide = slot === 'p2' || slot === 'p4';
-        const team = this.state.match?.tiles
-          .map((t) => t.occupant)
-          .filter((p): p is NonNullable<typeof p> => !!p && p.playerId === playerId && p.id !== occ.id) ?? [];
+        const teamSeen = new Set<string>();
+        const team = (this.state.match?.tiles.map((t) => t.occupant) ?? [])
+          .filter((p): p is NonNullable<typeof p> => !!p && p.playerId === playerId && p.id !== occ.id)
+          // Un `large` ocupa 7 casillas: dedup por id para no repetirlo en el HUD.
+          .filter((p) => (teamSeen.has(p.id) ? false : (teamSeen.add(p.id), true)));
         if (team.length === 0) {
           teamEl.innerHTML = '';
           teamEl.classList.add('hidden');
@@ -132,10 +312,13 @@ export class HUDView {
             const barBg = pPct > 50 ? 'bg-green-500' : pPct > 20 ? 'bg-yellow-500' : 'bg-red-500';
             const spriteUrl = this.state.pokeGifs[p.name ?? ''] ?? '';
             return `
-              <div data-poke-id="${p.id}" class="flex items-center gap-1.5 flex-1 min-w-0 bg-gray-800 border border-gray-600 rounded px-1.5 py-1 shadow transition-transform hover:scale-105 cursor-pointer ${rightSide ? 'flex-row-reverse' : ''}" title="${p.name ?? 'Pokémon'} (${p.hp}/${p.maxHp})">
+              <div data-poke-id="${p.id}" class="flex items-center gap-1.5 flex-1 min-w-0 bg-gray-800 border border-gray-600 rounded px-1.5 py-1 shadow transition-transform hover:scale-105 cursor-pointer ${rightSide ? 'flex-row-reverse' : ''}" title="${p.name ?? 'Pokémon'} · Lv.${p.level ?? 1} (${p.hp}/${p.maxHp})">
                 <img src="${spriteUrl}" class="w-8 h-8 object-contain flex-shrink-0" style="image-rendering: pixelated;" />
-                <div class="flex-1 min-w-0 h-2 bg-gray-900 rounded overflow-hidden border border-gray-700 flex ${rightSide ? 'justify-end' : ''}">
-                  <div class="h-full ${barBg}" style="width: ${pPct}%;"></div>
+                <div class="flex flex-col flex-1 min-w-0 gap-0.5">
+                  <span class="text-gray-300 leading-none ${rightSide ? 'text-right' : ''}" style="font-family:'Press Start 2P',monospace; font-size:6px;">Lv.${p.level ?? 1}</span>
+                  <div class="min-w-0 h-2 bg-gray-900 rounded overflow-hidden border border-gray-700 flex ${rightSide ? 'justify-end' : ''}">
+                    <div class="h-full ${barBg}" style="width: ${pPct}%;"></div>
+                  </div>
                 </div>
               </div>
             `;
@@ -152,7 +335,14 @@ export class HUDView {
     const logEl = document.getElementById('event-log');
     if (!match || !logEl) return;
     const lines = match.log.slice(-6);
-    logEl.innerHTML = lines.map((l) => `<div>› ${this.escape(l)}</div>`).join('');
+    logEl.innerHTML = lines
+      .map((l) => `<div>› ${this.escape(this.prettifyPlayers(l))}</div>`)
+      .join('');
+  }
+
+  /** Sustituye los identificadores de slot (player1..4) por el nombre/login visible. */
+  private prettifyPlayers(line: string): string {
+    return line.replace(/player[1-4]/g, (slot) => this.state.labelFor(slot));
   }
 
   private updateWinOverlay(): void {
@@ -160,19 +350,47 @@ export class HUDView {
     const overlay = document.getElementById('win-overlay');
     const text = document.getElementById('win-text');
     if (!match || !overlay || !text) return;
+    const rewardsEl = document.getElementById('win-rewards');
     if (match.status === 'finished' && match.winner) {
       overlay.classList.remove('hidden');
       overlay.classList.add('flex');
       // El ganador puede ser un equipo ("player2 & player4") → nombres visibles.
-      const label = match.winner
-        .split(' & ')
-        .map((p) => this.state.labelFor(p).toUpperCase())
-        .join(' & ');
+      const winners = match.winner.split(' & ');
+      const label = winners.map((p) => this.state.labelFor(p).toUpperCase()).join(' & ');
       text.textContent = `${label} gana la partida`;
+      if (rewardsEl) rewardsEl.innerHTML = this.rewardSummaryHtml(match, winners);
     } else {
       overlay.classList.add('hidden');
       overlay.classList.remove('flex');
+      if (rewardsEl) rewardsEl.innerHTML = '';
     }
+  }
+
+  /** Resumen "lo que TE llevas" para el jugador local, si está entre los ganadores. */
+  private rewardSummaryHtml(match: MatchState, winners: string[]): string {
+    const slot = this.state.mySlot ?? 'player1'; // local hot-seat / vs IA: el usuario es P1
+    if (!winners.includes(slot)) return '';
+    const kos = match.kos?.[slot] ?? 0;
+    const losers = Math.max(0, match.players.length - winners.length);
+    const winShare = winners.length > 0 ? Math.floor((1000 * losers) / winners.length) : 0;
+    const koCoins = 500 * kos;
+    const balls = match.rewards?.find((r) => r.slot === slot)?.balls ?? [];
+    const ballsHtml = balls.length
+      ? balls
+          .map(
+            (b) =>
+              `<img src="${ballSpriteUrl(b)}" title="${BALL_LABEL[b]}" class="w-7 h-7 object-contain" style="image-rendering:pixelated;" />`
+          )
+          .join('')
+      : `<span class="text-gray-400" style="font-size:9px;">—</span>`;
+    const F = "font-family:'Press Start 2P',monospace;";
+    return `
+      <div class="text-left mx-auto bg-black/30 rounded p-3" style="width:min(360px,86vw);">
+        <div class="text-yellow-300 mb-2 text-center" style="${F} font-size:9px;">TE LLEVAS</div>
+        <div class="flex justify-between items-center gap-4 text-white" style="font-size:11px; white-space:nowrap;"><span>500 × ${kos} KO</span><span class="flex-shrink-0">🪙 ${koCoins}</span></div>
+        <div class="flex justify-between items-center gap-4 text-white mt-1" style="font-size:11px; white-space:nowrap;"><span>Botín de victoria</span><span class="flex-shrink-0">🪙 ${winShare}</span></div>
+        <div class="flex items-center gap-1.5 mt-2 flex-wrap"><span class="text-white" style="font-size:11px;">Bolas:</span>${ballsHtml}</div>
+      </div>`;
   }
 
   /** Muestra un mensaje efímero (errores de jugada, avisos). */

@@ -12,6 +12,21 @@ export class GameState {
   private _selectedHex: Hex | null = null;
   private _cameraOffset: { x: number; y: number } = { x: 0, y: 0 };
   private _zoom = 1.0;
+  private _activeMoveIndex: number | null = null;
+  public selectedReserveId: string | null = null;
+  public hoverHex: Hex | null = null;
+  /**
+   * True mientras la cámara se mueve (paneo con teclado o centrado animado). Los
+   * sprites se reposicionan SIN transición para que queden estáticos sobre el mapa
+   * (si no, la transición CSS de left/top los hace "bailar" al panear).
+   */
+  public cameraMoving = false;
+  /**
+   * Ids de Pokémon que se están desplazando por empuje/dash (T3.2/T3.4): en el próximo
+   * render, `EntityView` usa una transición de posición más larga para que "deslicen".
+   * Se limpia tras aplicarse (one-shot).
+   */
+  public slidingIds = new Set<string>();
   private _lastInteractedPokemonId: Record<string, string | null> = {};
   private listeners: Set<Listener> = new Set();
 
@@ -20,6 +35,13 @@ export class GameState {
 
   /** Slot propio en partidas ONLINE (player1..4); null en local hot-seat. */
   public mySlot: string | null = null;
+  /**
+   * Slots cuyos Pokémon OCULTOS se muestran (translúcidos) en local. `null` = sin
+   * ocultación en cliente (online —el servidor ya censura— o hot-seat —pantalla
+   * compartida—). En vs-IA contiene los slots del equipo humano: los ocultos de
+   * slots fuera de esta lista (la IA) no se renderizan.
+   */
+  public hiddenAllySlots: string[] | null = null;
   /** Nombres visibles por slot (player1 → username) en partidas online. */
   public playerNames: Record<string, string> = {};
 
@@ -40,6 +62,9 @@ export class GameState {
   }
   get selectedHex(): Hex | null {
     return this._selectedHex;
+  }
+  get activeMoveIndex(): number | null {
+    return this._activeMoveIndex;
   }
   get cameraOffset(): { x: number; y: number } {
     return this._cameraOffset;
@@ -63,7 +88,15 @@ export class GameState {
 
   set selectedHex(hex: Hex | null) {
     this._selectedHex = hex;
-    if (!hex) this._moveOptions = null;
+    if (!hex) {
+      this._moveOptions = null;
+      this._activeMoveIndex = null;
+    }
+    this.notify();
+  }
+
+  set activeMoveIndex(idx: number | null) {
+    this._activeMoveIndex = idx;
     this.notify();
   }
 

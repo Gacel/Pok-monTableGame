@@ -1,13 +1,13 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { decideBotAction, hexDistance } from '../src/controllers/botStrategy';
+import { decideBotAction, hexDistance, pickCastMove } from '../src/controllers/botStrategy';
 import type { BotPieceOptions, EnemyPiece } from '../src/controllers/botStrategy';
-import type { Hex, Pokemon, PokemonType } from '@transcendence/shared';
+import type { Hex, Pokemon, PokemonMove, PokemonType } from '@transcendence/shared';
 
 /**
  * Tests de la IA del bot local (lógica PURA). Cubre los 3 niveles de dificultad,
  * el remate (kill), evitar combates desfavorables (DIFÍCIL) y el fallback codicioso
- * (NORMAL). Ver services/frontend/src/controllers/botStrategy.ts y docs/RESPONSIVE.md
+ * (NORMAL). Ver services/frontend/src/controllers/botStrategy.ts y docs/10-RESPONSIVE.md
  * (la IA es parte del modo un jugador).
  */
 
@@ -199,5 +199,40 @@ describe('decideBotAction · evitar terreno malo (DIFÍCIL)', () => {
   it('sin conocer el terreno (o en niveles bajos) tomaría el avance máximo', () => {
     const d = decideBotAction([grassPiece], enemies, 3, rng(0)); // sin biomeOf
     assert.deepEqual((d as { to: Hex }).to, H(4, 0)); // el que más acerca
+  });
+});
+
+/** Ataque con nombre + potencia + forma mínima que consume `pickCastMove`. */
+function mv(power: number, range: number, aoe: PokemonMove['aoe'] = 'single'): PokemonMove {
+  return { name: 'm', type: 'NORMAL', power, damageClass: 'physical', range, aoe };
+}
+
+describe('pickCastMove · elección de ataque por alcance (fix IA congela)', () => {
+  it('elige el ataque de mayor potencia que ALCANZA el objetivo', () => {
+    const moves = [mv(40, 1), mv(90, 3), mv(120, 1)]; // el de 120 es melee (no llega a dist 2)
+    assert.equal(pickCastMove(moves, 2), 1); // gana el de 90 (range 3)
+  });
+
+  it('devuelve -1 si ningún ataque llega (objetivo fuera de rango)', () => {
+    const moves = [mv(40, 1), mv(90, 2)];
+    assert.equal(pickCastMove(moves, 4), -1);
+  });
+
+  it('un melee (range 1) no alcanza a distancia 2', () => {
+    assert.equal(pickCastMove([mv(50, 1)], 2), -1);
+  });
+
+  it('una onda radial autocentrada alcanza desde distancia 0', () => {
+    assert.equal(pickCastMove([mv(70, 2, 'radius')], 0), 0);
+  });
+
+  it('un autocentrado (range 0) alcanza a un enemigo dentro de su radio, no solo a dist 0', () => {
+    const quake: PokemonMove = { name: 'earthquake', type: 'GROUND', power: 90, damageClass: 'physical', range: 0, aoe: 'radius', radius: 2 };
+    assert.equal(pickCastMove([quake], 2), 0); // dist 2 <= radio 2
+    assert.equal(pickCastMove([quake], 3), -1); // fuera del radio
+  });
+
+  it('sin movimientos no hay elección', () => {
+    assert.equal(pickCastMove([], 1), -1);
   });
 });

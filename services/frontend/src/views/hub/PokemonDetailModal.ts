@@ -2,8 +2,8 @@ import { apiFetch } from '../../net/api';
 import { getSprite } from '../../net/PokeSprites';
 import { escapeHtml } from '../../utils/html';
 import { FONT } from './panel';
-import { POKEMON_TYPES, typeAdvantage } from '@transcendence/shared';
-import type { MovementPattern, PokemonMove, PokemonType } from '../../models/Types';
+import { POKEMON_TYPES, typeAdvantage, typeLabelEs } from '@transcendence/shared';
+import type { PokemonMove, PokemonType } from '../../models/Types';
 
 /**
  * Ficha modal reutilizable de un Pokémon (inventario y draft).
@@ -23,11 +23,7 @@ const TYPE_COLOR: Record<string, string> = {
   PSYCHIC: '#f85888', DRAGON: '#7038f8', FLYING: '#a890f0',
 };
 
-const PATTERN_LABEL: Record<MovementPattern, string> = {
-  FLYING: 'Volador · Alfil',
-  TANK: 'Tanque · Rey',
-  SPEEDSTER: 'Velocista · Caballo',
-};
+
 
 const CLASS_LABEL: Record<string, string> = {
   physical: '⚔ Físico',
@@ -40,23 +36,46 @@ export interface PokemonDetailSeed {
   name: string;
   type?: PokemonType;
   level?: number;
-  movementPattern?: MovementPattern;
+  /** XP acumulada hacia el siguiente nivel (T6.4). */
+  xp?: number;
+  /** XP total para subir; null/undefined en el nivel máximo. */
+  xpToNext?: number | null;
   hp?: number;
   atk?: number;
   def?: number;
   /** Sprite ya precargado por la vista (evita re-fetch). */
   spriteUrl?: string;
+  isShiny?: boolean;
+  /** Id de instancia (inventario): habilita la evolución meta (T9.3). Ausente en draft. */
+  ownedId?: string;
+  /** Callback tras evolucionar (para refrescar el inventario). */
+  onEvolved?: () => void;
 }
+
+/** Resolución de evolución de la instancia (del servidor, T9.3). */
+interface EvoUi {
+  canEvolve: boolean;
+  target: string | null;
+  requirement: string;
+}
+
+/** Ataque curado + su descripción corta (short_effect de PokeAPI, cacheada). */
+type PokedexMove = PokemonMove & { shortEffect?: string | null };
 
 interface PokedexData {
   name: string;
   type: PokemonType;
-  movementPattern: MovementPattern;
   hp: number;
   maxHp: number;
   atk: number;
   def: number;
-  moves: PokemonMove[];
+  moves: PokedexMove[];
+}
+
+/** Limpia el texto de efecto de PokeAPI (sustituye placeholders tipo $effect_chance). */
+function cleanEffect(s: string | null | undefined): string {
+  if (!s) return '';
+  return s.replace(/\$effect_chance/g, 'X').replace(/\s+/g, ' ').trim();
 }
 
 /** Relaciones de tipo derivadas de la rueda `typeAdvantage`. */
@@ -79,7 +98,43 @@ function typeRelations(type: PokemonType): {
 }
 
 function typeBadge(t: string, size = 6): string {
-  return `<span style="${FONT} font-size:${size}px; background:${TYPE_COLOR[t] ?? '#666'}; color:#000; padding:2px 5px; border-radius:4px; line-height:1;">${escapeHtml(t)}</span>`;
+  return `<span style="${FONT} font-size:${size}px; background:${TYPE_COLOR[t] ?? '#666'}; color:#000; padding:2px 5px; border-radius:4px; line-height:1;">${escapeHtml(typeLabelEs(t))}</span>`;
+}
+
+/** Barra de progreso de XP hacia el siguiente nivel (T6.4). Vacía si no hay datos de XP. */
+function xpBar(seed: PokemonDetailSeed): string {
+  if (seed.xp == null) return '';
+  const max = seed.xpToNext;
+  if (max == null) {
+    // Nivel máximo: sin barra, solo distintivo.
+    return `<span class="text-yellow-400 mt-1" style="${FONT} font-size:6px;">★ NIVEL MÁXIMO</span>`;
+  }
+  const pct = Math.max(0, Math.min(100, Math.round((seed.xp / max) * 100)));
+  return `
+    <div class="w-32 mt-1.5">
+      <div class="flex justify-between text-gray-400" style="${FONT} font-size:5px;">
+        <span>XP</span><span>${seed.xp}/${max}</span>
+      </div>
+      <div class="w-full rounded-full bg-gray-800 border border-gray-700 overflow-hidden" style="height:6px;">
+        <div class="h-full bg-green-400" style="width:${pct}%;"></div>
+      </div>
+    </div>`;
+}
+
+/** Bloque de evolución meta (T9.3): botón si puede evolucionar ya; si no, el requisito. */
+function evolveHtml(seed: PokemonDetailSeed, evo?: EvoUi | null): string {
+  if (!seed.ownedId || !evo || !evo.target) return ''; // draft o forma final: nada
+  const to = evo.target.toUpperCase();
+  if (evo.canEvolve) {
+    return `
+      <button id="pkmn-evolve-btn" class="w-full mt-3 py-2 rounded border-b-4 bg-green-600 hover:bg-green-500 text-white border-green-800 active:border-b-0" style="${FONT} font-size:9px; box-shadow:0 3px 0 #000;">
+        ✨ EVOLUCIONAR A ${escapeHtml(to)}
+      </button>`;
+  }
+  return `
+    <div class="w-full mt-3 py-2 rounded bg-gray-800 border border-gray-700 text-center" style="${FONT} font-size:7px; color:#9ca3af;">
+      Evoluciona a ${escapeHtml(to)} · ${escapeHtml(evo.requirement)}
+    </div>`;
 }
 
 function statChip(label: string, val: number | undefined, color: string): string {
@@ -101,7 +156,7 @@ function relRow(label: string, color: string, types: PokemonType[]): string {
     </div>`;
 }
 
-function moveRow(m: PokemonMove): string {
+function moveRow(m: PokedexMove): string {
   const cls = CLASS_LABEL[m.damageClass] ?? m.damageClass;
   const meta = [
     m.power > 0 ? `Pot ${m.power}` : null,
@@ -110,13 +165,17 @@ function moveRow(m: PokemonMove): string {
   ]
     .filter(Boolean)
     .join(' · ');
+  const desc = cleanEffect(m.shortEffect);
+  // Tres líneas para que el nombre NO se corte: tipo + nombre arriba, metadatos
+  // debajo (a ancho completo, sin nowrap) y la descripción al final (fuente legible).
   return `
-    <li class="flex items-center justify-between gap-2 rounded bg-gray-800/80 border border-gray-700" style="padding:5px 7px;">
-      <span class="flex items-center gap-1.5 min-w-0">
+    <li class="rounded bg-gray-800/80 border border-gray-700" style="padding:7px 9px;">
+      <div class="flex items-center gap-1.5">
         ${typeBadge(m.type, 5)}
-        <span class="text-white uppercase truncate" style="${FONT} font-size:7px;">${escapeHtml(m.name.replace(/-/g, ' '))}</span>
-      </span>
-      <span class="text-gray-300 whitespace-nowrap" style="${FONT} font-size:5.5px;">${escapeHtml(cls)}${meta ? ` · ${escapeHtml(meta)}` : ''}</span>
+        <span class="text-white uppercase" style="${FONT} font-size:8px; line-height:1.4;">${escapeHtml(m.name.replace(/-/g, ' '))}</span>
+      </div>
+      <div class="text-gray-400 mt-1" style="${FONT} font-size:6px; line-height:1.5;">${escapeHtml(cls)}${meta ? ` · ${escapeHtml(meta)}` : ''}</div>
+      ${desc ? `<p class="text-gray-200 mt-1.5 font-mono" style="font-size:10px; line-height:1.45;">${escapeHtml(desc)}</p>` : ''}
     </li>`;
 }
 
@@ -124,10 +183,10 @@ function bodyHtml(
   seed: PokemonDetailSeed,
   data: PokedexData | null,
   sprite: string,
-  loading: boolean
+  loading: boolean,
+  evo?: EvoUi | null
 ): string {
   const curType = data?.type ?? seed.type;
-  const pattern = data?.movementPattern ?? seed.movementPattern;
   const hp = data?.hp ?? seed.hp;
   const atk = data?.atk ?? seed.atk;
   const def = data?.def ?? seed.def;
@@ -145,12 +204,14 @@ function bodyHtml(
       <div class="w-24 h-24 flex items-center justify-center rounded-lg bg-gray-950/60 border-2 border-gray-700">
         <img id="pkmn-modal-sprite" src="${escapeHtml(sprite)}" alt="${escapeHtml(name)}" class="w-20 h-20 object-contain" style="image-rendering:pixelated;" />
       </div>
-      <h3 class="text-yellow-400 uppercase mt-2" style="${FONT} font-size:13px; text-shadow:2px 2px 0 #000;">${escapeHtml(name)}</h3>
+      <h3 class="text-yellow-400 uppercase mt-2" style="${FONT} font-size:13px; text-shadow:2px 2px 0 #000;">
+        ${escapeHtml(name)} ${seed.isShiny ? '✨' : ''}
+      </h3>
       <div class="flex items-center justify-center gap-2 flex-wrap mt-1">
         ${curType ? typeBadge(curType, 7) : ''}
         ${seed.level != null ? `<span class="text-white" style="${FONT} font-size:7px;">Lv.${escapeHtml(seed.level)}</span>` : ''}
       </div>
-      ${pattern ? `<span class="text-gray-300 mt-1" style="${FONT} font-size:6px;">${PATTERN_LABEL[pattern]}</span>` : ''}
+      ${xpBar(seed)}
     </div>
 
     <div class="grid grid-cols-3 gap-2 mt-3">
@@ -158,6 +219,8 @@ function bodyHtml(
       ${statChip('ATK', atk, '#f87171')}
       ${statChip('DEF', def, '#60a5fa')}
     </div>
+
+    ${evolveHtml(seed, evo)}
 
     <h4 class="text-white mt-4 mb-1.5" style="${FONT} font-size:8px;">ATAQUES APRENDIDOS</h4>
     ${movesHtml}
@@ -208,20 +271,28 @@ export function openPokemonDetail(seed: PokemonDetailSeed): void {
 
   const body = overlay.querySelector('#pkmn-modal-body') as HTMLElement;
   let sprite = seed.spriteUrl ?? '';
-  const paint = (data: PokedexData | null, loading: boolean): void => {
-    body.innerHTML = bodyHtml(seed, data, sprite, loading);
+  let pdData: PokedexData | null = null;
+  let loading = true;
+  let evo: EvoUi | null = null;
+  const paint = (): void => {
+    body.innerHTML = bodyHtml(seed, pdData, sprite, loading, evo);
   };
-  paint(null, true);
+  paint();
 
   overlay.addEventListener('click', (e) => {
     if (e.target === overlay) closePokemonDetail();
   });
   overlay.querySelector('#pkmn-modal-close')?.addEventListener('click', () => closePokemonDetail());
+  // Evolución meta (T9.3): botón dentro del cuerpo (se re-pinta), por delegación.
+  overlay.addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement).closest('#pkmn-evolve-btn');
+    if (btn && seed.ownedId && evo?.canEvolve) void doEvolve(seed);
+  });
   document.addEventListener('keydown', onKey);
 
   // Sprite: si la vista no lo precargó, lo pedimos (cacheado en memoria por PokeSprites).
   if (!sprite) {
-    void getSprite(seed.name).then((s) => {
+    void getSprite(seed.name, !!seed.isShiny).then((s) => {
       if (activeOverlay !== overlay || !s) return;
       sprite = s;
       const img = overlay.querySelector('#pkmn-modal-sprite') as HTMLImageElement | null;
@@ -235,9 +306,48 @@ export function openPokemonDetail(seed: PokemonDetailSeed): void {
       const res = await apiFetch(`/api/game/pokedex/${encodeURIComponent(seed.name)}`);
       const json = await res.json();
       if (activeOverlay !== overlay) return; // el usuario cerró o abrió otra ficha
-      paint(res.ok && json.pokemon ? (json.pokemon as PokedexData) : null, false);
+      pdData = res.ok && json.pokemon ? (json.pokemon as PokedexData) : null;
     } catch {
-      if (activeOverlay === overlay) paint(null, false);
+      /* sin datos */
+    }
+    if (activeOverlay === overlay) {
+      loading = false;
+      paint();
     }
   })();
+
+  // Evolución (solo instancias del inventario).
+  if (seed.ownedId) {
+    void (async () => {
+      try {
+        const res = await apiFetch(`/api/inventory/pokemon/${seed.ownedId}/evolution`);
+        const json = await res.json();
+        if (activeOverlay !== overlay) return;
+        if (res.ok && json.evolution) {
+          evo = json.evolution as EvoUi;
+          paint();
+        }
+      } catch {
+        /* sin info de evolución */
+      }
+    })();
+  }
+}
+
+/** Ejecuta la evolución meta de la instancia y refresca (T9.3). */
+async function doEvolve(seed: PokemonDetailSeed): Promise<void> {
+  if (!seed.ownedId) return;
+  try {
+    const res = await apiFetch(`/api/inventory/pokemon/${seed.ownedId}/evolve`, { method: 'POST' });
+    const json = await res.json();
+    if (res.ok && json.success) {
+      alert(`✨ ${String(json.from ?? seed.name).toUpperCase()} evolucionó a ${String(json.evolvedTo ?? '').toUpperCase()}!`);
+      closePokemonDetail();
+      seed.onEvolved?.();
+    } else {
+      alert(json.error ?? 'No se pudo evolucionar');
+    }
+  } catch {
+    alert('Error de red al evolucionar');
+  }
 }

@@ -1,10 +1,24 @@
 import { GameState } from '../models/GameState';
-import type { Hex, Tile } from '../models/Types';
+import type { Hex, Tile, BallKey } from '../models/Types';
+import { calculateAoE, isAutocentered, autocenteredRadius } from '@transcendence/shared';
+
+/** Color de la mitad superior de la bola en el suelo, por tipo. */
+const BALL_TOP: Record<string, string> = {
+  normal: '#ee1515', // Poké
+  super: '#2f7fd0', // Great
+  ultra: '#e6b800', // Ultra
+  master: '#8a2be2', // Master
+};
 
 export class BoardView {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
   private state: GameState;
+
+  /** Color RGB (para rgba) de cada jugador — huella de los grandes. */
+  private static readonly PLAYER_RGB: Record<string, string> = {
+    player1: '59, 130, 246', player2: '239, 68, 68', player3: '168, 85, 247', player4: '234, 179, 8',
+  };
 
   public readonly HEX_SIZE = 45;
   public readonly CENTER_X: number;
@@ -15,7 +29,16 @@ export class BoardView {
     WATER: new Image(),
     GRASS: new Image(),
     SAND: new Image(),
-    ICE: new Image()
+    ICE: new Image(),
+    SWAMP: new Image(),
+    TALL_GRASS: new Image(),
+    MOUNTAIN: new Image()
+  };
+
+  /** Overlays de relieve (dibujo encima del tile) para terrenos con altura. */
+  private reliefs = {
+    TALL_GRASS: new Image(),
+    MOUNTAIN: new Image()
   };
 
   private EDGE_DIRS: Hex[] = [
@@ -26,6 +49,32 @@ export class BoardView {
     { q: 0, r: -1 },  // top-left
     { q: 1, r: -1 },  // top-right
   ];
+
+  /**
+   * Geometría cacheada por REFERENCIA del array de tiles: orden de pintado (por Y,
+   * painter's algorithm) con sus coordenadas de píxel precalculadas, y el mapa de
+   * vecindad. Antes se reordenaba y remapeaba TODO en cada frame (con 2 hexToPixel
+   * por comparación); ahora solo se recalcula cuando cambia el estado del tablero.
+   */
+  private geomCache: {
+    tiles: Tile[];
+    order: { tile: Tile; x: number; y: number }[];
+    tileMap: Map<string, Tile>;
+  } | null = null;
+
+  private getGeom(): { order: { tile: Tile; x: number; y: number }[]; tileMap: Map<string, Tile> } {
+    const tiles = this.state.currentTiles;
+    if (this.geomCache && this.geomCache.tiles === tiles) return this.geomCache;
+    const order = tiles.map((t) => {
+      const p = this.hexToPixel(t.hex.q, t.hex.r);
+      return { tile: t, x: p.x, y: p.y };
+    });
+    order.sort((a, b) => a.y - b.y);
+    const tileMap = new Map<string, Tile>();
+    for (const t of tiles) tileMap.set(`${t.hex.q},${t.hex.r}`, t);
+    this.geomCache = { tiles, order, tileMap };
+    return this.geomCache;
+  }
 
   constructor(canvas: HTMLCanvasElement, state: GameState) {
     this.canvas = canvas;
@@ -41,10 +90,16 @@ export class BoardView {
     this.textures.GRASS.src = '/assets/grass.png';
     this.textures.SAND.src = '/assets/sand.png';
     this.textures.ICE.src = '/assets/ice.png';
+    this.textures.SWAMP.src = '/assets/swamp.png';
+    this.textures.TALL_GRASS.src = '/assets/tall_grass.png';
+    this.textures.MOUNTAIN.src = '/assets/mountain.png';
+    this.reliefs.TALL_GRASS.src = '/assets/tall_grass_relief.png';
+    this.reliefs.MOUNTAIN.src = '/assets/mountain_relief.png';
   }
 
   public async preloadImages() {
-    const promises = Object.values(this.textures).map(img => {
+    const all = [...Object.values(this.textures), ...Object.values(this.reliefs)];
+    const promises = all.map(img => {
       return new Promise((resolve) => {
         img.onload = resolve;
         img.onerror = resolve; 
@@ -60,6 +115,9 @@ export class BoardView {
       case 'GRASS': return this.textures.GRASS;
       case 'SAND': return this.textures.SAND;
       case 'ICE': return this.textures.ICE;
+      case 'SWAMP': return this.textures.SWAMP;
+      case 'TALL_GRASS': return this.textures.TALL_GRASS;
+      case 'MOUNTAIN': return this.textures.MOUNTAIN;
       default: return this.textures.GRASS;
     }
   }
@@ -69,6 +127,21 @@ export class BoardView {
     const x = this.HEX_SIZE * Math.sqrt(3) * (q + r / 2);
     const y = this.HEX_SIZE * 3 / 2 * r * isoScale;
     return { x: x + this.CENTER_X, y: y + this.CENTER_Y };
+  }
+
+  /**
+   * Píxel de PANTALLA de un hex: aplica el offset de cámara y el zoom alrededor del
+   * centro (misma transformación que usan los sprites de `EntityView`). Fuente única
+   * para posicionar sprites y efectos de feedback (`FxLayer`).
+   */
+  public hexToScreen(hex: { q: number; r: number }) {
+    const { x, y } = this.hexToPixel(hex.q, hex.r);
+    const sx = x + this.state.cameraOffset.x;
+    const sy = y + this.state.cameraOffset.y;
+    return {
+      x: (sx - this.CENTER_X) * this.state.zoom + this.CENTER_X,
+      y: (sy - this.CENTER_Y) * this.state.zoom + this.CENTER_Y,
+    };
   }
 
   public pixelToHex(x: number, y: number, offsetX: number, offsetY: number) {
@@ -247,27 +320,129 @@ export class BoardView {
       this.ctx.drawImage(img, x - imgSize / 2, y / isoScale - imgSize / 2, imgSize, imgSize);
       this.ctx.restore();
     } else {
-      const fallback = img === this.textures.FIRE ? '#ef4444' : 
-                       img === this.textures.WATER ? '#3b82f6' : 
-                       img === this.textures.SAND ? '#eab308' : 
-                       img === this.textures.ICE ? '#93c5fd' : '#22c55e';
+      const fallback = img === this.textures.FIRE ? '#ef4444' :
+                       img === this.textures.WATER ? '#3b82f6' :
+                       img === this.textures.SAND ? '#eab308' :
+                       img === this.textures.ICE ? '#93c5fd' :
+                       img === this.textures.SWAMP ? '#3a4a24' :
+                       img === this.textures.TALL_GRASS ? '#2f7d33' :
+                       img === this.textures.MOUNTAIN ? '#8b857a' : '#22c55e';
       this.ctx.fillStyle = fallback;
       this.ctx.fill();
     }
-    
+
     this.ctx.lineWidth = 1.5;
     this.ctx.strokeStyle = 'rgba(0,0,0,0.3)';
     this.ctx.stroke();
   }
 
+  /**
+   * Dibuja el overlay de relieve (altura) de los terrenos que lo tienen: la imagen se
+   * ancla con su base cerca del centro del hex y se extiende hacia arriba. Como el
+   * bucle de render pinta por Y, los tiles de delante la ocluyen de forma natural.
+   */
+  private drawRelief(tile: Tile, x: number, y: number, fogged: boolean): void {
+    let img: HTMLImageElement | null = null;
+    let scale = 1;
+    if (tile.biome === 'MOUNTAIN') { img = this.reliefs.MOUNTAIN; scale = 2.3; }
+    else if (tile.biome === 'TALL_GRASS') { img = this.reliefs.TALL_GRASS; scale = 1.5; }
+    if (!img || !img.complete || img.naturalHeight === 0) return;
+
+    // Sin multiplicar por zoom: el bucle de render ya aplica ctx.scale(zoom), igual
+    // que drawHex (que usa HEX_SIZE en crudo). Multiplicarlo aquí lo escalaría al ².
+    const size = this.HEX_SIZE * scale;
+    // Base del dibujo un poco por debajo del centro del hex; el resto sube.
+    const baseY = y + this.HEX_SIZE * 0.4;
+    // Bajo niebla, oscurecer el relieve para que no asome por encima del overlay del
+    // hex (~0.65 negro ≈ brightness 0.35).
+    if (fogged) this.ctx.filter = 'brightness(0.35)';
+    this.ctx.drawImage(img, x - size / 2, baseY - size, size, size);
+    if (fogged) this.ctx.filter = 'none';
+  }
+
+  /** Distancia hexagonal (cúbica) entre dos casillas. */
+  private hexDist(a: { q: number; r: number }, b: { q: number; r: number }): number {
+    return (Math.abs(a.q - b.q) + Math.abs(a.q + a.r - b.q - b.r) + Math.abs(a.r - b.r)) / 2;
+  }
+
+  /**
+   * Preview del move QWER activo (TA.3): alcance legal y conjunto de hexes del AoE en el
+   * hover, SOLO si el objetivo está dentro de rango (misma regla que `GameService.cast`).
+   * `null` si no hay move activo/seleccionado.
+   */
+  private buildAttackPreview(): {
+    range: number;
+    selfOk: boolean;
+    aoeSet: Set<string>;
+    hoverInRange: boolean;
+    hoverKey: string | null;
+  } | null {
+    const sel = this.state.selectedHex;
+    if (this.state.activeMoveIndex === null || !sel) return null;
+    const casterTile = this.state.currentTiles.find((t) => t.hex.q === sel.q && t.hex.r === sel.r);
+    const move = casterTile?.occupant?.moves?.[this.state.activeMoveIndex];
+    if (!move) return null;
+
+    const range = move.range ?? 1;
+    const aoe = move.aoe || 'single';
+    const selfOk = aoe === 'radius'; // las ondas radiales pueden autocentrarse (dist 0)
+    const aoeSet = new Set<string>();
+    let hoverInRange = false;
+    let hoverKey: string | null = null;
+
+    // Ondas autocentradas (terratemblor…): siempre se centran sobre el lanzador, así que
+    // su AoE se muestra SIEMPRE alrededor de la pieza (no depende de dónde esté el ratón),
+    // con el radio expandido por su huella (igual que el servidor). Así se ve qué alcanza
+    // y basta clicar para lanzarla.
+    if (isAutocentered(move)) {
+      const size = casterTile?.occupant?.size ?? 'medium';
+      const radius = autocenteredRadius(move.radius, size);
+      for (const h of calculateAoE(sel, sel, aoe, range, radius)) aoeSet.add(`${h.q},${h.r}`);
+      return { range, selfOk, aoeSet, hoverInRange: true, hoverKey: `${sel.q},${sel.r}` };
+    }
+
+    const hv = this.state.hoverHex;
+    if (hv) {
+      hoverKey = `${hv.q},${hv.r}`;
+      const d = this.hexDist(sel, hv);
+      hoverInRange = d <= range && (d >= 1 || selfOk);
+      if (hoverInRange) {
+        for (const h of calculateAoE(sel, hv, aoe, range, move.radius)) aoeSet.add(`${h.q},${h.r}`);
+      }
+    }
+    return { range, selfOk, aoeSet, hoverInRange, hoverKey };
+  }
+
+  /**
+   * Preview de despliegue (T4.7): casillas que ocuparía el Pokémon de la reserva
+   * seleccionado colocado sobre el hover (7 si es `large`), y si el sitio es válido
+   * (todas dentro de la zona de despliegue y libres). `null` si no aplica.
+   */
+  private buildDeployPreview(): { hexes: Set<string>; valid: boolean } | null {
+    const m = this.state.match;
+    if (m?.status !== 'deployment' || !this.state.selectedReserveId || !this.state.hoverHex) return null;
+    const player = m.currentPlayer;
+    const p = m.reserve?.[player]?.find((r) => r.id === this.state.selectedReserveId);
+    if (!p) return null;
+
+    const hv = this.state.hoverHex;
+    const cells: Hex[] = p.size === 'large'
+      ? [hv, ...this.EDGE_DIRS.map((d) => ({ q: hv.q + d.q, r: hv.r + d.r }))]
+      : [hv];
+
+    const zone = m.deploymentZones?.[player] ?? [];
+    const inZone = (h: Hex) => zone.some((z) => z.q === h.q && z.r === h.r);
+    const occupied = (h: Hex) =>
+      this.state.currentTiles.some((t) => t.hex.q === h.q && t.hex.r === h.r && !!t.occupant);
+
+    const valid = cells.every((h) => inZone(h) && !occupied(h));
+    return { hexes: new Set(cells.map((h) => `${h.q},${h.r}`)), valid };
+  }
+
   public render() {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-    
-    const sortedTiles = [...this.state.currentTiles].sort((a, b) => {
-      const pA = this.hexToPixel(a.hex.q, a.hex.r);
-      const pB = this.hexToPixel(b.hex.q, b.hex.r);
-      return pA.y - pB.y;
-    });
+
+    const { order, tileMap } = this.getGeom();
 
     this.ctx.save();
     this.ctx.translate(this.CENTER_X, this.CENTER_Y);
@@ -275,28 +450,183 @@ export class BoardView {
     this.ctx.translate(-this.CENTER_X, -this.CENTER_Y);
     this.ctx.translate(this.state.cameraOffset.x, this.state.cameraOffset.y);
 
-    const tileMap = new Map<string, Tile>();
-    for (const t of sortedTiles) tileMap.set(`${t.hex.q},${t.hex.r}`, t);
+    // Culling de viewport: solo dibujamos las casillas cuyo píxel cae dentro del
+    // canvas (con margen para el alto del hex y su relieve). En ARENA (~5400
+    // casillas) esto reduce los dibujados a las ~pocas cientos visibles.
+    const z = this.state.zoom;
+    const { x: offX, y: offY } = this.state.cameraOffset;
+    const m = this.HEX_SIZE * 2;
+    const minX = (0 - this.CENTER_X) / z + this.CENTER_X - offX - m;
+    const maxX = (this.canvas.width - this.CENTER_X) / z + this.CENTER_X - offX + m;
+    const minY = (0 - this.CENTER_Y) / z + this.CENTER_Y - offY - m;
+    const maxY = (this.canvas.height - this.CENTER_Y) / z + this.CENTER_Y - offY + m;
 
-    for (const tile of sortedTiles) {
-      const { x, y } = this.hexToPixel(tile.hex.q, tile.hex.r);
+    // Preview de ataque (TA.3): con un move QWER activo, se precalcula su alcance legal y
+    // la forma AoE en el hover — solo si el objetivo está dentro de rango (como el `cast`).
+    const atk = this.buildAttackPreview();
+
+    // Preview de despliegue (T4.7): al pasar el ratón con un Pokémon de la reserva
+    // seleccionado, resalta las casillas que ocuparía (7 si es large) — verde si el sitio
+    // es válido (dentro de la zona y libre), rojo si no.
+    const deploy = this.buildDeployPreview();
+
+    // Ocupante seleccionado: se resalta TODA su huella (un large ocupa 7 hexes).
+    const selHex = this.state.selectedHex;
+    const selOccId = selHex
+      ? this.state.currentTiles.find((t) => t.hex.q === selHex.q && t.hex.r === selHex.r)?.occupant?.id ?? null
+      : null;
+
+    for (const { tile, x, y } of order) {
+      if (x < minX || x > maxX || y < minY || y > maxY) continue;
+
+      const isSelected = selOccId
+        ? tile.occupant?.id === selOccId
+        : !!(selHex && selHex.q === tile.hex.q && selHex.r === tile.hex.r);
+
+      const isDeploymentZone =
+        this.state.match?.status === 'deployment' &&
+        this.state.match?.deploymentZones?.[this.state.match.currentPlayer]?.some(z => z.q === tile.hex.q && z.r === tile.hex.r);
+
+      // Niebla de despliegue: casillas fuera de la zona (y no seleccionadas) se oscurecen.
+      const fogged = this.state.match?.status === 'deployment' && !isSelected && !isDeploymentZone;
+
       this.drawHex(x, y, this.getBiomeTexture(tile.biome));
       this.drawBiomeTransitions(tile, x, y, tileMap);
+      this.drawRelief(tile, x, y, !!fogged);
 
-      const isSelected =
-        this.state.selectedHex &&
-        this.state.selectedHex.q === tile.hex.q &&
-        this.state.selectedHex.r === tile.hex.r;
+      // Casilla(s) ocupada(s) por CUALQUIER Pokémon: se tiñen con el color de su jugador
+      // (tenue) para leer de quién es y qué ocupa (un large marca sus 7 hexes). No se tiñe
+      // un enemigo oculto para el observador (no filtrar su posición) — mismo filtro que
+      // EntityView; `hiddenAllySlots` null en online/hot-seat.
+      if (tile.occupant) {
+        const allies = this.state.hiddenAllySlots;
+        const hiddenFromViewer = tile.occupant.isHidden && allies && !allies.includes(tile.occupant.playerId);
+        if (!hiddenFromViewer) {
+          const rgb = BoardView.PLAYER_RGB[tile.occupant.playerId] ?? '148, 163, 184';
+          this.drawTileOverlay(x, y, `rgba(${rgb}, 0.24)`, `rgba(${rgb}, 0.55)`, 1);
+        }
+      }
 
       if (isSelected) {
         this.drawTileOverlay(x, y, 'rgba(255, 255, 0, 0.4)', '#fff', 3);
+      } else if (this.state.match?.status === 'deployment') {
+        if (isDeploymentZone) {
+          this.drawTileOverlay(x, y, 'rgba(34, 197, 94, 0.15)', '#4ade80', 2, false, true);
+        } else {
+          // Niebla de guerra profunda para el resto del mapa durante el despliegue
+          this.drawTileOverlay(x, y, 'rgba(0, 0, 0, 0.65)', 'rgba(0, 0, 0, 0.8)', 1);
+        }
+        // Huella del Pokémon a desplegar (sobre el hover): verde si cabe, rojo si no.
+        if (deploy && deploy.hexes.has(`${tile.hex.q},${tile.hex.r}`)) {
+          const c = deploy.valid ? '34, 197, 94' : '239, 68, 68';
+          this.drawTileOverlay(x, y, `rgba(${c}, 0.5)`, `rgba(${c}, 0.95)`, 2);
+        }
+      }
+
+      // Overlays de ataque/movimiento.
+      if (atk) {
+        // Move QWER activo: alcance legal (cian tenue), forma AoE en el hover (naranja,
+        // solo dentro de rango) y feedback de fuera de rango (rojo) — coincide con `cast`.
+        const key = `${tile.hex.q},${tile.hex.r}`;
+        const d = this.hexDist(this.state.selectedHex!, tile.hex);
+        const inRange = d <= atk.range && (d >= 1 || atk.selfOk);
+        const isAoE = atk.hoverInRange && atk.aoeSet.has(key);
+        const isOutHover = atk.hoverKey === key && !atk.hoverInRange;
+        if (isAoE) {
+          this.drawTileOverlay(x, y, 'rgba(249, 115, 22, 0.6)', '#fb923c', 2);
+        } else if (isOutHover) {
+          this.drawTileOverlay(x, y, 'rgba(239, 68, 68, 0.35)', '#ef4444', 2);
+        } else if (inRange) {
+          this.drawTileOverlay(x, y, 'rgba(56, 189, 248, 0.18)', 'rgba(56, 189, 248, 0.55)', 1);
+        }
       } else if (this.state.isAttackTarget(tile.hex)) {
         this.drawTileOverlay(x, y, 'rgba(239, 68, 68, 0.45)', '#fca5a5', 2, true);
       } else if (this.state.isMoveTarget(tile.hex)) {
         this.drawTileOverlay(x, y, 'rgba(34, 197, 94, 0.35)', '#86efac', 2, true);
       }
+
+      // Botín en la casilla: cofre (prioritario) o bola caída en el suelo.
+      if (tile.chest) this.drawChest(x, y);
+      else if (tile.groundBall) this.drawGroundBall(x, y, tile.groundBall);
     }
     this.ctx.restore();
+  }
+
+  /** Cofre de botín (pixel-art 8-bit, sin asset externo). */
+  private drawChest(x: number, y: number): void {
+    const w = this.HEX_SIZE * 0.9;
+    const h = this.HEX_SIZE * 0.62;
+    const left = x - w / 2;
+    const top = y - h * 0.55;
+    const ctx = this.ctx;
+    ctx.save();
+    // Sombra.
+    ctx.beginPath();
+    ctx.ellipse(x, y + h * 0.5, w * 0.55, h * 0.2, 0, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.fill();
+    // Cuerpo y tapa (madera).
+    ctx.fillStyle = '#7b4a1e';
+    ctx.fillRect(left, top + h * 0.42, w, h * 0.58);
+    ctx.fillStyle = '#8a5a24';
+    ctx.fillRect(left, top, w, h * 0.45);
+    // Herrajes dorados.
+    ctx.fillStyle = '#f5c542';
+    ctx.fillRect(left + w * 0.12, top, w * 0.08, h);
+    ctx.fillRect(left + w * 0.8, top, w * 0.08, h);
+    ctx.fillRect(left, top + h * 0.4, w, h * 0.08);
+    // Cerradura.
+    ctx.fillStyle = '#f5c542';
+    ctx.fillRect(x - w * 0.09, top + h * 0.34, w * 0.18, h * 0.22);
+    ctx.fillStyle = '#3e2410';
+    ctx.fillRect(x - w * 0.03, top + h * 0.42, w * 0.06, h * 0.09);
+    // Brillo + contorno.
+    ctx.fillStyle = 'rgba(255,255,255,0.25)';
+    ctx.fillRect(left + w * 0.1, top + h * 0.06, w * 0.5, h * 0.06);
+    ctx.lineWidth = Math.max(1.5, w * 0.05);
+    ctx.strokeStyle = '#3e2410';
+    ctx.strokeRect(left, top, w, h);
+    ctx.restore();
+  }
+
+  /** Bola caída en el suelo (dibujada; el color superior identifica el tipo). */
+  private drawGroundBall(x: number, y: number, ball: BallKey): void {
+    const r = this.HEX_SIZE * 0.28;
+    const top = BALL_TOP[ball] ?? '#ee1515';
+    const ctx = this.ctx;
+    ctx.save();
+    // Sombra.
+    ctx.beginPath();
+    ctx.ellipse(x, y + r * 0.95, r * 0.9, r * 0.35, 0, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.fill();
+    // Mitad inferior (blanca) y superior (color del tipo).
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fillStyle = '#f5f5f5';
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(x, y, r, Math.PI, 2 * Math.PI);
+    ctx.fillStyle = top;
+    ctx.fill();
+    // Banda y contorno negros.
+    ctx.strokeStyle = '#111';
+    ctx.lineWidth = Math.max(1.5, r * 0.18);
+    ctx.beginPath();
+    ctx.moveTo(x - r, y);
+    ctx.lineTo(x + r, y);
+    ctx.stroke();
+    ctx.lineWidth = Math.max(1, r * 0.12);
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.stroke();
+    // Botón central.
+    ctx.beginPath();
+    ctx.arc(x, y, r * 0.28, 0, Math.PI * 2);
+    ctx.fillStyle = '#fff';
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
   }
 
   /** Dibuja un overlay hexagonal (selección / movimiento / ataque). */
@@ -306,7 +636,8 @@ export class BoardView {
     fill: string,
     stroke: string,
     lineWidth: number,
-    dot = false
+    dot = false,
+    dashed = false
   ): void {
     const isoScale = 0.55;
     const points: { x: number; y: number }[] = [];
@@ -326,7 +657,13 @@ export class BoardView {
     this.ctx.fill();
     this.ctx.lineWidth = lineWidth;
     this.ctx.strokeStyle = stroke;
+    if (dashed) {
+      this.ctx.setLineDash([5, 5]);
+    }
     this.ctx.stroke();
+    if (dashed) {
+      this.ctx.setLineDash([]);
+    }
     if (dot) {
       this.ctx.beginPath();
       this.ctx.arc(x, y, 5, 0, Math.PI * 2);

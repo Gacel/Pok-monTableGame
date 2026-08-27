@@ -1,14 +1,21 @@
-import { Board, Biome, Pokemon } from '../engine/board.js';
-import { Hex, hexEqual, hexNeighbors } from '../engine/hex.js';
+import { Board, Pokemon, Tile, PokemonMove } from '../engine/board.js';
+import { Hex, hexEqual, hexDistance, hexNeighbors, hexAdd, hexDirection, hexLineDraw } from '../engine/hex.js';
 import { getMoveOptions, MoveOptions } from '../engine/movement.js';
-import { computeDamage, computeMoveDamage } from '../engine/combat.js';
-import { terrainDamage } from '../engine/environment.js';
+import { computeMoveDamage, calculateAoE, isAutocentered, autocenteredRadius } from '../engine/combat.js';
+import { terrainDamage, canEnter } from '../engine/environment.js';
 import { collectResources, PlayerResources } from '../engine/resources.js';
+import { scaledVitals } from '../engine/progression.js';
+import type { EvolutionInfo } from '../engine/evolution.js';
+import type { PokemonTemplate } from '../models/PokemonModel.js';
+import { BALL_LABEL, pickChestBall } from '@transcendence/shared';
 
 // Contratos de estado en @transcendence/shared (única fuente de verdad).
 // Se re-exportan para no romper los imports existentes `from '../services/GameService.js'`.
-export type { MatchStatus, CombatAction, CombatState, MatchStateDTO } from '@transcendence/shared';
-import type { MatchStatus, CombatAction, CombatState, MatchStateDTO } from '@transcendence/shared';
+export type { MatchStatus, MatchStateDTO, TurnEvent } from '@transcendence/shared';
+import type { MatchStatus, MatchStateDTO, BallKey, TurnEvent } from '@transcendence/shared';
+
+/** Turnos que tarda en reaparecer el cofre en ARENA tras recogerse. */
+const CHEST_RESPAWN_TURNS = 4;
 
 export interface PlayResult {
   ok: boolean;
@@ -17,14 +24,19 @@ export interface PlayResult {
 }
 
 const emptyResources = (): PlayerResources => ({ FIRE_CANDY: 0, WATER_CANDY: 0, GRASS_CANDY: 0 });
-const candyKey = (type: string): keyof PlayerResources =>
-  type === 'FIRE' ? 'FIRE_CANDY' : type === 'WATER' || type === 'ICE' ? 'WATER_CANDY' : 'GRASS_CANDY';
 const nameOf = (p: Pokemon) => (p.name ?? p.id).toUpperCase();
 
-const HABILIDAD_MULT = 1.6; // daño de habilidad
-const HABILIDAD_COST = 1; // candies del propio tipo
-const OBJETO_COST = 2; // candies (cualquier tipo)
-const OBJETO_HEAL = 0.3; // fracción de maxHp curada
+/** Coste en candies de una evolución in-match (T9.4). */
+const EVOLVE_CANDY_COST = 4;
+const CANDY_LABEL: Record<keyof PlayerResources, string> = {
+  FIRE_CANDY: 'Fuego', WATER_CANDY: 'Agua', GRASS_CANDY: 'Planta',
+};
+/** Candy que consume una pieza según su tipo (solo hay 3 tipos de caramelo). */
+function candyForType(type: string): keyof PlayerResources {
+  if (type === 'FIRE') return 'FIRE_CANDY';
+  if (type === 'WATER' || type === 'ICE') return 'WATER_CANDY';
+  return 'GRASS_CANDY'; // GRASS/POISON/NORMAL/otros
+}
 
 /**
  * Capa SERVICIO/DOMINIO: partida autoritativa. Única fuente de verdad del estado.
@@ -41,11 +53,17 @@ export class GameService {
     private winner: string | null,
     private resources: Record<string, PlayerResources>,
     private log: string[],
-    private combat: CombatState | null = null,
     private alliances: string[][] | null = null,
     private eliminated: string[] = [],
     /** ARENA: la partida NUNCA termina (siempre viva, aunque quede 0-1 jugadores). */
-    private persistent: boolean = false
+    private persistent: boolean = false,
+    public deploymentDeadline?: number,
+    public reserve: Record<string, Pokemon[]> = {},
+    public deploymentZones: Record<string, Hex[]> = {},
+    /** KOs acumulados por slot (para el resumen de recompensa). Persistido. */
+    private kos: Record<string, number> = {},
+    /** ARENA: turno en el que reaparece el cofre (0 = sin respawn pendiente). */
+    private chestRespawnTurn: number = 0
   ) {}
 
   static create(
@@ -57,28 +75,65 @@ export class GameService {
   ): GameService {
     const players: string[] = [];
     const resources: Record<string, PlayerResources> = {};
-    for (const { hex, pokemon } of placements) {
-      board.setOccupant(hex, pokemon);
+    const reserve: Record<string, Pokemon[]> = {};
+    const deploymentZones: Record<string, Hex[]> = {};
+
+    for (const { pokemon } of placements) {
       if (!players.includes(pokemon.playerId)) {
         players.push(pokemon.playerId);
         resources[pokemon.playerId] = emptyResources();
+        reserve[pokemon.playerId] = [];
+        deploymentZones[pokemon.playerId] = [];
+      }
+      reserve[pokemon.playerId]!.push(pokemon);
+    }
+    
+    // Assign deployment zones using Voronoi diagram based on first placement hex
+    const playerBases: Record<string, Hex> = {};
+    for (const { hex, pokemon } of placements) {
+      if (!playerBases[pokemon.playerId]) {
+        playerBases[pokemon.playerId] = hex;
       }
     }
-    return new GameService(
+
+    for (const t of board.tiles.values()) {
+      if (t.biome === 'WATER') continue;
+      
+      let minD = Infinity;
+      let owner: string | null = null;
+      for (const [pId, base] of Object.entries(playerBases)) {
+        const d = hexDistance(t.hex, base);
+        if (d < minD) {
+          minD = d;
+          owner = pId;
+        } else if (d === minD) {
+          // Break ties deterministically
+          if (pId < (owner ?? '')) owner = pId;
+        }
+      }
+      if (owner) {
+        deploymentZones[owner]!.push(t.hex);
+      }
+    }
+    const game = new GameService(
       id,
       board,
       players,
       players[0]!,
       1,
-      'active',
+      'deployment',
       null,
       resources,
-      [persistent ? '¡Bienvenido a la ARENA!' : '¡Comienza la partida!'],
-      null,
+      ['¡Fase de despliegue! Tienes 42 segundos.'],
       alliances,
       [],
-      persistent
+      persistent,
+      Date.now() + 42000, // 42 seconds from now
+      reserve,
+      deploymentZones
     );
+    game.seedChest(true);
+    return game;
   }
 
   /**
@@ -86,7 +141,7 @@ export class GameService {
    * jugadores entran/salen en caliente (addPlayer/removePlayer).
    */
   static createArena(id: string, board: Board): GameService {
-    return new GameService(
+    const game = new GameService(
       id,
       board,
       [],
@@ -97,10 +152,11 @@ export class GameService {
       {},
       ['🏟️ La ARENA está viva. Entra cuando quieras.'],
       null,
-      null,
       [],
       true
     );
+    game.seedChest(true);
+    return game;
   }
 
   /** Tablero vivo (para calcular spawns al entrar en caliente en la ARENA). */
@@ -136,15 +192,6 @@ export class GameService {
    * aunque no quede nadie. Cancela con seguridad un combate en el que participara.
    */
   removePlayer(playerId: string): void {
-    if (this.combat && (this.combat.attackerPlayer === playerId || this.combat.defenderPlayer === playerId)) {
-      const c = this.combat;
-      this.board.setOccupant(c.attackerHex, c.attacker.hp > 0 ? { ...c.attacker, hasActed: true } : null);
-      c.defenders.forEach((d, i) => {
-        this.board.setOccupant(c.defenderHexes[i]!, d.hp > 0 ? { ...d } : null);
-      });
-      this.combat = null;
-      if (this.status === 'combat') this.status = 'active';
-    }
     for (const tile of this.board.tiles.values()) {
       if (tile.occupant?.playerId === playerId) this.board.setOccupant(tile.hex, null);
     }
@@ -160,7 +207,116 @@ export class GameService {
    * consume para dar 500 monedas al killer. Efímero: se resetea al inicio de cada
    * acción y NO se serializa.
    */
-  private defeats: { killerSlot: string; victimSlot: string }[] = [];
+  private defeats: {
+    killerSlot: string;
+    victimSlot: string;
+    killerOwnedId?: string;
+    /** Instancia de la víctima (si era un Pokémon propio): para robo PvP (T8.4). */
+    victimOwnedId?: string;
+    /** Especie de la víctima: para capturar salvajes como nueva instancia (T8.2). */
+    victimName?: string;
+  }[] = [];
+
+  /**
+   * Bolas a conceder al usuario de cada slot (al ganar o abandonar en arena).
+   * Efímero como `defeats`: se resetea al inicio de cada acción y no se serializa.
+   */
+  private rewards: { slot: string; balls: BallKey[] }[] = [];
+
+  /**
+   * Eventos de feedback visual de la ÚLTIMA acción (daño, KO, …). El frontend los
+   * consume para animar. Efímero como `defeats`: se resetea al inicio de cada acción
+   * y NO se serializa.
+   */
+  private events: TurnEvent[] = [];
+
+  // ------------------------------------------------------ cofres y botín (bolas)
+
+  /** Distancia hex al origen (para colocar el cofre inicial cerca del centro). */
+  private hexDist0(h: Hex): number {
+    return (Math.abs(h.q) + Math.abs(h.r) + Math.abs(h.q + h.r)) / 2;
+  }
+
+  private hasChest(): boolean {
+    for (const tile of this.board.tiles.values()) if (tile.chest) return true;
+    return false;
+  }
+
+  /** Coloca un cofre en una casilla de tierra libre (central si `central`). */
+  private seedChest(central = false): void {
+    const land: Tile[] = [];
+    for (const tile of this.board.tiles.values()) {
+      if (tile.biome !== 'WATER' && !tile.occupant && !tile.chest && !tile.groundBall) land.push(tile);
+    }
+    if (!land.length) return;
+    const chosen = central
+      ? land.reduce((best, t) => (this.hexDist0(t.hex) < this.hexDist0(best.hex) ? t : best), land[0]!)
+      : land[Math.floor(Math.random() * land.length)]!;
+    chosen.chest = true;
+    this.log.push('🎁 Ha aparecido un cofre en el mapa.');
+  }
+
+  /** El Pokémon que entra en `hex` recoge el cofre o la bola del suelo (1 bola/Pokémon). */
+  private collectFromTile(pokemon: Pokemon | null, hex: Hex): void {
+    if (!pokemon || pokemon.carriedBall) return;
+    const tile = this.board.getTile(hex);
+    if (!tile) return;
+    if (tile.chest) {
+      pokemon.carriedBall = pickChestBall(Math.random());
+      tile.chest = false;
+      this.log.push(`🎁 ${nameOf(pokemon)} abre el cofre y consigue ${BALL_LABEL[pokemon.carriedBall]}.`);
+      if (this.persistent) this.chestRespawnTurn = this.turn + CHEST_RESPAWN_TURNS;
+    } else if (tile.groundBall) {
+      pokemon.carriedBall = tile.groundBall;
+      delete tile.groundBall;
+      this.log.push(`🔵 ${nameOf(pokemon)} recoge ${BALL_LABEL[pokemon.carriedBall]} del suelo.`);
+    }
+  }
+
+  /** Un Pokémon KO suelta su bola en la casilla `hex` (recogible por otros). */
+  private dropBall(pokemon: Pokemon, hex: Hex): void {
+    if (!pokemon.carriedBall) return;
+    const tile = this.board.getTile(hex);
+    if (tile) {
+      tile.groundBall = pokemon.carriedBall;
+      this.log.push(`💥 ${nameOf(pokemon)} suelta ${BALL_LABEL[pokemon.carriedBall]} al caer.`);
+    }
+    delete pokemon.carriedBall;
+  }
+
+  private addKo(slot: string): void {
+    this.kos[slot] = (this.kos[slot] ?? 0) + 1;
+  }
+
+  /** Reúne las bolas que llevan los Pokémon vivos de cada slot (recompensa). */
+  private ballsCarriedBy(slot: string): BallKey[] {
+    const balls: BallKey[] = [];
+    for (const tile of this.board.tiles.values()) {
+      const occ = tile.occupant;
+      if (occ?.playerId === slot && occ.carriedBall) balls.push(occ.carriedBall);
+    }
+    return balls;
+  }
+
+  /** ARENA: reaparece el cofre si tocaba (o si el mundo se quedó sin ninguno). */
+  private maybeRespawnChest(): void {
+    if (!this.persistent || this.hasChest()) return;
+    // Si hay respawn programado, espera al turno; si no (mundo sin cofre), siembra ya.
+    if (this.chestRespawnTurn > 0 && this.turn < this.chestRespawnTurn) return;
+    this.seedChest(false);
+    this.chestRespawnTurn = 0;
+  }
+
+  /**
+   * ARENA: garantiza que haya al menos un cofre (para mundos persistentes creados
+   * antes de esta mecánica, que se cargan sin cofre). Respeta el respawn en curso.
+   * Devuelve true si sembró (para que el caller persista).
+   */
+  ensureChest(): boolean {
+    if (!this.persistent || this.hasChest() || this.chestRespawnTurn > 0) return false;
+    this.seedChest(false);
+    return true;
+  }
 
   /** Aliados en 2v2 (incluye a uno mismo); en FFA cada jugador va solo. */
   private sameTeam = (a: string, b: string): boolean => {
@@ -169,10 +325,34 @@ export class GameService {
     return this.alliances.some((team) => team.includes(a) && team.includes(b));
   };
 
-  getStateDTO(): MatchStateDTO {
+  getStateDTO(requestingPlayerId?: string): MatchStateDTO {
+    const censoredIds = new Set<string>();
+    const serializedTiles = this.board.serialize().map((tile: Tile) => {
+      // Si la partida está activa, el pokemon está oculto, y no somos de su equipo, lo censuramos.
+      // En fase de despliegue, la visibilidad la gestiona el frontend de forma global.
+      if (
+        this.status === 'active' &&
+        tile.occupant &&
+        tile.occupant.isHidden &&
+        requestingPlayerId &&
+        !this.sameTeam(tile.occupant.playerId, requestingPlayerId)
+      ) {
+        censoredIds.add(tile.occupant.id);
+        return { ...tile, occupant: null };
+      }
+      return tile;
+    });
+
+    // Un evento que apunta a un enemigo AÚN oculto para este jugador se omite (un
+    // número flotante no debe revelar una pieza invisible). Los KO de piezas ya
+    // retiradas del tablero se conservan (su id no está entre los censurados).
+    const events = censoredIds.size
+      ? this.events.filter((e) => !e.pokemonId || !censoredIds.has(e.pokemonId))
+      : this.events;
+
     return {
       id: this.id,
-      tiles: this.board.serialize(),
+      tiles: serializedTiles,
       players: this.players,
       currentPlayer: this.currentPlayer,
       turn: this.turn,
@@ -180,11 +360,16 @@ export class GameService {
       winner: this.winner,
       resources: this.resources,
       log: this.log.slice(-30),
-      combat: this.combat,
       alliances: this.alliances,
       eliminated: this.eliminated,
       persistent: this.persistent,
       defeats: this.defeats,
+      ...(this.deploymentDeadline !== undefined ? { deploymentDeadline: this.deploymentDeadline } : {}),
+      reserve: this.reserve,
+      deploymentZones: this.deploymentZones,
+      kos: this.kos,
+      rewards: this.rewards,
+      events,
     };
   }
 
@@ -195,14 +380,88 @@ export class GameService {
     return getMoveOptions(hex, this.board, this.sameTeam);
   }
 
+  // ---------------------------------------------------------------- despliegue
+  public deploy(playerId: string, pokemonId: string, hex: Hex): PlayResult {
+    this.defeats = [];
+    this.events = [];
+    if (this.status === 'deployment' && this.deploymentDeadline && Date.now() > this.deploymentDeadline) {
+      this.forceStart();
+    }
+    if (this.status !== 'deployment') {
+      return { ok: false, error: 'La fase de despliegue ha terminado', state: this.getStateDTO() };
+    }
+    const myReserve = this.reserve[playerId];
+    if (!myReserve) {
+      return { ok: false, error: 'No tienes Pokémon en reserva', state: this.getStateDTO() };
+    }
+    const pokeIndex = myReserve.findIndex((p) => p.id === pokemonId);
+    if (pokeIndex < 0) {
+      return { ok: false, error: 'El Pokémon no está en tu reserva', state: this.getStateDTO() };
+    }
+    const validZones = this.deploymentZones[playerId];
+    if (!validZones || !validZones.some((z) => hexEqual(z, hex))) {
+      return { ok: false, error: 'Casilla fuera de tu zona de despliegue', state: this.getStateDTO() };
+    }
+    // Check occupancy using getOccupiedHexes for sizes
+    const pokemon = myReserve[pokeIndex]!;
+    const hexes = this.board.getOccupiedHexes(pokemon, hex);
+    for (const h of hexes) {
+      if (this.board.getOccupant(h)) {
+        return { ok: false, error: 'Casilla ocupada o insuficiente espacio', state: this.getStateDTO() };
+      }
+    }
+    
+    // Place it
+    myReserve.splice(pokeIndex, 1);
+    this.board.setOccupant(hex, pokemon);
+    this.log.push(`${playerId} despliega a ${nameOf(pokemon)}.`);
+
+    // If everyone has deployed everything, start match automatically?
+    const allDeployed = Object.values(this.reserve).every((res) => res.length === 0);
+    if (allDeployed) {
+      this.forceStart();
+    }
+
+    return { ok: true, state: this.getStateDTO() };
+  }
+
+  public forceStart(): PlayResult {
+    if (this.status === 'deployment') {
+      this.status = 'active';
+      this.log.push('¡El despliegue ha terminado! ¡Comienza la partida!');
+      // Colocar los Pokémon no desplegados en casillas aleatorias válidas de su zona
+      for (const [playerId, res] of Object.entries(this.reserve)) {
+        if (!res || res.length === 0) continue;
+        const zones = this.deploymentZones[playerId] ?? [];
+        // Aleatorizar el orden de las zonas
+        const shuffledZones = [...zones].sort(() => Math.random() - 0.5);
+        for (const p of res) {
+          for (const hex of shuffledZones) {
+             const hexes = this.board.getOccupiedHexes(p, hex);
+             const canPlace = hexes.every(h => !this.board.getOccupant(h) && this.board.getTile(h));
+             if (canPlace) {
+                this.board.setOccupant(hex, p);
+                break;
+             }
+          }
+        }
+      }
+      this.reserve = {};
+    }
+    this.updateStealthVisibility();
+    return { ok: true, state: this.getStateDTO() };
+  }
+
   // ---------------------------------------------------------------- movimiento
   play(playerId: string, from: Hex, to: Hex): PlayResult {
     this.defeats = [];
+    this.rewards = [];
+    this.events = [];
     if (this.status === 'finished') {
       return { ok: false, error: 'La partida ha terminado', state: this.getStateDTO() };
     }
-    if (this.status === 'combat') {
-      return { ok: false, error: 'Hay un combate en curso', state: this.getStateDTO() };
+    if (this.status === 'deployment') {
+      return { ok: false, error: 'Aún en fase de despliegue', state: this.getStateDTO() };
     }
     if (playerId !== this.currentPlayer) {
       return { ok: false, error: 'No es tu turno', state: this.getStateDTO() };
@@ -220,333 +479,406 @@ export class GameService {
 
     const opts = getMoveOptions(from, this.board, this.sameTeam);
     const isMove = opts.moves.some((h) => hexEqual(h, to));
-    const isAttack = opts.attacks.some((h) => hexEqual(h, to));
 
     if (isMove) {
-      this.board.moveOccupant(from, to);
+      // Honrar el resultado: un `large` puede no caber en el destino (huella) — no mentir
+      // con "se mueve" si no ocurrió (T4.5).
+      if (!this.board.moveOccupant(from, to)) {
+        return { ok: false, error: 'No cabe en esa casilla', state: this.getStateDTO() };
+      }
       const moved = this.board.getOccupant(to);
-      if (moved) moved.hasActed = true;
+      if (moved) {
+        moved.hasActed = true;
+        moved.revealed = false; // reubicarse permite volver a esconderse (T1.1)
+        this.collectFromTile(moved, to);
+      }
       this.log.push(`${nameOf(mover)} se mueve.`);
-      return { ok: true, state: this.getStateDTO() };
-    }
-    if (isAttack) {
-      this.initiateCombat(from, to);
+      this.updateStealthVisibility();
       return { ok: true, state: this.getStateDTO() };
     }
     return { ok: false, error: 'Movimiento ilegal', state: this.getStateDTO() };
   }
 
-  // ------------------------------------------------------------------- combate
-  private initiateCombat(from: Hex, to: Hex): void {
-    const attacker = { ...this.board.getOccupant(from)!, hasActed: true };
-    const primary = { ...this.board.getOccupant(to)! };
-    const defenderPlayer = primary.playerId;
-
-    // "Varios contra uno": todos los Pokémon del jugador defensor que están a
-    // rango (adyacentes al punto de combate) se unen a la defensa contra el
-    // atacante solitario. El primer defensor es el objetivo inicial.
-    const defenders: Pokemon[] = [primary];
-    const defenderHexes: Hex[] = [{ ...to }];
-    for (const nb of hexNeighbors(to)) {
-      const occ = this.board.getOccupant(nb);
-      if (occ && occ.playerId === defenderPlayer && occ.id !== primary.id && occ.id !== attacker.id) {
-        defenders.push({ ...occ });
-        defenderHexes.push({ ...nb });
+  private updateStealthVisibility(): void {
+    if (this.status !== 'active') return;
+    const pokes = new Map<string, { pokemon: Pokemon; hexes: Hex[] }>();
+    for (const tile of this.board.tiles.values()) {
+      if (tile.occupant) {
+        if (!pokes.has(tile.occupant.id)) {
+          pokes.set(tile.occupant.id, { pokemon: tile.occupant, hexes: [] });
+        }
+        pokes.get(tile.occupant.id)!.hexes.push(tile.hex);
       }
     }
 
-    this.combat = {
-      attackerId: attacker.id,
-      defenderId: primary.id,
-      attackerHex: from,
-      defenderHex: to,
-      attacker,
-      defender: primary,
-      attackerPlayer: attacker.playerId,
-      defenderPlayer,
-      defenders,
-      defenderHexes,
-      targetId: primary.id,
-      turnActorId: attacker.id, // el atacante actúa primero
-      round: 1,
-      log: [`¡${nameOf(attacker)} ataca a ${nameOf(primary)}!`],
-      status: 'active',
-      winnerId: null,
-      loserId: null,
-      outcome: null,
-    };
-    this.status = 'combat';
-    const extra = defenders.length - 1;
-    this.log.push(
-      `Combate: ${nameOf(attacker)} vs ${nameOf(primary)}${extra > 0 ? ` (+${extra} de refuerzo)` : ''}.`
-    );
-  }
+    for (const { pokemon, hexes } of pokes.values()) {
+      // Si está en hierba, asume oculto inicialmente, salvo que haya un enemigo cerca.
+      // Solo consideramos hierba alta si TODAS sus casillas ocupadas son TALL_GRASS.
+      const inGrass = hexes.length > 0 && hexes.every((h) => this.board.getTile(h)?.biome === 'TALL_GRASS');
+      
+      let enemyAdjacent = false;
+      for (const hex of hexes) {
+        const neighbors = hexNeighbors(hex);
+        for (const n of neighbors) {
+          const adjOcc = this.board.getOccupant(n);
+          if (adjOcc && !this.sameTeam(adjOcc.playerId, pokemon.playerId)) {
+            enemyAdjacent = true;
+            break;
+          }
+        }
+        if (enemyAdjacent) break;
+      }
 
-  /** Índice de un defensor por id (o -1). */
-  private defenderIndex(id: string): number {
-    return this.combat ? this.combat.defenders.findIndex((d) => d.id === id) : -1;
-  }
-
-  /** Defensores aún en pie, en orden. */
-  private livingDefenders(): Pokemon[] {
-    return this.combat ? this.combat.defenders.filter((d) => d.hp > 0) : [];
-  }
-
-  /** Fija el objetivo del atacante y sincroniza los campos espejo `defender*`. */
-  private setTarget(id: string): boolean {
-    const c = this.combat;
-    if (!c) return false;
-    const idx = this.defenderIndex(id);
-    if (idx < 0 || c.defenders[idx]!.hp <= 0) return false;
-    c.targetId = id;
-    c.defenderId = id;
-    c.defender = c.defenders[idx]!;
-    c.defenderHex = c.defenderHexes[idx]!;
-    return true;
-  }
-
-  private terrainOf(hex: Hex): Biome {
-    return this.board.getTile(hex)?.biome ?? 'GRASS';
-  }
-
-  private spendCandies(playerId: string, amount: number, prefer: string): boolean {
-    const res = this.resources[playerId] ?? emptyResources();
-    const total = res.FIRE_CANDY + res.WATER_CANDY + res.GRASS_CANDY;
-    if (total < amount) return false;
-    let left = amount;
-    const order: (keyof PlayerResources)[] = [
-      candyKey(prefer),
-      'FIRE_CANDY',
-      'WATER_CANDY',
-      'GRASS_CANDY',
-    ];
-    for (const k of order) {
-      while (left > 0 && res[k] > 0) {
-        res[k]--;
-        left--;
+      if (inGrass && !enemyAdjacent && !pokemon.hasActed && !pokemon.revealed) {
+        // Puede esconderse (salvo si fue descubierto por daño y no se ha reubicado, T1.1)
+        if (pokemon.isHidden === false || pokemon.isHidden === undefined) {
+           pokemon.isHidden = true;
+        }
+      } else if (enemyAdjacent && pokemon.isHidden) {
+        pokemon.isHidden = false;
+        this.log.push(`👁️ ¡${nameOf(pokemon)} ha sido descubierto!`);
+      } else if (!inGrass && pokemon.isHidden) {
+        pokemon.isHidden = false;
       }
     }
-    this.resources[playerId] = res;
-    return true;
   }
 
-  /** Aplica una acción de combate para el Pokémon cuyo turno es. */
-  combatAction(action: CombatAction, moveName?: string, targetId?: string): PlayResult {
+  // ---------------------------------------------------------------- combate AoE
+  cast(playerId: string, from: Hex, targetHex: Hex, moveIndex: number): PlayResult {
     this.defeats = [];
-    if (this.status !== 'combat' || !this.combat) {
-      return { ok: false, error: 'No hay combate en curso', state: this.getStateDTO() };
+    this.rewards = [];
+    this.events = [];
+    if (this.status !== 'active') {
+      return { ok: false, error: 'La partida no está activa', state: this.getStateDTO() };
     }
-    const c = this.combat;
-    if (c.status !== 'active') {
-      return { ok: false, error: 'Fase de combate cerrada', state: this.getStateDTO() };
+    if (playerId !== this.currentPlayer) {
+      return { ok: false, error: 'No es tu turno', state: this.getStateDTO() };
     }
-
-    const actorIsAttacker = c.turnActorId === c.attackerId;
-
-    // Selección de objetivo: solo el atacante y solo entre defensores vivos.
-    if (action === 'TARGET') {
-      if (!actorIsAttacker) {
-        return { ok: false, error: 'Solo el atacante elige objetivo', state: this.getStateDTO() };
-      }
-      if (!targetId || !this.setTarget(targetId)) {
-        return { ok: false, error: 'Objetivo no válido', state: this.getStateDTO() };
-      }
-      return { ok: true, state: this.getStateDTO() };
+    const caster = this.board.getOccupant(from);
+    if (!caster) {
+      return { ok: false, error: 'No hay ninguna pieza tuya en el origen', state: this.getStateDTO() };
+    }
+    if (caster.playerId !== playerId) {
+      return { ok: false, error: 'Esa pieza no es tuya', state: this.getStateDTO() };
+    }
+    if (caster.hasActed) {
+      return { ok: false, error: 'Esa pieza ya ha actuado en este turno', state: this.getStateDTO() };
     }
 
-    // El atacante puede reapuntar en la misma acción (targetId opcional).
-    if (actorIsAttacker && targetId) this.setTarget(targetId);
-
-    const actor = actorIsAttacker
-      ? c.attacker
-      : (c.defenders.find((d) => d.id === c.turnActorId) ?? c.defender);
-    const target = actorIsAttacker
-      ? (c.defenders.find((d) => d.id === c.targetId && d.hp > 0) ?? this.livingDefenders()[0])
-      : c.attacker;
-    if (!target) {
-      return { ok: false, error: 'No hay objetivo válido', state: this.getStateDTO() };
+    const move = caster.moves?.[moveIndex];
+    if (!move) {
+      return { ok: false, error: 'El movimiento seleccionado no existe', state: this.getStateDTO() };
     }
-    const actorHex = actorIsAttacker ? c.attackerHex : c.defenderHexes[this.defenderIndex(actor.id)]!;
-    const targetHex = actorIsAttacker
-      ? c.defenderHexes[this.defenderIndex(target.id)]!
-      : c.attackerHex;
-    const actorTerrain = this.terrainOf(actorHex);
-    const targetTerrain = this.terrainOf(targetHex);
+    
+    const range = move.range ?? 1;
+    const aoe = move.aoe || 'single';
 
-    switch (action) {
-      case 'MOVE': {
-        const move = (actor.moves ?? []).find((m) => m.name === moveName);
-        if (!move) {
-          return { ok: false, error: 'Ataque no disponible', state: this.getStateDTO() };
+    // Ondas autocentradas (terratemblor, surf…): SIEMPRE se centran sobre el lanzador,
+    // sin importar en qué casilla se haya hecho clic. Un `large` ocupa 7 hexes; exigir
+    // el hex-centro exacto hacía imposible lanzarlas (las otras 6 daban "fuera de rango").
+    const center = isAutocentered(move) ? from : targetHex;
+
+    // Validar rango (distancia geométrica entre centro del caster y el centro del AoE).
+    const dist = hexDistance(from, center);
+
+    // El centro del AoE debe estar dentro del alcance (también los radiales — TA.1: se
+    // acabó el "rango infinito").
+    if (dist > range) {
+       return { ok: false, error: 'El objetivo está fuera de rango', state: this.getStateDTO() };
+    }
+
+    // Auto-cast (dist 0) solo válido para ondas radiales autocentradas.
+    if (dist === 0 && aoe !== 'radius') {
+       return { ok: false, error: 'No puedes atacarte a ti mismo con este movimiento', state: this.getStateDTO() };
+    }
+
+    // Dash (T3.3): el atacante se lanza en línea hasta junto al objetivo dañando lo que
+    // embiste. Reutiliza `cast` (validación de turno/propiedad/rango ya hecha arriba).
+    if (move.dash) {
+      return this.castDash(caster, from, targetHex, move);
+    }
+
+    const moveRange = move.range || 1;
+    // Radio efectivo: las ondas autocentradas se expanden por la huella del lanzador
+    // para alcanzar MÁS ALLÁ de su propio cuerpo (un large llena el anillo 1).
+    const radius = isAutocentered(move)
+      ? autocenteredRadius(move.radius, caster.size)
+      : move.radius;
+    const aoeHexes = calculateAoE(from, center, aoe, moveRange, radius);
+    let hits = 0;
+    
+    this.log.push(`🔥 ${nameOf(caster)} lanza ${move.name.toUpperCase()}!`);
+    
+    // Aplicar daño a todo ocupante enemigo del área afectada.
+    const processed = new Set<string>(); // para no dañar al mismo pokemon (incl. large) 2 veces
+    for (const h of aoeHexes) {
+      const tile = this.board.getTile(h);
+      if (!tile || !tile.occupant) continue;
+      if (this.sameTeam(tile.occupant.playerId, caster.playerId)) continue;
+
+      // Línea de visión / bodyblocking (T4.3, D3): si un `large` enemigo se interpone
+      // entre el atacante y este hex, intercepta el impacto (lo recibe él; lo que hay
+      // detrás queda a la sombra). Aplica a línea, cono y ondas radiales por igual.
+      const block = this.losBlocker(from, h, tile.occupant.id, caster);
+      const victim = block?.occ ?? tile.occupant;
+      const victimHex = block?.hex ?? tile.hex;
+      if (processed.has(victim.id)) continue;
+      processed.add(victim.id);
+
+      const targetTerrain = this.board.getTile(victimHex)?.biome ?? tile.biome;
+      const casterTerrain = this.board.getTile(from)?.biome ?? 'GRASS';
+      const dmg = computeMoveDamage(caster, victim, move, casterTerrain, targetTerrain);
+      if (dmg <= 0) continue;
+
+      victim.hp = Math.max(0, victim.hp - dmg);
+      hits++;
+      if (block) this.log.push(`🛡️ ${nameOf(victim)} intercepta el ataque con su cuerpo!`);
+      this.log.push(`💥 ${nameOf(victim)} recibe ${dmg} de daño (HP: ${victim.hp}).`);
+      this.events.push({ kind: 'damage', pokemonId: victim.id, hex: victimHex, delta: -dmg, ...(block ? { blocked: true } : {}) });
+
+      if (victim.hp <= 0) {
+        this.log.push(`💀 ¡${nameOf(victim)} ha caído KO!`);
+        this.events.push({ kind: 'ko', pokemonId: victim.id, hex: victimHex });
+        this.defeats.push({
+          killerSlot: caster.playerId,
+          victimSlot: victim.playerId,
+          ...(caster.ownedId ? { killerOwnedId: caster.ownedId } : {}),
+          ...(victim.ownedId ? { victimOwnedId: victim.ownedId } : {}),
+          ...(victim.name ? { victimName: victim.name } : {}),
+        });
+        this.addKo(caster.playerId);
+        this.dropBall(victim, victimHex);
+        this.board.setOccupant(victimHex, null);
+      } else {
+        // Sobrevive al impacto directo.
+        if (victim.isHidden) {
+          // Golpeado por AoE: se descubre (T1.1). `revealed` evita que
+          // updateStealthVisibility lo vuelva a ocultar estando quieto.
+          victim.isHidden = false;
+          victim.revealed = true;
+          this.log.push(`👁️ ¡${nameOf(victim)} ha sido descubierto!`);
+          this.events.push({ kind: 'reveal', pokemonId: victim.id, hex: victimHex });
         }
-        // Los ataques especiales cuestan 1 candy del tipo del movimiento; los físicos son gratis.
-        if (move.damageClass === 'special' && !this.spendCandies(actor.playerId, 1, move.type)) {
-          return { ok: false, error: 'Sin candies para ataque especial', state: this.getStateDTO() };
+        // Empuje (knockback) desde el atacante — T3.1.
+        if (move.knockback) {
+          const dir = hexDirection(from, victimHex);
+          this.applyKnockback(victimHex, dir, move.knockback, victim, caster.playerId, caster.ownedId);
         }
-        const dmg = computeMoveDamage(actor, target, move, actorTerrain, targetTerrain);
-        target.hp = Math.max(0, target.hp - dmg);
-        c.log.push(`${nameOf(actor)} usa ${move.name.toUpperCase()}: ${dmg} de daño (${nameOf(target)}: ${target.hp}).`);
-        break;
-      }
-      case 'ATACAR': {
-        const dmg = computeDamage(actor, target, actorTerrain, targetTerrain);
-        target.hp = Math.max(0, target.hp - dmg);
-        c.log.push(`${nameOf(actor)} ATACA: ${dmg} de daño (${nameOf(target)}: ${target.hp}).`);
-        break;
-      }
-      case 'HABILIDAD': {
-        if (!this.spendCandies(actor.playerId, HABILIDAD_COST, actor.type)) {
-          return { ok: false, error: 'Sin recursos para HABILIDAD', state: this.getStateDTO() };
-        }
-        const dmg = Math.round(computeDamage(actor, target, actorTerrain, targetTerrain) * HABILIDAD_MULT);
-        target.hp = Math.max(0, target.hp - dmg);
-        c.log.push(`${nameOf(actor)} usa HABILIDAD: ${dmg} de daño (${nameOf(target)}: ${target.hp}).`);
-        break;
-      }
-      case 'OBJETO': {
-        if (!this.spendCandies(actor.playerId, OBJETO_COST, actor.type)) {
-          return { ok: false, error: 'Sin recursos para OBJETO', state: this.getStateDTO() };
-        }
-        const heal = Math.round(actor.maxHp * OBJETO_HEAL);
-        actor.hp = Math.min(actor.maxHp, actor.hp + heal);
-        c.log.push(`${nameOf(actor)} usa OBJETO: cura ${heal} (${nameOf(actor)}: ${actor.hp}).`);
-        break;
-      }
-      case 'HUIR': {
-        // Huir tiene riesgo: el rival lanza un golpe libre.
-        const dmg = computeDamage(target, actor, targetTerrain, actorTerrain);
-        actor.hp = Math.max(0, actor.hp - dmg);
-        c.log.push(`${nameOf(actor)} huye; ${nameOf(target)} le alcanza con ${dmg} de daño.`);
-        if (actor.hp <= 0) {
-          c.outcome = 'ko';
-          c.winnerId = target.id;
-          c.loserId = actor.id;
-          // Economía: al huir, el que se queda (target) derrota al que huye (actor).
-          this.defeats.push({ killerSlot: target.playerId, victimSlot: actor.playerId });
-        } else {
-          c.outcome = 'fled';
-          c.winnerId = null;
-          c.loserId = actor.id; // el que huyó
-        }
-        c.status = 'finished'; // fase de resultado; se resuelve con continueCombat()
-        return { ok: true, state: this.getStateDTO() };
       }
     }
-
-    // KO por daño (OBJETO cura, no puede tumbar a nadie).
-    if (action !== 'OBJETO' && target.hp <= 0) {
-      c.log.push(`¡${nameOf(target)} se ha debilitado!`);
-      // Economía: el que actúa (actor) derrota al objetivo (target).
-      this.defeats.push({ killerSlot: actor.playerId, victimSlot: target.playerId });
-      if (!actorIsAttacker) {
-        // Un defensor tumbó al atacante → gana el bando defensor.
-        c.outcome = 'ko';
-        c.winnerId = actor.id;
-        c.loserId = c.attackerId;
-        c.status = 'finished';
-        return { ok: true, state: this.getStateDTO() };
-      }
-      // El atacante tumbó a un defensor: ¿quedan más?
-      const living = this.livingDefenders();
-      if (living.length === 0) {
-        c.outcome = 'ko';
-        c.winnerId = c.attackerId;
-        c.loserId = target.id;
-        c.status = 'finished';
-        return { ok: true, state: this.getStateDTO() };
-      }
-      // Aún hay defensores: se reapunta al primero vivo y responden ellos.
-      this.setTarget(living[0]!.id);
-      c.turnActorId = living[0]!.id;
-      c.round += 1;
-      return { ok: true, state: this.getStateDTO() };
+    
+    if (hits === 0) {
+      this.log.push(`💨 El ataque no golpeó a nadie.`);
     }
 
-    // Sin KO: pasa el turno al siguiente actor (atacante ⇄ ronda de defensores).
-    c.turnActorId = this.nextCombatActor(actorIsAttacker, actor.id);
-    c.round += 1;
+    caster.hasActed = true;
+    caster.isHidden = false; // El ataque rompe el sigilo inmediatamente
+
+    this.updateStealthVisibility();
+    this.checkWinCondition();
     return { ok: true, state: this.getStateDTO() };
   }
 
   /**
-   * Siguiente en actuar. Tras el atacante actúan, en orden, todos los defensores
-   * vivos; cuando el último defensor termina, el turno vuelve al atacante.
+   * Evolución IN-MATCH (T9.4): la pieza en `from` evoluciona gastando **candies** (los
+   * recursos por fin tienen uso). Valida turno/propiedad, exige el nivel para las evoluciones
+   * por nivel (las de piedra/intercambio se resuelven con candies), sube stats a la forma
+   * destino sin curar, consume la acción del turno y emite el evento. `info`/`tpl` los resuelve
+   * la capa de servicio (async) y se los pasa ya listos.
    */
-  private nextCombatActor(actorIsAttacker: boolean, actorId: string): string {
-    const c = this.combat!;
-    const living = this.livingDefenders();
-    if (actorIsAttacker) {
-      return living.length ? living[0]!.id : c.attackerId;
-    }
-    const idx = living.findIndex((d) => d.id === actorId);
-    if (idx >= 0 && idx + 1 < living.length) return living[idx + 1]!.id;
-    return c.attackerId;
-  }
-
-  /** Cierra un combate ya resuelto (fase de resultado): aplica el tablero y sigue. */
-  continueCombat(): PlayResult {
+  evolvePiece(actor: string, from: Hex, info: EvolutionInfo, tpl: PokemonTemplate): PlayResult {
     this.defeats = [];
-    if (this.status !== 'combat' || !this.combat || this.combat.status !== 'finished') {
-      return { ok: false, error: 'No hay combate por resolver', state: this.getStateDTO() };
+    this.events = [];
+    if (this.status !== 'active') {
+      return { ok: false, error: 'La partida no está activa', state: this.getStateDTO() };
     }
-    this.finalizeCombat();
+    if (actor !== this.currentPlayer) {
+      return { ok: false, error: 'No es tu turno', state: this.getStateDTO() };
+    }
+    const occ = this.board.getOccupant(from);
+    if (!occ) return { ok: false, error: 'No hay ninguna pieza ahí', state: this.getStateDTO() };
+    if (occ.playerId !== actor) return { ok: false, error: 'Esa pieza no es tuya', state: this.getStateDTO() };
+    if (occ.hasActed) return { ok: false, error: 'Esa pieza ya ha actuado en este turno', state: this.getStateDTO() };
+
+    // Las evoluciones por nivel exigen el nivel; las de piedra/intercambio, solo candies.
+    if (info.trigger === 'level' && (occ.level ?? 1) < (info.minLevel ?? Infinity)) {
+      return { ok: false, error: `Requiere nivel ${info.minLevel}`, state: this.getStateDTO() };
+    }
+
+    const candyKey = candyForType(occ.type);
+    const res = this.resources[actor] ?? emptyResources();
+    if ((res[candyKey] ?? 0) < EVOLVE_CANDY_COST) {
+      return {
+        ok: false,
+        error: `Necesitas ${EVOLVE_CANDY_COST} caramelos de ${CANDY_LABEL[candyKey]}`,
+        state: this.getStateDTO(),
+      };
+    }
+    res[candyKey] -= EVOLVE_CANDY_COST;
+    this.resources[actor] = res;
+
+    // Sube a la forma destino (stats escaladas por su nivel; no cura: HP tope al nuevo maxHp).
+    const prevName = nameOf(occ);
+    const vitals = scaledVitals(tpl, occ.level ?? 1);
+    occ.name = info.evolvesTo;
+    occ.type = tpl.type;
+    occ.size = tpl.size;
+    if (tpl.scale != null) occ.scale = tpl.scale;
+    occ.maxHp = vitals.maxHp;
+    occ.hp = Math.min(occ.hp, vitals.maxHp);
+    occ.atk = vitals.atk;
+    occ.def = vitals.def;
+    occ.hasActed = true;
+
+    this.events.push({ kind: 'evolve', pokemonId: occ.id, hex: from });
+    this.log.push(`✨ ${prevName} evolucionó a ${info.evolvesTo.toUpperCase()}!`);
+    this.updateStealthVisibility();
     return { ok: true, state: this.getStateDTO() };
   }
 
-  private finalizeCombat(): void {
-    const c = this.combat;
-    if (!c) return;
-
-    // Vuelca los defensores al tablero: los vivos con su HP, los KO se retiran.
-    const writeDefenders = () => {
-      c.defenders.forEach((d, i) => {
-        this.board.setOccupant(c.defenderHexes[i]!, d.hp > 0 ? { ...d } : null);
-      });
-    };
-
-    if (c.outcome === 'ko') {
-      const attackerWon = c.winnerId === c.attackerId;
-      this.board.setOccupant(c.attackerHex, null);
-      if (attackerWon) {
-        // Cayeron TODOS los defensores: se limpian sus casillas y el atacante
-        // ocupa la casilla de combate INICIAL (adyacente a su origen), no la del
-        // último reapuntado, que podría quedar lejos.
-        c.defenders.forEach((_, i) => this.board.setOccupant(c.defenderHexes[i]!, null));
-        this.board.setOccupant(c.defenderHexes[0] ?? c.defenderHex, { ...c.attacker, hasActed: true });
-        this.log.push(`${nameOf(c.attacker)} vence y ocupa la casilla.`);
-      } else {
-        // Cayó el atacante: los defensores supervivientes permanecen.
-        writeDefenders();
-        this.log.push(`${nameOf(c.attacker)} ha sido derrotado.`);
+  /**
+   * Línea de visión / bodyblocking (T4.3, D3): busca un `large` ENEMIGO que se interponga
+   * entre el atacante (`from`) y el hex objetivo (`target`), excluyendo el propio origen y
+   * el objetivo. Si lo hay, ese coloso intercepta el impacto. Los aliados no bloquean tu
+   * disparo (por jugabilidad) y el objetivo no se auto-bloquea.
+   */
+  private losBlocker(
+    from: Hex,
+    target: Hex,
+    targetId: string,
+    caster: Pokemon
+  ): { occ: Pokemon; hex: Hex } | null {
+    const line = hexLineDraw(from, target);
+    for (let i = 1; i < line.length - 1; i++) {
+      const o = this.board.getOccupant(line[i]!);
+      if (
+        o &&
+        o.size === 'large' &&
+        o.id !== targetId &&
+        o.id !== caster.id &&
+        !this.sameTeam(o.playerId, caster.playerId)
+      ) {
+        return { occ: o, hex: line[i]! };
       }
-    } else {
-      // Huida: el atacante (si sobrevive) vuelve a su casilla; defensores igual.
-      this.board.setOccupant(
-        c.attackerHex,
-        c.attacker.hp > 0 ? { ...c.attacker, hasActed: true } : null
-      );
-      writeDefenders();
-      this.log.push('El combate termina en huida.');
+    }
+    return null;
+  }
+
+  /**
+   * Dash (T3.3): el atacante se lanza en línea recta (`hexLineDraw`) hacia el objetivo,
+   * daña al primer enemigo que embiste y termina en la última casilla libre de la
+   * trayectoria (junto al objetivo). Si mata a lo que embiste, avanza a su casilla.
+   */
+  private castDash(caster: Pokemon, from: Hex, targetHex: Hex, move: PokemonMove): PlayResult {
+    this.log.push(`💨 ${nameOf(caster)} se lanza con ${move.name.toUpperCase()}!`);
+    const casterTerrain = this.board.getTile(from)?.biome ?? 'GRASS';
+    let landing = from;
+    let hit = false;
+
+    for (const h of hexLineDraw(from, targetHex).slice(1)) {
+      const occ = this.board.getOccupant(h);
+      if (occ && !this.sameTeam(occ.playerId, caster.playerId)) {
+        const dmg = computeMoveDamage(caster, occ, move, casterTerrain, this.board.getTile(h)?.biome ?? 'GRASS');
+        if (dmg > 0) {
+          occ.hp = Math.max(0, occ.hp - dmg);
+          hit = true;
+          this.log.push(`💥 ${nameOf(occ)} recibe ${dmg} de daño (HP: ${occ.hp}).`);
+          this.events.push({ kind: 'damage', pokemonId: occ.id, hex: h, delta: -dmg });
+          if (occ.hp <= 0) {
+            this.log.push(`💀 ¡${nameOf(occ)} ha caído KO!`);
+            this.events.push({ kind: 'ko', pokemonId: occ.id, hex: h });
+            this.defeats.push({
+              killerSlot: caster.playerId,
+              victimSlot: occ.playerId,
+              ...(caster.ownedId ? { killerOwnedId: caster.ownedId } : {}),
+              ...(occ.ownedId ? { victimOwnedId: occ.ownedId } : {}),
+              ...(occ.name ? { victimName: occ.name } : {}),
+            });
+            this.addKo(caster.playerId);
+            this.dropBall(occ, h);
+            this.board.setOccupant(h, null);
+          } else if (occ.isHidden) {
+            occ.isHidden = false;
+            occ.revealed = true;
+            this.log.push(`👁️ ¡${nameOf(occ)} ha sido descubierto!`);
+            this.events.push({ kind: 'reveal', pokemonId: occ.id, hex: h });
+          }
+        }
+      }
+      // No puede terminar sobre una casilla ocupada (viva) ni intransitable; se detiene.
+      const tile = this.board.getTile(h);
+      if (this.board.getOccupant(h) || !tile || !canEnter(caster, tile.biome)) break;
+      landing = h;
     }
 
-    this.combat = null;
-    this.status = 'active';
+    if (!hexEqual(landing, from)) this.board.moveOccupant(from, landing);
+    this.events.push({ kind: 'dash', pokemonId: caster.id, hex: from, from, to: landing });
+    if (!hit) this.log.push(`💨 La embestida no golpeó a nadie.`);
+
+    caster.hasActed = true;
+    caster.isHidden = false;
+    this.updateStealthVisibility();
     this.checkWinCondition();
-    // Si el eliminado era el jugador de turno (p.ej. atacante que pierde su
-    // último Pokémon), el turno pasa al siguiente vivo.
-    if (this.status === 'active' && this.eliminated.includes(this.currentPlayer)) {
-      this.switchPlayer();
+    return { ok: true, state: this.getStateDTO() };
+  }
+
+  /**
+   * Empuje (T3.1): mueve al defensor `distance` hexes en `dir`. Large inmunes (D2). Se
+   * detiene ante obstáculo/pieza/borde y, en ese caso, recibe 10% maxHp de colisión.
+   * Emite evento `knockback` (from→to) y, si procede, daño/KO de colisión.
+   */
+  private applyKnockback(startHex: Hex, dir: Hex, distance: number, occ: Pokemon, killerSlot: string, killerOwnedId?: string): void {
+    if (occ.size === 'large') return; // Large inmunes al empuje
+    if (dir.q === 0 && dir.r === 0) return;
+
+    let cur = startHex;
+    let collided = false;
+    for (let i = 0; i < distance; i++) {
+      const next = hexAdd(cur, dir);
+      const tile = this.board.getTile(next);
+      if (!tile || this.board.getOccupant(next) || !canEnter(occ, tile.biome)) {
+        collided = true;
+        break;
+      }
+      cur = next;
+    }
+
+    if (!hexEqual(cur, startHex)) this.board.moveOccupant(startHex, cur);
+    this.log.push(`💨 ${nameOf(occ)} sale despedido.`);
+    this.events.push({ kind: 'knockback', pokemonId: occ.id, hex: startHex, from: startHex, to: cur });
+
+    if (collided) {
+      const dmg = Math.max(1, Math.round(0.1 * (occ.maxHp ?? occ.hp)));
+      occ.hp = Math.max(0, occ.hp - dmg);
+      this.log.push(`💥 ${nameOf(occ)} choca contra un obstáculo (-${dmg} HP).`);
+      this.events.push({ kind: 'damage', pokemonId: occ.id, hex: cur, delta: -dmg });
+      if (occ.hp <= 0) {
+        this.log.push(`💀 ¡${nameOf(occ)} ha caído KO por el impacto!`);
+        this.events.push({ kind: 'ko', pokemonId: occ.id, hex: cur });
+        this.defeats.push({
+          killerSlot,
+          victimSlot: occ.playerId,
+          ...(killerOwnedId ? { killerOwnedId } : {}),
+          ...(occ.ownedId ? { victimOwnedId: occ.ownedId } : {}),
+          ...(occ.name ? { victimName: occ.name } : {}),
+        });
+        this.addKo(killerSlot);
+        this.dropBall(occ, cur);
+        this.board.setOccupant(cur, null);
+      }
     }
   }
 
   // --------------------------------------------------------------------- turnos
   public endTurn(playerId?: string): PlayResult {
     this.defeats = [];
+    this.rewards = [];
+    this.events = [];
     if (this.status === 'finished') {
       return { ok: false, error: 'La partida ha terminado', state: this.getStateDTO() };
     }
-    if (this.status === 'combat') {
-      return { ok: false, error: 'Hay un combate en curso', state: this.getStateDTO() };
+    if (this.status === 'deployment') {
+      return { ok: false, error: 'La partida aún no ha empezado', state: this.getStateDTO() };
     }
     if (playerId && playerId !== this.currentPlayer) {
       return { ok: false, error: 'No es tu turno', state: this.getStateDTO() };
@@ -559,13 +891,16 @@ export class GameService {
     }
 
     this.collectTurnResources();
-    this.applyLavaDamage();
+    this.applyEndOfTurnEffects();
     if (this.status === 'active') this.switchPlayer();
+    this.maybeRespawnChest();
     return { ok: true, state: this.getStateDTO() };
   }
 
   public abandon(playerId?: string): PlayResult {
     this.defeats = [];
+    this.rewards = [];
+    this.events = [];
     if (this.status === 'finished') {
       return { ok: false, error: 'La partida ya ha terminado', state: this.getStateDTO() };
     }
@@ -574,17 +909,17 @@ export class GameService {
       return { ok: false, error: 'Ese jugador no está en la partida', state: this.getStateDTO() };
     }
 
-    // Si hay combate en curso se cancela: el atacante y TODOS los defensores
-    // vuelven al tablero con su HP actual antes de retirar las piezas del que
-    // abandona.
-    if (this.combat) {
-      const c = this.combat;
-      this.board.setOccupant(c.attackerHex, c.attacker.hp > 0 ? { ...c.attacker, hasActed: true } : null);
-      c.defenders.forEach((d, i) => {
-        this.board.setOccupant(c.defenderHexes[i]!, d.hp > 0 ? { ...d } : null);
-      });
-      this.combat = null;
-      this.status = 'active';
+    // Bolas del que abandona: en ARENA se las lleva (recompensa al momento); en
+    // partida finita las suelta en el mapa (la partida termina, es irrelevante).
+    if (this.persistent) {
+      const balls = this.ballsCarriedBy(loser);
+      if (balls.length) this.rewards.push({ slot: loser, balls });
+    } else {
+      for (const tile of this.board.tiles.values()) {
+        if (tile.occupant?.playerId === loser && tile.occupant.carriedBall) {
+          this.dropBall(tile.occupant, tile.hex);
+        }
+      }
     }
 
     // Abandonar = eliminación: se retiran todas sus piezas y la partida sigue
@@ -598,25 +933,63 @@ export class GameService {
     return { ok: true, state: this.getStateDTO() };
   }
 
-  private applyLavaDamage(): void {
+  /**
+   * Aplica al final del turno los efectos de terreno de TODOS los biomas (no solo
+   * lava): daño de lava (escalado por `lavaTurns`), daño de pantano y curaciones
+   * (valores negativos de `terrainDamage`, preparado para T2.2). Emite eventos de
+   * turno (T0.1) de daño/curación/KO.
+   */
+  private applyEndOfTurnEffects(): void {
+    // Deduplicar por id: un `large` ocupa varios hexes y no debe sufrir el efecto
+    // varias veces (mismo patrón que `cast`). Hoy todos son `medium` (1 hex); esto
+    // es defensa de cara a T4.1.
+    const processed = new Set<string>();
     for (const tile of this.board.tiles.values()) {
-      if (tile.occupant) {
-        if (tile.biome === 'FIRE') {
-          if (tile.occupant.type !== 'FIRE' && tile.occupant.type !== 'FLYING') {
-            tile.occupant.lavaTurns = (tile.occupant.lavaTurns ?? 0) + 1;
-          }
-          const dmg = terrainDamage(tile.occupant, 'FIRE');
-          if (dmg > 0) {
-            tile.occupant.hp -= dmg;
-            this.log.push(`¡${nameOf(tile.occupant)} se quema en la lava (-${dmg} HP, turno ${tile.occupant.lavaTurns})!`);
-            if (tile.occupant.hp <= 0) {
-              this.log.push(`¡${nameOf(tile.occupant)} ha caído KO por la lava!`);
-              this.board.setOccupant(tile.hex, null);
-            }
-          }
-        } else {
-          tile.occupant.lavaTurns = 0;
+      const occ = tile.occupant;
+      if (!occ || processed.has(occ.id)) continue;
+      processed.add(occ.id);
+
+      // `lavaTurns`: escala en FIRE consecutivo (excepto FIRE/FLYING); se reinicia
+      // en cuanto la pieza deja la lava.
+      if (tile.biome === 'FIRE') {
+        if (occ.type !== 'FIRE' && occ.type !== 'FLYING') {
+          occ.lavaTurns = (occ.lavaTurns ?? 0) + 1;
         }
+      } else {
+        occ.lavaTurns = 0;
+      }
+
+      const raw = terrainDamage(occ, tile.biome);
+      if (raw === 0) continue;
+
+      // Clamp a [0, maxHp] (soporta daño raw>0 y curación raw<0). El evento usa el
+      // delta REALMENTE aplicado: curar a HP lleno no emite un "+N" fantasma.
+      const maxHp = occ.maxHp ?? occ.hp;
+      const before = occ.hp;
+      occ.hp = Math.max(0, Math.min(maxHp, before - raw));
+      const applied = occ.hp - before; // <0 daño real · >0 curación real · 0 sin efecto
+      if (applied === 0) continue;
+
+      if (applied < 0) {
+        const lost = -applied;
+        this.events.push({ kind: 'damage', pokemonId: occ.id, hex: tile.hex, delta: applied });
+        if (tile.biome === 'FIRE') {
+          this.log.push(`¡${nameOf(occ)} se quema en la lava (-${lost} HP, turno ${occ.lavaTurns})!`);
+        } else if (tile.biome === 'SWAMP') {
+          this.log.push(`☠️ ${nameOf(occ)} sufre el pantano (-${lost} HP).`);
+        } else {
+          this.log.push(`${nameOf(occ)} sufre el terreno (-${lost} HP).`);
+        }
+        if (occ.hp <= 0) {
+          this.log.push(`¡${nameOf(occ)} ha caído KO por el terreno!`);
+          this.events.push({ kind: 'ko', pokemonId: occ.id, hex: tile.hex });
+          this.dropBall(occ, tile.hex);
+          this.board.setOccupant(tile.hex, null);
+        }
+      } else {
+        // Curación (Planta en hierba alta, 8% maxHp — D9).
+        this.events.push({ kind: 'heal', pokemonId: occ.id, hex: tile.hex, delta: applied });
+        this.log.push(`♻️ ${nameOf(occ)} se regenera (+${applied} HP).`);
       }
     }
     this.checkWinCondition();
@@ -667,6 +1040,11 @@ export class GameService {
       this.status = 'finished';
       this.winner = alive.join(' & ');
       this.log.push(`🏆 ${this.winner} gana la partida.`);
+      // Recompensa: cada ganador se lleva las bolas de sus Pokémon supervivientes.
+      for (const slot of alive) {
+        const balls = this.ballsCarriedBy(slot);
+        if (balls.length) this.rewards.push({ slot, balls });
+      }
     }
   }
 
@@ -695,24 +1073,20 @@ export class GameService {
       winner: this.winner,
       resources: this.resources,
       log: this.log,
-      combat: this.combat,
       alliances: this.alliances,
       eliminated: this.eliminated,
       persistent: this.persistent,
+      deploymentDeadline: this.deploymentDeadline,
+      reserve: this.reserve,
+      deploymentZones: this.deploymentZones,
+      kos: this.kos,
+      chestRespawnTurn: this.chestRespawnTurn,
     });
   }
 
   static deserialize(json: string): GameService {
     const d = JSON.parse(json);
     const board = Board.deserialize(d.tiles);
-    // Compatibilidad: combates guardados antes de "varios contra uno" no tienen
-    // `defenders`; se normalizan al defensor único que sí guardaban.
-    const combat: CombatState | null = d.combat ?? null;
-    if (combat && !Array.isArray((combat as Partial<CombatState>).defenders)) {
-      combat.defenders = [combat.defender];
-      combat.defenderHexes = [combat.defenderHex];
-      combat.targetId = combat.defenderId;
-    }
     return new GameService(
       d.id,
       board,
@@ -723,10 +1097,14 @@ export class GameService {
       d.winner,
       d.resources,
       d.log ?? [],
-      combat,
       d.alliances ?? null,
       d.eliminated ?? [],
-      d.persistent ?? false
+      d.persistent ?? false,
+      d.deploymentDeadline,
+      d.reserve ?? {},
+      d.deploymentZones ?? {},
+      d.kos ?? {},
+      d.chestRespawnTurn ?? 0
     );
   }
 

@@ -89,6 +89,25 @@ class RealtimeHub {
     }
   }
 
+  /** Envía un objeto personalizado para cada cliente de la sala según su contexto (ej. para ocultar enemigos en la niebla de guerra). */
+  broadcastPersonalized(matchId: string, factory: (ctx: SocketCtx) => unknown): void {
+    const room = this.rooms.get(matchId);
+    if (!room) return;
+    for (const socket of room) {
+      if (socket.readyState === 1) {
+        try {
+          const ctx = this.ctx.get(socket);
+          if (ctx) {
+             const message = factory(ctx);
+             socket.send(JSON.stringify(message));
+          }
+        } catch {
+          room.delete(socket);
+        }
+      }
+    }
+  }
+
   /** Envía a un único socket. */
   send(socket: WebSocket, message: unknown): void {
     if (socket.readyState === 1) socket.send(JSON.stringify(message));

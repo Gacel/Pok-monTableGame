@@ -3,16 +3,18 @@ import { getSpritePair } from '../net/PokeSprites';
 import { BoardView } from '../views/BoardView';
 import { HUDView } from '../views/HUDView';
 import { EntityView } from '../views/EntityView';
-import { CombatView } from '../views/CombatView';
 import { MinimapView } from '../views/MinimapView';
+import { FxLayer } from '../utils/fx';
 import { WsClient } from '../net/WsClient';
 import type { WsMessage } from '../net/WsClient';
 import { apiFetch } from '../net/api';
 import { MatchSession } from '../state/MatchSession';
 import type { OnlineSession } from '../state/MatchSession';
-import type { Hex, MatchState, CombatAction, Pokemon } from '../models/Types';
+import type { Hex, MatchState, Pokemon, BallKey } from '../models/Types';
+import { BALL_SPRITE, BALL_LABEL } from '@transcendence/shared';
+import type { CaptureResult } from '@transcendence/shared';
 import { authState } from '../auth/AuthState';
-import { decideBotAction } from './botStrategy';
+import { decideBotAction, hexDistance, pickCastMove } from './botStrategy';
 import type { BotLevel, BotPieceOptions, EnemyPiece } from './botStrategy';
 
 /**
@@ -24,9 +26,11 @@ export class GameController {
   private boardView: BoardView;
   private hudView: HUDView;
   private entityView: EntityView;
-  private combatView: CombatView;
   private minimapView: MinimapView;
+  private fxLayer: FxLayer;
   private canvas: HTMLCanvasElement;
+  /** Firma del último lote de eventos despachado (dedup HTTP resp + eco WS). */
+  private lastEventsSig = '';
 
   private isDragging = false;
   private dragStartX = 0;
@@ -37,6 +41,9 @@ export class GameController {
   private busy = false;
   private wsClient: WsClient | null = null;
   private cameraAnimId: number | null = null;
+  /** Direcciones de paneo de cámara activas (teclas mantenidas: flechas / WASD). */
+  private panKeys = new Set<string>();
+  private panAnimId: number | null = null;
   /** Sesión de partida ONLINE (matchId + slot propio); null en local hot-seat. */
   private session: OnlineSession | null = null;
   /** Slots controlados por la IA (solo local): slot → nivel (1/2/3). */
@@ -44,6 +51,8 @@ export class GameController {
   private botTimer: number | null = null;
   private botActionCount = 0;
   private botTurnKey = '';
+  /** Coalescido de render: varias mutaciones en un frame → un solo repintado. */
+  private renderScheduled = false;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -51,17 +60,17 @@ export class GameController {
     this.boardView = new BoardView(this.canvas, this.state);
     this.hudView = new HUDView(this.state);
     this.entityView = new EntityView(this.state, this.boardView);
-    this.combatView = new CombatView(
-      this.state,
-      (a, moveName, targetId) => this.sendCombatAction(a, moveName, targetId),
-      () => this.sendCombatContinue()
-    );
     this.minimapView = new MinimapView(this.state, this.boardView, this.canvas);
+    this.fxLayer = new FxLayer(this.state, this.boardView);
 
-    this.state.subscribe(() => this.renderAll());
+    // Coalescido: el estado notifica en cada mutación (incluida la cámara en cada
+    // mousemove del pan). En vez de repintar de forma síncrona por cada notify,
+    // agrupamos en un único render por frame → sin tirones al arrastrar/zoom.
+    this.state.subscribe(() => this.scheduleRender());
     this.setupEvents();
     this.setupKeyboardShortcuts();
     this.setupHUDListeners();
+    this.setupActionPanelListeners();
   }
 
   /**
@@ -95,11 +104,22 @@ export class GameController {
     if (resetBtn) resetBtn.style.display = session ? 'none' : '';
     const rematchBtn = document.getElementById('btn-rematch');
     if (rematchBtn) rematchBtn.textContent = session ? 'VOLVER AL MENÚ' : 'REVANCHA';
+    // Online: la "revancha" ya lleva al menú → sobra el botón MENÚ extra.
+    const winMenuBtn = document.getElementById('btn-win-menu');
+    if (winMenuBtn) winMenuBtn.style.display = session ? 'none' : '';
   }
 
   /** Configura los slots controlados por la IA (solo local). */
   public setBots(bots: Record<string, BotLevel> | null): void {
     this.bots = bots ?? {};
+    // Bautiza a los slots de IA (se llama tras setSession, que fija los nombres por
+    // defecto). El nombre representa que el oponente NO es humano; el número
+    // desambigua cuando hay varias IAs (FFA).
+    const slots = Object.keys(this.bots);
+    for (const slot of slots) {
+      const n = slot.replace('player', '');
+      this.state.playerNames[slot] = slots.length > 1 ? `IA ${n}` : 'IA';
+    }
   }
 
   private isBotSlot(slot: string): boolean {
@@ -127,22 +147,6 @@ export class GameController {
     const m = this.state.match;
     if (!m) return;
 
-    if (m.status === 'combat' && m.combat) {
-      const c = m.combat;
-      if (c.status === 'finished') {
-        if (this.isBotSlot(c.attackerPlayer) || this.isBotSlot(c.defenderPlayer)) {
-          this.scheduleBot(() => this.sendCombatContinue());
-        }
-        return;
-      }
-      const actor = c.turnActorId === c.attackerId ? c.attackerPlayer : c.defenderPlayer;
-      if (this.isBotSlot(actor)) {
-        // El combate lo resuelve a golpes básicos; la "listeza" está en elegir el enfrentamiento.
-        this.scheduleBot(() => this.sendCombatAction('ATACAR' as CombatAction));
-      }
-      return;
-    }
-
     if (m.status === 'active' && this.isBotSlot(m.currentPlayer)) {
       this.scheduleBot(() => this.runBotTurn());
     }
@@ -166,7 +170,7 @@ export class GameController {
     // Tope de seguridad: evita bucles si una acción no consume la pieza.
     const ownPieces = m.tiles.filter((t) => t.occupant && t.occupant.playerId === slot);
     if (this.botActionCount > ownPieces.length + 2) {
-      await this.endTurn();
+      await this.endTurn(true);
       return;
     }
     this.botActionCount++;
@@ -191,7 +195,7 @@ export class GameController {
     }
 
     if (!pieces.length) {
-      await this.endTurn();
+      await this.endTurn(true);
       return;
     }
 
@@ -199,10 +203,63 @@ export class GameController {
     const biomeOf = (h: Hex) => m.tiles.find((t) => t.hex.q === h.q && t.hex.r === h.r)?.biome;
     const decision = decideBotAction(pieces, enemies, this.bots[slot] ?? 2, Math.random, biomeOf);
     if (decision.type === 'end') {
-      await this.endTurn();
-    } else {
-      await this.performMove(decision.from, decision.to);
+      await this.endTurn(true);
+      return;
     }
+
+    // Ejecuta la decisión. Los ataques van SIEMPRE por /cast (combate on-map por
+    // rango), nunca por /move — mover a una casilla ocupada es ilegal y era la causa
+    // de que la IA se quedara congelada.
+    let ok: boolean;
+    if (decision.type === 'attack') {
+      ok = await this.botCast(decision.from, decision.to);
+      if (!ok) {
+        // El objetivo estaba fuera del alcance real del ataque (la heurística del bot
+        // razona por adyacencia, no por rango de `cast`): en vez de perder el turno, la
+        // pieza se ACERCA al enemigo para poder atacar el próximo turno.
+        const piece = pieces.find((p) => p.from.q === decision.from.q && p.from.r === decision.from.r);
+        const step = this.closestStepToward(piece?.moves ?? [], decision.to);
+        ok = step ? await this.performMove(decision.from, step) : false;
+      }
+    } else {
+      ok = await this.performMove(decision.from, decision.to);
+    }
+    // Si nada prosperó (acción rechazada por el servidor), pasamos turno: la partida
+    // avanza en lugar de congelarse.
+    if (!ok) {
+      await this.endTurn(true);
+    }
+  }
+
+  /** Hex de `moves` que deja a la pieza más cerca de `target` (o `null` si no acerca). */
+  private closestStepToward(moves: Hex[], target: Hex): Hex | null {
+    let best: Hex | null = null;
+    let bestDist = Infinity;
+    for (const h of moves) {
+      const d = hexDistance(h, target);
+      if (d < bestDist) {
+        bestDist = d;
+        best = h;
+      }
+    }
+    return best;
+  }
+
+  /**
+   * La IA lanza un ataque on-map con /cast: elige, entre los movimientos del atacante,
+   * el de mayor potencia cuyo alcance real llega al objetivo desde su posición actual.
+   * Devuelve `false` si ningún movimiento alcanza (para que el turno avance sin congelar).
+   */
+  private async botCast(from: Hex, target: Hex): Promise<boolean> {
+    const caster = this.state.match?.tiles.find(
+      (t) => t.hex.q === from.q && t.hex.r === from.r,
+    )?.occupant;
+    const moves = caster?.moves ?? [];
+    if (!moves.length) return false;
+
+    const bestIdx = pickCastMove(moves, hexDistance(from, target));
+    if (bestIdx < 0) return false;
+    return this.performCast(from, target, bestIdx);
   }
 
   /** Opciones de movimiento/ataque de una pieza SIN tocar el estado de la UI. */
@@ -225,8 +282,27 @@ export class GameController {
   private isMyTurn(): boolean {
     const match = this.state.match;
     if (!match) return false;
-    if (!this.session) return true; // local: el turno se comparte en pantalla
+    // Local: el turno se comparte en pantalla (hot-seat), PERO en el turno de un slot
+    // controlado por la IA el humano no debe poder actuar ni pasar turno.
+    if (!this.session) return !this.isBotSlot(match.currentPlayer);
     return match.currentPlayer === this.session.mySlot;
+  }
+
+  /**
+   * Perspectiva de ocultación en LOCAL. Online (server censura) y hot-seat (pantalla
+   * compartida) → null (sin ocultación en cliente). vs-IA → equipo humano: los
+   * ocultos de la IA no se muestran; los del humano sí (translúcidos).
+   */
+  private updateStealthPerspective(): void {
+    const match = this.state.match;
+    if (this.session || !match || Object.keys(this.bots).length === 0) {
+      this.state.hiddenAllySlots = null;
+      return;
+    }
+    const humans = match.players.filter((p) => !this.bots[p]);
+    this.state.hiddenAllySlots = match.players.filter((p) =>
+      humans.some((h) => !this.isEnemySlot(h, p))
+    );
   }
 
   private turnOwnerLabel(): string {
@@ -271,6 +347,28 @@ export class GameController {
     } else if (msg.type === 'chat' && msg.text) {
       this.hudView.flashToast(`💬 ${msg.text}`, '#1d4ed8');
       this.hudView.appendChat(msg.text);
+    } else if (msg.type === 'capture' && msg.captures) {
+      this.showCaptureFeedback(msg.captures);
+    }
+  }
+
+  /** Feedback de captura/robo/pérdida (T8.5): toast + número flotante sobre la pieza. */
+  private showCaptureFeedback(captures: CaptureResult[]): void {
+    for (const c of captures) {
+      const name = (c.name || 'POKÉMON').toUpperCase();
+      if (c.kind === 'capture') {
+        this.hudView.flashToast(`🎯 ¡Capturado ${name}!`, '#16a34a');
+      } else if (c.kind === 'steal') {
+        this.hudView.flashToast(`💰 ¡Robaste ${name}!`, '#7c3aed');
+      } else {
+        this.hudView.flashToast(`💀 Perdiste a ${name}`, '#dc2626');
+      }
+      // Marca visual sobre la pieza del slot implicado (si sigue en el tablero).
+      const tile = this.state.currentTiles.find((t) => t.occupant?.playerId === c.slot);
+      if (tile) {
+        const emoji = c.kind === 'lost' ? '💀' : c.kind === 'steal' ? '💰' : '🎯';
+        this.fxLayer.flash(tile.hex, emoji);
+      }
     }
   }
 
@@ -322,6 +420,7 @@ export class GameController {
     const startY = this.state.cameraOffset.y;
     const duration = 800;
     const startTime = performance.now();
+    this.state.cameraMoving = true; // sprites sin transición mientras dura el centrado
 
     const step = (now: number) => {
       const elapsed = now - startTime;
@@ -330,12 +429,14 @@ export class GameController {
       const ease = progress < 0.5 ? 4 * progress * progress * progress : 1 - Math.pow(-2 * progress + 2, 3) / 2;
       const curX = startX + (targetX - startX) * ease;
       const curY = startY + (targetY - startY) * ease;
+      // setCameraOffset ya programa el render (coalescido); no repintamos aquí
+      // para no hacer doble trabajo por frame.
       this.state.setCameraOffset(curX, curY);
-      this.renderAll();
       if (progress < 1) {
         this.cameraAnimId = requestAnimationFrame(step);
       } else {
         this.cameraAnimId = null;
+        this.state.cameraMoving = false;
       }
     };
     this.cameraAnimId = requestAnimationFrame(step);
@@ -346,6 +447,13 @@ export class GameController {
     const oldPlayer = this.state.match?.currentPlayer;
 
     this.state.setMatch(newState);
+    this.updateStealthPerspective();
+
+    // Feedback visual: reproducir los eventos de la acción (T0.1). Se omite en la
+    // carga inicial (sin `oldPlayer`) para no reproducir eventos viejos al entrar,
+    // y se deduplica por firma: online, la respuesta HTTP y el eco WS difunden el
+    // mismo estado (broadcastPersonalized incluye al actor).
+    if (oldPlayer) this.dispatchEvents(newState);
 
     // Partida online terminada: la sesión ya no debe reanudarse tras un F5.
     if (this.session && newState.status === 'finished') {
@@ -353,8 +461,20 @@ export class GameController {
     }
 
     if (!oldPlayer || oldPlayer !== newState.currentPlayer || oldTurn !== newState.turn) {
-      const targetTile = this.state.getLastInteractedTile(newState.currentPlayer);
-      this.centerOnTile(targetTile, animateCamera && !!oldPlayer);
+      if (newState.status === 'deployment' && newState.deploymentZones) {
+        const zones = newState.deploymentZones[newState.currentPlayer];
+        if (zones && zones.length > 0) {
+           let sumQ = 0, sumR = 0;
+           for (const z of zones) { sumQ += z.q; sumR += z.r; }
+           const centerQ = Math.round(sumQ / zones.length);
+           const centerR = Math.round(sumR / zones.length);
+           const centerTile = newState.tiles.find(t => t.hex.q === centerQ && t.hex.r === centerR) || newState.tiles.find(t => t.hex.q === zones[0].q && t.hex.r === zones[0].r);
+           this.centerOnTile(centerTile, animateCamera && !!oldPlayer);
+        }
+      } else {
+        const targetTile = this.state.getLastInteractedTile(newState.currentPlayer);
+        this.centerOnTile(targetTile, animateCamera && !!oldPlayer);
+      }
     }
 
     // Nuevo turno de partida → reinicia el tope de acciones del bot.
@@ -366,9 +486,56 @@ export class GameController {
     this.maybeRunBot();
   }
 
+  /**
+   * Reproduce los eventos de feedback visual del DTO (T0.1) sobre el tablero. La
+   * guarda por firma evita el doble disparo cuando el mismo estado llega dos veces
+   * (respuesta HTTP + eco WS de `broadcastPersonalized`). Cada ticket de mecánica
+   * añade su `case`; T0.4 solo cablea `damage` (prueba del pipeline).
+   */
+  private dispatchEvents(state: MatchState): void {
+    const events = state.events;
+    if (!events || events.length === 0) return;
+    const sig = `${state.turn}|${state.currentPlayer}|${JSON.stringify(events)}`;
+    if (sig === this.lastEventsSig) return;
+    this.lastEventsSig = sig;
+
+    for (const ev of events) {
+      if (!ev.hex) continue;
+      switch (ev.kind) {
+        case 'damage':
+          this.fxLayer.floatingNumber(ev.hex, String(ev.delta ?? 0), 'damage');
+          if (ev.blocked) this.fxLayer.flash(ev.hex, '🛡️'); // intercepción de un coloso (T4.4)
+          break;
+        case 'heal':
+          this.fxLayer.floatingNumber(ev.hex, `+${ev.delta ?? 0}`, 'heal'); // +N verde (T2.3)
+          break;
+        case 'reveal':
+          this.fxLayer.flash(ev.hex); // "!" de emboscada revelada (T1.2)
+          break;
+        case 'evolve':
+          this.fxLayer.flash(ev.hex, '✨'); // evolución in-match (T9.4); el sprite cambia solo
+          break;
+        case 'knockback':
+        case 'dash':
+          // Deslizamiento del sprite (T3.2/T3.4): se marca el id para que EntityView use
+          // una transición de posición larga en el render que lo mueve a su nuevo hex.
+          if (ev.pokemonId) this.state.slidingIds.add(ev.pokemonId);
+          break;
+        // capture → su ticket (T8.5).
+        default:
+          break;
+      }
+    }
+  }
+
   private async preloadSprites(state: MatchState): Promise<void> {
     const names = new Set<string>();
     for (const t of state.tiles) if (t.occupant?.name) names.add(t.occupant.name);
+    if (state.reserve) {
+      for (const playerReserve of Object.values(state.reserve)) {
+        for (const p of playerReserve) if (p.name) names.add(p.name);
+      }
+    }
     await Promise.all(Array.from(names).map((n) => this.loadPokeSprite(n)));
   }
 
@@ -381,11 +548,20 @@ export class GameController {
     return gif;
   }
 
+  /** Programa un repintado para el próximo frame (coalesce múltiples notify). */
+  private scheduleRender(): void {
+    if (this.renderScheduled) return;
+    this.renderScheduled = true;
+    requestAnimationFrame(() => {
+      this.renderScheduled = false;
+      this.renderAll();
+    });
+  }
+
   private renderAll(): void {
     this.boardView.render();
     this.entityView.render();
     this.hudView.render();
-    this.combatView.render();
     this.minimapView.render();
     this.updateTurnControls();
   }
@@ -401,68 +577,11 @@ export class GameController {
     if (!btn) return;
     const match = this.state.match;
     const inMatch = match?.status === 'active';
-    if (this.session) {
-      const show = inMatch && this.isMyTurn();
-      btn.style.display = show ? '' : 'none';
-    } else {
-      btn.style.display = inMatch ? '' : 'none';
-    }
+    // Solo cuando este cliente puede actuar: online fuera de tu turno, y en local
+    // durante el turno de la IA, el botón se oculta (isMyTurn ya lo distingue).
+    btn.style.display = inMatch && this.isMyTurn() ? '' : 'none';
   }
 
-  private async sendCombatAction(
-    action: CombatAction,
-    moveName?: string,
-    targetId?: string
-  ): Promise<void> {
-    if (this.busy) return;
-    // Online: solo actúa el dueño del Pokémon al que le toca en el combate.
-    const combat = this.state.match?.combat;
-    if (this.session && combat) {
-      const actorPlayer =
-        combat.turnActorId === combat.attackerId ? combat.attackerPlayer : combat.defenderPlayer;
-      if (actorPlayer !== this.session.mySlot) {
-        this.hudView.flashToast(`Turno de ${this.state.labelFor(actorPlayer).toUpperCase()}`);
-        return;
-      }
-    }
-    this.busy = true;
-    try {
-      const body: Record<string, string> = { action };
-      if (moveName) body.moveName = moveName;
-      if (targetId) body.targetId = targetId;
-      const res = await apiFetch(this.apiPath('/combat/action'), {
-        method: 'POST',
-        body: JSON.stringify(body),
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        this.applyMatchState(data.state as MatchState);
-      } else {
-        this.hudView.flashToast(data.error ?? 'Acción no válida');
-      }
-    } catch (err) {
-      console.error(err);
-      this.hudView.flashToast('Error de red');
-    } finally {
-      this.busy = false;
-    }
-  }
-
-  private async sendCombatContinue(): Promise<void> {
-    if (this.busy) return;
-    this.busy = true;
-    try {
-      const res = await apiFetch(this.apiPath('/combat/continue'), { method: 'POST' });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        this.applyMatchState(data.state as MatchState);
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      this.busy = false;
-    }
-  }
 
   private setupEvents(): void {
     this.canvas.onmousedown = (e) => {
@@ -475,6 +594,24 @@ export class GameController {
     };
 
     this.canvas.onmousemove = (e) => {
+      const rect = this.canvas.getBoundingClientRect();
+      const scaleX = this.canvas.width / rect.width;
+      const scaleY = this.canvas.height / rect.height;
+      const mouseX = (e.clientX - rect.left) * scaleX;
+      const mouseY = (e.clientY - rect.top) * scaleY;
+
+      const hex = this.boardView.pixelToHex(
+        mouseX,
+        mouseY,
+        this.state.cameraOffset.x,
+        this.state.cameraOffset.y
+      );
+      
+      if (!this.state.hoverHex || this.state.hoverHex.q !== hex.q || this.state.hoverHex.r !== hex.r) {
+        this.state.hoverHex = hex;
+        this.renderAll();
+      }
+
       if (!this.isDragging) return;
       const dx = e.clientX - this.dragStartX;
       const dy = e.clientY - this.dragStartY;
@@ -482,9 +619,10 @@ export class GameController {
         this.hasDragged = true;
         this.canvas.style.cursor = 'grabbing';
       }
-      const rect = this.canvas.getBoundingClientRect();
-      const scaleX = this.canvas.width / rect.width;
-      const scaleY = this.canvas.height / rect.height;
+
+      // Arrastre de cámara: sprites sin transición para que no "bailen" (igual que el
+      // paneo con teclado).
+      this.state.cameraMoving = true;
       this.state.setCameraOffset(
         this.initialCameraOffsetX + dx * scaleX,
         this.initialCameraOffsetY + dy * scaleY
@@ -493,12 +631,14 @@ export class GameController {
 
     this.canvas.onmouseup = async (e) => {
       this.isDragging = false;
+      this.state.cameraMoving = false;
       this.canvas.style.cursor = 'default';
       if (!this.hasDragged) await this.handleCanvasClick(e);
     };
 
     this.canvas.onmouseleave = () => {
       this.isDragging = false;
+      this.state.cameraMoving = false;
       this.canvas.style.cursor = 'default';
     };
 
@@ -506,9 +646,9 @@ export class GameController {
       'wheel',
       (e) => {
         e.preventDefault();
-        // Durante el combate (o al terminar) el tablero está bajo el overlay:
-        // el zoom queda bloqueado para que no se "asome" el mapa por detrás.
-        if (this.state.match && this.state.match.status !== 'active') return;
+        // Al TERMINAR la partida el tablero queda bajo el overlay de victoria: el zoom
+        // se bloquea para que no se "asome" el mapa. En despliegue y juego sí se permite.
+        if (this.state.match && this.state.match.status === 'finished') return;
         const delta = e.deltaY > 0 ? -0.1 : 0.1;
         let newZoom = this.state.zoom + delta;
         if (newZoom < 0.3) newZoom = 0.3;
@@ -520,6 +660,8 @@ export class GameController {
 
     document.getElementById('btn-reset')?.addEventListener('click', () => this.resetGame());
     document.getElementById('btn-rematch')?.addEventListener('click', () => this.resetGame());
+    // "◀ MENÚ" en el overlay de victoria: aceptar y volver al menú (no forzar revancha).
+    document.getElementById('btn-win-menu')?.addEventListener('click', () => this.exitToMenu());
     document.getElementById('btn-end-turn')?.addEventListener('click', () => this.endTurn());
     document.getElementById('btn-abandon')?.addEventListener('click', () => {
       if (confirm('¿Estás seguro de que quieres abandonar la partida? (Esto equivaldrá a una derrota)')) {
@@ -540,12 +682,21 @@ export class GameController {
   private async handleCanvasClick(e: MouseEvent): Promise<void> {
     const match = this.state.match;
     // Durante el combate el tablero no acepta clics (se usa el menú de combate).
-    if (!match || match.status !== 'active' || this.busy) return;
+    if (!match || (match.status !== 'active' && match.status !== 'deployment') || this.busy) return;
 
     // Online: fuera de tu turno el tablero es de solo lectura.
-    if (!this.isMyTurn()) {
+    if (!this.isMyTurn() && match.status !== 'deployment') {
       this.hudView.flashToast(`Turno de ${this.turnOwnerLabel()}`);
       return;
+    }
+    
+    // En fase de despliegue, también debes ser el jugador de turno o es local (todos los turnos permitidos al ser compartidos, pero el match.currentPlayer dicta quién despliega ahora)
+    if (match.status === 'deployment') {
+      const isMe = this.state.mySlot === null || this.state.mySlot === match.currentPlayer;
+      if (!isMe) {
+        this.hudView.flashToast(`Turno de despliegue de ${this.turnOwnerLabel()}`);
+        return;
+      }
     }
 
     const rect = this.canvas.getBoundingClientRect();
@@ -566,7 +717,28 @@ export class GameController {
       return;
     }
 
-    // Si hay una pieza seleccionada y el destino está resaltado → ejecutar jugada.
+    if (match.status === 'deployment') {
+      if (this.state.selectedReserveId) {
+        const zones = match.deploymentZones?.[match.currentPlayer] ?? [];
+        const valid = zones.some(z => z.q === hex.q && z.r === hex.r);
+        if (valid) {
+          await this.performDeploy(this.state.selectedReserveId, hex);
+        } else {
+          this.hudView.flashToast('Casilla fuera de tu zona de despliegue');
+        }
+      } else {
+        this.hudView.flashToast('Selecciona un Pokémon de tu reserva abajo');
+      }
+      return;
+    }
+
+    // Si hay una pieza seleccionada y un movimiento activo (QWER), intentamos castear allí
+    if (this.state.selectedHex && this.state.activeMoveIndex !== null) {
+      await this.performCast(this.state.selectedHex, hex, this.state.activeMoveIndex);
+      return;
+    }
+
+    // Si hay una pieza seleccionada y el destino está resaltado → ejecutar jugada normal.
     if (this.state.selectedHex && (this.state.isMoveTarget(hex) || this.state.isAttackTarget(hex))) {
       await this.performMove(this.state.selectedHex, hex);
       return;
@@ -576,8 +748,11 @@ export class GameController {
     if (clickedTile.occupant) {
       this.state.setLastInteractedPokemon(clickedTile.occupant.playerId, clickedTile.occupant.id);
       if (clickedTile.occupant.playerId === match.currentPlayer) {
-        this.state.selectedHex = hex;
-        await this.loadMoveOptions(hex);
+        // Normaliza al CENTRO del ocupante: un large ocupa 7 hexes y debe seleccionarse
+        // igual se clique donde se clique (T4.5).
+        const center = this.occupantCenter(clickedTile.occupant.id) ?? hex;
+        this.state.selectedHex = center;
+        await this.loadMoveOptions(center);
       } else {
         this.hudView.flashToast('No es el turno de esa pieza');
         this.state.selectedHex = null;
@@ -585,6 +760,16 @@ export class GameController {
     } else {
       this.state.selectedHex = null;
     }
+  }
+
+  /** Centro (centroide) de las casillas que ocupa un Pokémon (para grandes = su centro). */
+  private occupantCenter(id: string): Hex | null {
+    const hexes = (this.state.match?.tiles ?? []).filter((t) => t.occupant?.id === id).map((t) => t.hex);
+    if (hexes.length === 0) return null;
+    return {
+      q: Math.round(hexes.reduce((a, h) => a + h.q, 0) / hexes.length),
+      r: Math.round(hexes.reduce((a, h) => a + h.r, 0) / hexes.length),
+    };
   }
 
   private async loadMoveOptions(hex: Hex): Promise<void> {
@@ -596,7 +781,7 @@ export class GameController {
     }
   }
 
-  private async performMove(from: Hex, to: Hex): Promise<void> {
+  private async performMove(from: Hex, to: Hex): Promise<boolean> {
     const movingOcc = this.state.currentTiles.find((t) => t.hex.q === from.q && t.hex.r === from.r)?.occupant;
     if (movingOcc) {
       this.state.setLastInteractedPokemon(movingOcc.playerId, movingOcc.id);
@@ -615,9 +800,105 @@ export class GameController {
           this.hudView.flashToast(`Combate: gana ${String(c.winnerId).toUpperCase()}`, '#7c3aed');
         }
         this.applyMatchState(data.state as MatchState);
+        return true;
+      }
+      this.hudView.flashToast(data.error ?? 'Jugada inválida');
+      this.state.selectedHex = null;
+      return false;
+    } catch (err) {
+      console.error(err);
+      this.hudView.flashToast('Error de red');
+      return false;
+    } finally {
+      this.busy = false;
+    }
+  }
+
+  private async performForceStart(): Promise<void> {
+    if (this.busy) return;
+    this.busy = true;
+    try {
+      const res = await apiFetch(this.apiPath('/force-start'), {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        this.applyMatchState(data.state as MatchState);
       } else {
-        this.hudView.flashToast(data.error ?? 'Jugada inválida');
+        this.hudView.flashToast(data.error ?? 'No se pudo iniciar la partida');
+      }
+    } catch (err) {
+      console.error(err);
+      this.hudView.flashToast('Error de red');
+    } finally {
+      this.busy = false;
+    }
+  }
+
+  private async performDeploy(pokemonId: string, hex: Hex): Promise<void> {
+    this.busy = true;
+    try {
+      const res = await apiFetch(this.apiPath('/deploy'), {
+        method: 'POST',
+        body: JSON.stringify({ pokemonId, hex }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        this.state.selectedReserveId = null;
+        this.applyMatchState(data.state as MatchState, false); // no animar cámara en cada despliegue
+      } else {
+        this.hudView.flashToast(data.error ?? 'Error al desplegar');
+      }
+    } catch (err) {
+      console.error(err);
+      this.hudView.flashToast('Error de red');
+    } finally {
+      this.busy = false;
+    }
+  }
+
+  private async performCast(from: Hex, to: Hex, moveIndex: number): Promise<boolean> {
+    const movingOcc = this.state.currentTiles.find((t) => t.hex.q === from.q && t.hex.r === from.r)?.occupant;
+    if (movingOcc) {
+      this.state.setLastInteractedPokemon(movingOcc.playerId, movingOcc.id);
+    }
+    this.busy = true;
+    try {
+      const res = await apiFetch(this.apiPath('/cast'), {
+        method: 'POST',
+        body: JSON.stringify({ from, target: to, moveIndex }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
         this.state.selectedHex = null;
+        this.state.activeMoveIndex = null;
+        this.applyMatchState(data.state as MatchState);
+        return true;
+      }
+      this.hudView.flashToast(data.error ?? 'Jugada inválida');
+      return false;
+    } catch (err) {
+      console.error(err);
+      this.hudView.flashToast('Error de red');
+      return false;
+    } finally {
+      this.busy = false;
+    }
+  }
+
+  /** Evolución in-match (T9.4): la pieza seleccionada evoluciona gastando candies. */
+  private async performEvolve(from: Hex): Promise<void> {
+    if (this.busy) return;
+    this.busy = true;
+    try {
+      const res = await apiFetch(this.apiPath('/evolve'), { method: 'POST', body: JSON.stringify({ from }) });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        this.state.selectedHex = null;
+        await this.preloadSprites(data.state as MatchState);
+        this.applyMatchState(data.state as MatchState);
+      } else {
+        this.hudView.flashToast(data.error ?? 'No se pudo evolucionar', '#dc2626');
       }
     } catch (err) {
       console.error(err);
@@ -642,17 +923,23 @@ export class GameController {
         this.state.selectedHex = null;
         await this.preloadSprites(data.state as MatchState);
         this.applyMatchState(data.state as MatchState, false);
+      } else {
+        // p.ej. Survival: si perdiste un Pokémon del equipo, no se puede repetir con los mismos.
+        this.hudView.flashToast(data.error ?? 'No se pudo reiniciar', '#dc2626');
+        setTimeout(() => location.reload(), 1500); // volver al hub para reconfigurar
       }
     } catch (err) {
       console.error(err);
+      this.hudView.flashToast('Error de red al reiniciar', '#dc2626');
     } finally {
       this.busy = false;
     }
   }
 
-  private async endTurn(): Promise<void> {
+  private async endTurn(fromBot = false): Promise<void> {
     if (this.busy) return;
-    if (!this.isMyTurn()) {
+    // El bot pasa su propio turno (isMyTurn es falso en turno de IA); el humano no.
+    if (!fromBot && !this.isMyTurn()) {
       this.hudView.flashToast(`Turno de ${this.turnOwnerLabel()}`);
       return;
     }
@@ -682,10 +969,18 @@ export class GameController {
       const data = await res.json();
       if (res.ok && data.success) {
         this.state.selectedHex = null;
-        this.applyMatchState(data.state as MatchState);
+        const state = data.state as MatchState;
+        this.applyMatchState(state);
+        // ARENA: si te llevas bolas al abandonar, muéstralas antes de salir.
+        const slot = this.session?.mySlot ?? 'player1';
+        const balls = state.rewards?.find((r) => r.slot === slot)?.balls ?? [];
         // Quien abandona sale SIEMPRE al menú principal (la partida sigue para
         // el resto en online; en local se cierra al volver al menú).
-        this.exitToMenu();
+        if (balls.length) {
+          this.showAbandonRewards(balls, () => this.exitToMenu());
+        } else {
+          this.exitToMenu();
+        }
       } else {
         this.hudView.flashToast(data.error ?? 'Error al abandonar partida');
       }
@@ -695,6 +990,35 @@ export class GameController {
     } finally {
       this.busy = false;
     }
+  }
+
+  /** Modal-resumen retro: bolas que te llevas al abandonar la ARENA. Al cerrar, `onClose`. */
+  private showAbandonRewards(balls: BallKey[], onClose: () => void): void {
+    const F = "font-family:'Press Start 2P',monospace;";
+    const base = 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items';
+    const ballsHtml = balls
+      .map(
+        (b) =>
+          `<img src="${base}/${BALL_SPRITE[b]}.png" title="${BALL_LABEL[b]}" class="w-10 h-10 object-contain" style="image-rendering:pixelated;" />`
+      )
+      .join('');
+    const overlay = document.createElement('div');
+    overlay.className = 'fixed inset-0 z-[220] flex items-center justify-center p-4';
+    overlay.style.background = 'rgba(0,0,0,0.75)';
+    overlay.innerHTML = `
+      <div class="relative bg-gray-900 w-full text-center" style="max-width:min(340px,94vw); border:6px solid #fff; border-radius:12px; box-shadow:0 0 0 6px #000, 0 0 40px rgba(0,0,0,0.85);">
+        <div class="bg-blue-900 border-4 border-black" style="border-radius:6px; box-shadow:inset 0 0 30px rgba(0,0,0,0.6); padding:22px;">
+          <h3 class="text-yellow-400 uppercase mb-3" style="${F} font-size:13px; text-shadow:2px 2px 0 #000;">TE LLEVAS</h3>
+          <div class="flex items-center justify-center gap-2 flex-wrap mb-4">${ballsHtml}</div>
+          <button id="ar-reward-ok" class="bg-green-600 hover:bg-green-500 text-white px-6 py-3 rounded border-b-4 border-green-800 active:border-b-0" style="${F} font-size:11px;">RECOGER</button>
+        </div>
+      </div>`;
+    const close = (): void => {
+      overlay.remove();
+      onClose();
+    };
+    overlay.querySelector('#ar-reward-ok')?.addEventListener('click', close);
+    document.body.appendChild(overlay);
   }
 
   /** Cierra el socket, limpia la sesión y avisa a la SPA para volver al menú. */
@@ -707,9 +1031,65 @@ export class GameController {
     document.dispatchEvent(new CustomEvent('return-to-menu'));
   }
 
+  /** Mapea una tecla a una dirección de paneo de cámara (flechas / WASD), o null. */
+  private panDirForKey(key: string): 'up' | 'down' | 'left' | 'right' | null {
+    switch (key) {
+      case 'ArrowUp': case 'w': case 'W': return 'up';
+      case 'ArrowDown': case 's': case 'S': return 'down';
+      case 'ArrowLeft': case 'a': case 'A': return 'left';
+      case 'ArrowRight': case 'd': case 'D': return 'right';
+      default: return null;
+    }
+  }
+
+  /** Aplica un paso de paneo según las teclas mantenidas. */
+  private panStep(): void {
+    if (this.panKeys.size === 0) return;
+    // Velocidad constante en pantalla: el offset se aplica en el espacio escalado,
+    // así que se divide por el zoom (px/frame de pantalla ≈ constante).
+    const step = 34 / this.state.zoom;
+    let dx = 0;
+    let dy = 0;
+    if (this.panKeys.has('left')) dx += step;
+    if (this.panKeys.has('right')) dx -= step;
+    if (this.panKeys.has('up')) dy += step;
+    if (this.panKeys.has('down')) dy -= step;
+    this.state.setCameraOffset(this.state.cameraOffset.x + dx, this.state.cameraOffset.y + dy);
+  }
+
+  /** Bucle de paneo mientras haya teclas de dirección mantenidas. */
+  private startPanLoop(): void {
+    if (this.panAnimId !== null) return;
+    // Cancela cualquier centrado animado en curso (el paneo manual manda).
+    if (this.cameraAnimId !== null) {
+      cancelAnimationFrame(this.cameraAnimId);
+      this.cameraAnimId = null;
+    }
+    this.state.cameraMoving = true;
+    // Primer paso inmediato: respuesta instantánea al pulsar (no espera al 1er frame).
+    this.panStep();
+    const loop = () => {
+      if (this.panKeys.size === 0) {
+        this.panAnimId = null;
+        this.state.cameraMoving = false;
+        return;
+      }
+      this.panStep();
+      this.panAnimId = requestAnimationFrame(loop);
+    };
+    this.panAnimId = requestAnimationFrame(loop);
+  }
+
   private setupKeyboardShortcuts(): void {
     let lastKey = '';
     let lastKeyTime = 0;
+
+    // Soltar tecla / perder foco: liberar direcciones de paneo (evita que se queden pegadas).
+    window.addEventListener('keyup', (e) => {
+      const dir = this.panDirForKey(e.key);
+      if (dir) this.panKeys.delete(dir);
+    });
+    window.addEventListener('blur', () => this.panKeys.clear());
 
     window.addEventListener('keydown', (e) => {
       if (
@@ -717,6 +1097,18 @@ export class GameController {
         e.target instanceof HTMLTextAreaElement ||
         e.target instanceof HTMLSelectElement
       ) {
+        return;
+      }
+
+      // Paneo de cámara. Las flechas SIEMPRE panean. WASD panea solo cuando NO hay
+      // pieza seleccionada: con pieza, Q/W/E/R son los hotkeys de movimiento, así que
+      // WASD queda inhabilitado como bloque (coherente: si W no panea, A/S/D tampoco).
+      const dir = this.panDirForKey(e.key);
+      const isWasd = /^[wasd]$/i.test(e.key);
+      if (dir && !(isWasd && this.state.selectedHex)) {
+        e.preventDefault();
+        this.panKeys.add(dir);
+        this.startPanLoop();
         return;
       }
 
@@ -730,6 +1122,17 @@ export class GameController {
         lastKey = '';
         lastKeyTime = 0;
       } else {
+        const key = e.key.toUpperCase();
+        if (['Q', 'W', 'E', 'R'].includes(key) && this.state.selectedHex) {
+          const map: Record<string, number> = { Q: 0, W: 1, E: 2, R: 3 };
+          this.state.activeMoveIndex = map[key];
+        } else if (key === 'V' && this.state.selectedHex && this.isMyTurn()) {
+          // Evolución in-match (T9.4): evoluciona la pieza seleccionada gastando candies.
+          void this.performEvolve(this.state.selectedHex);
+        } else if (key === 'ESCAPE') {
+          this.state.activeMoveIndex = null;
+        }
+        
         lastKey = e.key;
         lastKeyTime = now;
       }
@@ -768,5 +1171,37 @@ export class GameController {
         });
       }
     });
+  }
+
+  private setupActionPanelListeners(): void {
+    const panel = document.getElementById('action-panel');
+    if (panel) {
+      panel.addEventListener('click', (e) => {
+        const moveBtn = (e.target as HTMLElement).closest('.move-btn') as HTMLElement | null;
+        if (moveBtn) {
+          const idx = parseInt(moveBtn.dataset.moveIdx ?? '-1', 10);
+          if (idx >= 0 && idx < 4) {
+            this.state.activeMoveIndex = idx;
+          }
+          return;
+        }
+        
+        const reserveBtn = (e.target as HTMLElement).closest('.reserve-btn') as HTMLElement | null;
+        if (reserveBtn) {
+          const resId = reserveBtn.dataset.reserveId;
+          if (resId) {
+            this.state.selectedReserveId = resId;
+            this.renderAll(); // Fuerza a repintar el HUDView para mostrar la selección
+          }
+          return;
+        }
+
+        const readyBtn = (e.target as HTMLElement).closest('#ready-btn') as HTMLElement | null;
+        if (readyBtn) {
+          this.performForceStart();
+          return;
+        }
+      });
+    }
   }
 }

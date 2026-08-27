@@ -1,5 +1,5 @@
-import type { Hex, Pokemon } from '../models/Types';
-import { typeAdvantage } from '@transcendence/shared';
+import type { Hex, Pokemon, PokemonMove } from '../models/Types';
+import { typeAdvantage, isAutocentered } from '@transcendence/shared';
 
 /**
  * IA del bot (partida local). No hay "IA" real: es la LISTEZA al elegir
@@ -35,6 +35,34 @@ export function hexDistance(a: Hex, b: Hex): number {
   const s1 = -a.q - a.r;
   const s2 = -b.q - b.r;
   return Math.max(Math.abs(a.q - b.q), Math.abs(a.r - b.r), Math.abs(s1 - s2));
+}
+
+/**
+ * Índice del movimiento con más potencia cuyo alcance real llega a un objetivo a
+ * distancia `dist`, o `-1` si ninguno alcanza. El combate on-map es por rango: un
+ * ataque melee (`range 1`) no llega a distancia 2, y una onda radial autocentrada
+ * (`aoe:'radius'`) alcanza desde distancia 0. Función PURA → testeable sin DOM.
+ */
+export function pickCastMove(moves: readonly PokemonMove[], dist: number): number {
+  let bestIdx = -1;
+  let bestPower = -1;
+  for (let i = 0; i < moves.length; i++) {
+    const mv = moves[i]!;
+    const range = mv.range ?? 1;
+    // Autocentrada (terratemblor…): alcanza si el objetivo cae en su radio (envuelve al
+    // lanzador). Radial con alcance: el centro debe estar en rango. Resto: melee/proyectil.
+    const reaches = isAutocentered(mv)
+      ? dist <= Math.max(1, mv.radius ?? 1)
+      : mv.aoe === 'radius'
+        ? dist <= range
+        : dist >= 1 && dist <= range;
+    const power = mv.power ?? 0;
+    if (reaches && power > bestPower) {
+      bestPower = power;
+      bestIdx = i;
+    }
+  }
+  return bestIdx;
 }
 
 /** Daño aproximado (sin terreno) para valorar un ataque. */

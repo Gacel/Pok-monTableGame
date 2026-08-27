@@ -3,6 +3,7 @@ import { open, Database } from 'sqlite';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { GEN1_NAMES } from '../engine/gen1.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -41,7 +42,8 @@ async function openAndMigrate(): Promise<Database> {
       atk             INTEGER NOT NULL DEFAULT 50,
       def             INTEGER NOT NULL DEFAULT 40,
       type            TEXT NOT NULL,
-      movementPattern TEXT NOT NULL,
+      speed           INTEGER NOT NULL DEFAULT 3,
+      size            TEXT NOT NULL DEFAULT 'medium',
       raw_data        TEXT
     );
 
@@ -80,6 +82,8 @@ async function openAndMigrate(): Promise<Database> {
       pp           INTEGER,
       damage_class TEXT,
       short_effect TEXT,
+      target       TEXT,
+      display_name TEXT,
       raw_data     TEXT
     );
 
@@ -93,6 +97,15 @@ async function openAndMigrate(): Promise<Database> {
       PRIMARY KEY (pokemon_name, move_name)
     );
     CREATE INDEX IF NOT EXISTS idx_pokemon_moves_pokemon ON pokemon_moves(pokemon_name);
+
+    -- Catalogo de evolucion por especie (T5.2). evolves_to NULL = forma final.
+    CREATE TABLE IF NOT EXISTS evolutions (
+      name        TEXT PRIMARY KEY,
+      evolves_to  TEXT,
+      trigger     TEXT,
+      min_level   INTEGER,
+      item        TEXT
+    );
 
     -- Amistades ACEPTADAS (COMUNIDAD). Bidireccional: se guardan las dos direcciones.
     CREATE TABLE IF NOT EXISTS friendships (
@@ -119,7 +132,10 @@ async function openAndMigrate(): Promise<Database> {
       user_id      TEXT NOT NULL,
       name         TEXT NOT NULL,
       level        INTEGER NOT NULL DEFAULT 1,
+      xp           INTEGER NOT NULL DEFAULT 0,
+      lost_at      TEXT,
       is_starter   INTEGER NOT NULL DEFAULT 0,
+      is_shiny     INTEGER NOT NULL DEFAULT 0,
       acquired_via TEXT NOT NULL DEFAULT 'starter',
       created_at   TEXT NOT NULL DEFAULT (datetime('now'))
     );
@@ -167,12 +183,40 @@ async function openAndMigrate(): Promise<Database> {
       winner_id      TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_auctions_status ON auctions(status, expires_at);
+
+    -- Intercambios entre amigos (T10.1). offer = lo que da el proponente (escrowado);
+    -- request = lo que pide al destinatario (se valida/mueve al aceptar).
+    CREATE TABLE IF NOT EXISTS trades (
+      id           TEXT PRIMARY KEY,
+      from_user    TEXT NOT NULL,
+      to_user      TEXT NOT NULL,
+      offer_json   TEXT NOT NULL,
+      request_json TEXT NOT NULL,
+      status       TEXT NOT NULL DEFAULT 'pending',  -- pending|completed|cancelled
+      created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_trades_users ON trades(to_user, from_user, status);
   `);
 
   // Escrow de Pokémon en subasta: bloquea la instancia sin perder metadatos.
   const opCols = await db.all(`PRAGMA table_info(owned_pokemon)`);
   if (!opCols.some((c: { name: string }) => c.name === 'auction_id')) {
     await db.exec(`ALTER TABLE owned_pokemon ADD COLUMN auction_id TEXT`);
+  }
+  if (!opCols.some((c: { name: string }) => c.name === 'is_shiny')) {
+    await db.exec(`ALTER TABLE owned_pokemon ADD COLUMN is_shiny INTEGER NOT NULL DEFAULT 0`);
+  }
+  // XP acumulada hacia el siguiente nivel (T6.1). El nivel ya existe (default 1).
+  if (!opCols.some((c: { name: string }) => c.name === 'xp')) {
+    await db.exec(`ALTER TABLE owned_pokemon ADD COLUMN xp INTEGER NOT NULL DEFAULT 0`);
+  }
+  // Pérdida en Survival (T8.3): marca de baja (soft-delete); null = viva/en inventario.
+  if (!opCols.some((c: { name: string }) => c.name === 'lost_at')) {
+    await db.exec(`ALTER TABLE owned_pokemon ADD COLUMN lost_at TEXT`);
+  }
+  // Escrow de intercambio (T10.1): retiene la instancia ofertada hasta aceptar/cancelar.
+  if (!opCols.some((c: { name: string }) => c.name === 'trade_id')) {
+    await db.exec(`ALTER TABLE owned_pokemon ADD COLUMN trade_id TEXT`);
   }
 
   // Migración defensiva: columna `email` en users (si la tabla ya existía).
@@ -195,6 +239,15 @@ async function openAndMigrate(): Promise<Database> {
   const names = new Set(cols.map((c: { name: string }) => c.name));
   if (!names.has('atk')) await db.exec(`ALTER TABLE pokemons ADD COLUMN atk INTEGER NOT NULL DEFAULT 50`);
   if (!names.has('def')) await db.exec(`ALTER TABLE pokemons ADD COLUMN def INTEGER NOT NULL DEFAULT 40`);
+  if (!names.has('speed')) await db.exec(`ALTER TABLE pokemons ADD COLUMN speed INTEGER NOT NULL DEFAULT 3`);
+  if (!names.has('size')) await db.exec(`ALTER TABLE pokemons ADD COLUMN size TEXT NOT NULL DEFAULT 'medium'`);
+  if (names.has('movementPattern')) {
+    try {
+      await db.exec(`ALTER TABLE pokemons DROP COLUMN movementPattern`);
+    } catch {
+      // Si SQLite es viejo y no soporta DROP COLUMN, no importa, ya no se usa, pero requeriría default value o nullable.
+    }
+  }
 
   // Migración defensiva: columnas del lobby multijugador en `matches`.
   const matchCols = await db.all(`PRAGMA table_info(matches)`);
@@ -209,6 +262,22 @@ async function openAndMigrate(): Promise<Database> {
   if (!matchNames.has('host_id')) await db.exec(`ALTER TABLE matches ADD COLUMN host_id TEXT`);
   if (!matchNames.has('players_json'))
     await db.exec(`ALTER TABLE matches ADD COLUMN players_json TEXT`);
+
+  // Migración defensiva: columna target en moves
+  const moveCols = await db.all(`PRAGMA table_info(moves)`);
+  if (!moveCols.some((c: { name: string }) => c.name === 'target')) {
+    await db.exec(`ALTER TABLE moves ADD COLUMN target TEXT`);
+  }
+
+  // Scope Gen 1 (D11): el juego solo usa los 151. La gacha/loot/starter ya conceden solo
+  // Gen 1, pero pudo quedar inventario HEREDADO de Gen 2+ de antes de acotar el pool. Se
+  // purga aquí (idempotente): retira del inventario todo lo que no sea Gen 1.
+  const gen1Lower = GEN1_NAMES.map((n) => n.toLowerCase());
+  const placeholders = gen1Lower.map(() => '?').join(',');
+  await db.run(
+    `DELETE FROM owned_pokemon WHERE lower(name) NOT IN (${placeholders})`,
+    ...gen1Lower
+  );
 
   return db;
 }

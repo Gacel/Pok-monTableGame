@@ -5,7 +5,7 @@
  * DTOs de API y utilidades comunes. Mantener este paquete como única fuente
  * de verdad para que los servicios no se desincronicen.
  *
- * A medida que avance el plan (ver docs/IMPLEMENTATION_PLAN.md) aquí irán:
+ * A medida que avance el plan (ver docs/01-IMPLEMENTATION_PLAN.md) aquí irán:
  *   - auth.ts      → verificación de JWT y hook requireAuth (C1.4)
  *   - vault.ts     → cliente de secretos (C1.1)
  *   - events.ts    → contratos de eventos RabbitMQ (C2.1)
@@ -21,6 +21,8 @@ export * from './ws.js';
 // ÚNICA fuente de verdad; backend y frontend re-exportan desde aquí.
 export * from './domain.js';
 export * from './match.js';
+export * from './combat.js';
+export * from './balls.js';
 
 /** Estado de presencia de un usuario (status-service). */
 export type PresenceStatus = 'online' | 'offline' | 'in-game';

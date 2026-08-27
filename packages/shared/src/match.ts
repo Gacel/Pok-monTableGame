@@ -3,39 +3,52 @@
  * ÚNICA fuente de verdad. El servidor es autoritativo: el cliente recibe
  * `MatchStateDTO` y solo renderiza.
  */
-import type { Hex, Pokemon, Tile, PlayerResources } from './domain.js';
+import type { Pokemon, Tile, PlayerResources } from './domain.js';
+import type { BallKey } from './balls.js';
 
-export type MatchStatus = 'active' | 'combat' | 'finished';
-export type CombatAction = 'ATACAR' | 'HABILIDAD' | 'OBJETO' | 'HUIR' | 'MOVE' | 'TARGET';
+export type MatchStatus = 'deployment' | 'active' | 'finished';
+export type CombatAction = 'ATACAR' | 'HABILIDAD' | 'OBJETO' | 'HUIR' | 'MOVE';
+
+/** Tipos de evento puntual de una acción/turno (feedback visual en el cliente). */
+export type TurnEventKind =
+  | 'damage'
+  | 'heal'
+  | 'ko'
+  | 'reveal'
+  | 'knockback'
+  | 'dash'
+  | 'capture'
+  | 'evolve';
 
 /**
- * Estado de un combate interactivo por turnos ("varios contra uno"): un atacante
- * solitario contra uno o VARIOS defensores del mismo jugador a rango. Los campos
- * `defender*` reflejan el objetivo actual del atacante (`targetId`).
+ * Evento puntual de una acción/turno, para feedback visual (números flotantes,
+ * flashes, tweens). Efímero: se resetea al inicio de cada acción, viaja en el DTO
+ * y NO se persiste (mismo patrón que `defeats`/`rewards`).
  */
-export interface CombatState {
-  attackerId: string;
-  defenderId: string;
-  attackerHex: Hex;
-  defenderHex: Hex;
-  attacker: Pokemon;
-  defender: Pokemon;
-  attackerPlayer: string;
-  defenderPlayer: string;
-  /** Todos los defensores que participan. */
-  defenders: Pokemon[];
-  /** Hexes paralelos a `defenders`. */
-  defenderHexes: Hex[];
-  /** Id del defensor al que el atacante dirige sus acciones. */
-  targetId: string;
-  /** Id del Pokémon que debe elegir acción ahora. */
-  turnActorId: string;
-  round: number;
-  log: string[];
-  status: 'active' | 'finished';
-  winnerId: string | null;
-  loserId: string | null;
-  outcome: 'ko' | 'fled' | null;
+export interface TurnEvent {
+  kind: TurnEventKind;
+  /** Id de la pieza implicada (identidad). */
+  pokemonId?: string;
+  /** Casilla donde ocurre (posición para el número flotante / flash). */
+  hex?: Tile['hex'];
+  /** Variación de HP con signo: daño negativo, curación positiva. */
+  delta?: number;
+  /** Origen/destino de un desplazamiento (knockback/dash) — tickets posteriores. */
+  from?: Tile['hex'];
+  to?: Tile['hex'];
+  /** El daño lo interceptó un `large` (bodyblocking): el cliente muestra un escudo (T4.4). */
+  blocked?: boolean;
+}
+
+/** Captura (Survival) o robo (BR) resuelto tras un KO. Para el feedback del cliente (T8.5). */
+export interface CaptureResult {
+  /** Slot del ganador que se lleva el Pokémon. */
+  slot: string;
+  /** Especie capturada/robada. */
+  name: string;
+  /** `capture` = salvaje capturado (Survival); `steal` = instancia robada a un rival (BR);
+   *  `lost` = instancia PROPIA perdida al caer (Survival). */
+  kind: 'capture' | 'steal' | 'lost';
 }
 
 /** Estado autoritativo de la partida (DTO que difunde el servidor). */
@@ -49,15 +62,39 @@ export interface MatchStateDTO {
   winner: string | null;
   resources: Record<string, PlayerResources>;
   log: string[];
-  combat: CombatState | null;
   /** Alianzas 2v2 ([[p1,p3],[p2,p4]]); null en todos contra todos. */
   alliances: string[][] | null;
   /** Jugadores ya eliminados (sin Pokémon o que abandonaron). */
   eliminated: string[];
   /** ARENA: partida persistente que nunca termina. */
   persistent: boolean;
-  /** Bajas por KO de la última acción (para economía). Efímero, no persistido. */
-  defeats: { killerSlot: string; victimSlot: string }[];
+  /** Bajas por KO de la última acción (para economía, XP y captura). Efímero, no persistido.
+   *  `killerOwnedId`: instancia del atacante (XP, T6.1). `victimOwnedId`: instancia de la
+   *  víctima si era propia (robo PvP, T8.4). `victimName`: especie (capturar salvaje, T8.2). */
+  defeats: {
+    killerSlot: string;
+    victimSlot: string;
+    killerOwnedId?: string;
+    victimOwnedId?: string;
+    victimName?: string;
+  }[];
+  /** Capturas/robos resueltos en la última acción (feedback, T8.5). Efímero, no persistido. */
+  captures?: CaptureResult[];
+  /** Tiempo límite de la fase de despliegue en formato UNIX (ms). */
+  deploymentDeadline?: number;
+  /** Pokémon pendientes de desplegar en Turno 0. */
+  reserve?: Record<string, Pokemon[]>;
+  /** Casillas válidas para el despliegue de cada jugador. */
+  deploymentZones?: Record<string, Tile['hex'][]>;
+  /** KOs acumulados por slot durante la partida (para el resumen de recompensa). Persistido. */
+  kos?: Record<string, number>;
+  /**
+   * Bolas a conceder al usuario de cada slot (al ganar o abandonar en arena).
+   * Efímero, patrón `defeats`: no se persiste, viaja en el DTO y la economía lo consume.
+   */
+  rewards?: { slot: string; balls: BallKey[] }[];
+  /** Eventos de la última acción para feedback visual. Efímero, no persistido. */
+  events?: TurnEvent[];
 }
 
 /** Alias histórico usado por el frontend. */

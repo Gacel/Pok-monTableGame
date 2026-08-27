@@ -1,0 +1,1663 @@
+# Roadmap de Jugabilidad por Épicas y Tickets
+
+> Reescritura completa del antiguo TICKETS_TACTICS. Convierte el diseño de
+> [`11-GAME_DESIGN_ROADMAP.md`](11-GAME_DESIGN_ROADMAP.md) **y** el resto de la
+> jugabilidad pendiente (obtención de Pokémon, progresión, evolución, social) en
+> tickets listos para desarrollar. Alcance: **todo lo jugable**; la infraestructura
+> pura (Vault/RabbitMQ/Redis/microservicios/ModSecurity/CI/pruebas de carga) queda
+> fuera y se sigue en [`01-IMPLEMENTATION_PLAN.md`](01-IMPLEMENTATION_PLAN.md) /
+> [`03-ARCHITECTURE.md`](03-ARCHITECTURE.md).
+
+## Cómo leer este documento
+
+- El trabajo se agrupa en **épicas** (tareas padre). Cada épica contiene **tickets**.
+- Cada ticket tiene: **Historia de usuario · Objetivos de desarrollo · Dudas
+  resueltas · Criterios de aceptación · Investigación** (archivos/funciones a tocar,
+  con líneas verificadas contra la rama `tactics`) **· Dependencias · Paralelizable**.
+- Notación de dependencias: **[P]** = sin dependencias, arrancable en paralelo ·
+  **→X** = depende del ticket X.
+- **Todo ticket de motor (`engine/`) incluye tests unitarios** como criterio de
+  aceptación (es lógica pura). Los de servicio/frontend se validan con smoke/e2e
+  manual en local **y** online/arena vía Docker (`make up`).
+- **Rama de trabajo:** todo se desarrolla sobre `tactics` (reconciliada en la Épica R);
+  al cerrar cada épica se mergea `tactics → main`.
+
+## Estado real verificado (correcciones al doc 11)
+
+- **Divergencia de ramas (crítico):** `tactics` y `origin/main` divergieron desde
+  `0edf5f7`. `origin/main` tiene 7 commits (~1172 líneas) que a `tactics` le faltan
+  (menú de inventario vender/**regalar**, **cofres con pokéballs como botín**,
+  acciones de objetos, `balls.ts`). El `main` **local** está viejo. Se reconcilia en
+  la **Épica R** antes de nada.
+- **Fase 3:** sigilo/emboscada ×1.5/niebla de guerra reales; falta revelar al oculto
+  golpeado por AoE y el flash de revelado.
+- **Fase 4:** ✅ el daño de pantano **ya está activo** (T0.2: `applyEndOfTurnEffects`
+  usa el bioma real y el mapa genera losetas `SWAMP`). Faltan fantasmas-atraviesan (T2.1)
+  y curación de Planta en hierba (T2.2).
+- **Fase 5:** knockback/dash/carga inexistentes; `PokemonMove` no tiene esos campos.
+- **Fase 6:** tamaños con infra (`getOccupiedHexes` da 7 hexes a `large`) pero todo
+  Pokémon se crea `'medium'`; no hay trazado de línea hex ni redondeo cúbico.
+- **Economía/progresión:** candies se ganan pero **nunca se gastan**;
+  `owned_pokemon.level` **siempre 1** y el combate **ignora el nivel**; **evolución
+  inexistente**; stub `OwnedPokemonModel.transfer` (captura) **sin llamadas**; loot
+  pool son **200** Pokémon (#1-200), no 151; el equipo se envía **por nombre** (se
+  pierde la instancia). "Survival" y "ENVIAR REGALO" son placeholders de UI sin backend.
+
+## Decisiones de diseño transversales (dudas ya resueltas con el usuario)
+
+| # | Decisión |
+|---|----------|
+| D1 | **Fantasmas** atraviesan a todos (aliados y enemigos); solo no pueden terminar en casilla ocupada. |
+| D2 | **Knockback**: distancia por movimiento (1-3); **Large inmunes**; **colisión 10% maxHP**. |
+| D3 | **Bodyblocking**: Large intercepta ataques `line` **y** ondas radiales (`radius`/`cone`) desde detrás (LoS por hex del AoE). |
+| D4 | **Feedback visual completo**: números flotantes, flash de revelado "!", tweens de empuje/dash. |
+| D5 | **Moves tácticos** etiquetados por **lista curada manual** (nombre PokeAPI → efecto). |
+| D6 | **Tamaños de los 151**: auto por height/weight de PokeAPI + mapa de overrides. |
+| D7 | **Ataques de 2 turnos (carga)**: **aplazados** como feature opcional. |
+| D8 | **Local y Online/Arena** soportados desde el inicio en cada mecánica. |
+| D9 | **Curación Planta en hierba alta**: **8% maxHP/turno**. |
+| D10 | **Captura**: modo **Survival** (1J vs IA) con captura al derrotar, pérdida permanente y recuperación en tienda (10000 🪙); **+ robo PvP en Battle Royale**. |
+| D11 | **Scope Gen 1**: clamp a **#1-151** como fuente única de verdad. |
+| D12 | **Equipos por instancia** (`ownedId`): la partida usa nivel/stats/forma reales. |
+| D13 | **Evolución**: **meta (hub) + in-match**, **fiel a PokeAPI** (nivel/piedra/intercambio). |
+| D14 | **Niveles/XP**: XP en batalla + subida de nivel + **escalado de stats**. |
+| D15 | **Draft eliminado**: todos los modos usan Pokémon propios. |
+| D16 | **Objetos de evolución** (piedras, etc.) como **drops post-combate + compra en tienda** (reutiliza cofres). |
+| D17 | **Evoluciones por intercambio**: se implementa un **sistema de intercambio** (Pokémon + objetos + monedas) que las dispara. |
+
+**Defaults ajustables** (no bloquean, se afinan en desarrollo): curva de XP y escalado
+de stats (lineal, cap nivel 100), tabla piedra→especie, nivel de captura (nace a
+nivel 1), tasas de drop, umbrales de height/weight para tamaños.
+
+---
+
+# ÉPICA R — Reconciliación de ramas (PRE-REQUISITO)
+
+> Bloquea todo. Trae a `tactics` el trabajo de economía/inventario de `origin/main`.
+
+## 🎟️ TR.1 — Merge `origin/main` → `tactics`
+
+**Historia de usuario:** Como equipo, quiero unificar el combate táctico (`tactics`)
+con el trabajo de economía/inventario/regalos/cofres (`origin/main`) en una sola rama,
+para construir el resto del roadmap sobre una base completa y sin duplicar trabajo.
+
+**Objetivos de desarrollo:**
+1. `git fetch origin` y `git merge origin/main` sobre `tactics`.
+2. Resolver conflictos. Focos probables (tocados por ambos lados): `GameService.ts`
+   (+167 líneas en main), `InventoryController.ts` (+111), `BoardView.ts` (+143),
+   `MinimapView.ts` (+60), `HUDView.ts` (+52), `EconomyService.ts`, `MatchManager.ts`,
+   `EntityView.ts`, `packages/shared` (`domain.ts`, `match.ts`, `index.ts` + `balls.ts` nuevo).
+3. Actualizar el `main` local a `origin/main`.
+
+**Dudas resueltas:** merge (no cherry-pick ni reimplementar); se trabaja sobre `tactics`.
+
+**Criterios de aceptación:**
+- [x] `make up` levanta el stack sin errores tras el merge (verificado por el usuario).
+- [x] `npm run typecheck` limpio en todo el monorepo (3 workspaces).
+- [x] Conviven: combate táctico + despliegue + sigilo (de `tactics`) con
+      inventario/cofres-botín/regalar/subastas/gacha (de `origin/main`).
+- [x] Se puede jugar una partida, abrir inventario, ver un cofre en el mapa y en el
+      minimapa, y usar el menú contextual de inventario.
+
+**Investigación:** `git log --oneline tactics..origin/main` (7 commits: `531d6f5`
+vender/regalar, `f6a6134` cofres-botín, `68dba2b` cofres en minimapa, `d02338d` perf
+arena, `a922f40`/`29c3635` fixes UI, `ca4b6cc` arena-cofre). Nuevos en main:
+`packages/shared/src/balls.ts`, `services/frontend/src/views/hub/ContextMenu.ts`,
+`services/game-service/src/routes/inventory.routes.ts`.
+
+**Dependencias:** ninguna. **Paralelizable:** no (bloquea todo el resto).
+
+### ✅ Resolución (lo realmente hecho) — desviación importante vs. el plan
+
+El plan original asumía un **merge mecánico**. En la práctica apareció un **choque de
+modelos de combate** que convirtió TR.1 en *merge + integración*:
+
+- **`tactics`** = combate **on-map** (skillshot AoE en estado `'active'`, `GameService.cast`).
+  **`origin/main`** = combate **interactivo antiguo** (estado `'combat'` + sub-estado
+  `this.combat`, `ATACAR/HABILIDAD/OBJETO/HUIR`, `finalizeCombat`/`continueCombat`),
+  con la **economía nueva de cofres/bolas injertada encima**.
+- **Decisión (consultada con el usuario):** conservar el combate **on-map de tactics**
+  (dirección del roadmap) y **re-enganchar la economía de cofres/bolas** a ese modelo,
+  descartando el combate interactivo de main.
+
+**Cambios de la resolución (7 ficheros en conflicto + 2 fixes de higiene):**
+- `GameService.ts` (9 bloques): combate on-map de tactics; **injerto de 2 líneas** en el
+  KO del `cast` (`this.addKo(caster.playerId)` + `this.dropBall(tile.occupant, tile.hex)`
+  antes de retirar la pieza). La recogida de cofres ya estaba enganchada al movimiento
+  (`collectFromTile`), y el KO por lava y el abandono/victoria ya soltaban bola / daban
+  `rewards` (auto-merge). Constructor / `serialize` / `deserialize` **unen** ambos conjuntos
+  de campos (`deploymentDeadline`/`reserve`/`deploymentZones` + `kos`/`chestRespawnTurn`).
+- Backend `controllers/GameController.ts`: conservados `deploy`/`cast`/`forceStart`,
+  eliminados `combatAction`/`combatContinue` (modelo viejo).
+- `packages/shared/{index,match}.ts`: unión de exports/campos (`combat` + `balls`;
+  despliegue + `kos`/`rewards`).
+- Frontend `GameController.ts` y `BoardView.ts`: unión conservando la economía de bolas
+  (`BALL_SPRITE`/`BALL_LABEL`/`BALL_TOP`/`BallKey`); eliminado `CombatAction` sin usar.
+- Frontend `MinimapView.ts`: **reconstruido en 2 bucles** (sombreado de despliegue de
+  tactics + marcadores de cofres/bolas de main); el auto-merge los había fundido en uno
+  roto con la condición `if (!t.chest && !t.groundBall) continue`.
+- Fix de higiene preexistente: `packages/shared/src/combat.ts` → `import type { Hex }`
+  (bloqueaba el build del frontend bajo `verbatimModuleSyntax`; error de `tactics`, no del merge).
+
+**Verificación:** `tsc` limpio en los 3 workspaces · tests game-service 9/9 y frontend 17/17 ·
+las 4 imágenes Docker compilan (incl. build de producción del frontend) y los servicios
+arrancan sin errores · `make up` funcionando (usuario). Revisión escéptica (manual, por
+límite de sesión del agente): sin features perdidas, integridad de constructor confirmada
+(solo 3 `new GameService(` internos), economía completamente alcanzable, sin handlers WS
+huérfanos.
+
+**Limpieza pendiente (no bloqueante, vestigios preexistentes):** tipos `combat_action`/
+`combat_continue` en `packages/shared/src/ws.ts` (ya sin handler) y un comentario a
+`CombatView` en `utils/theme.ts`.
+
+---
+
+# ÉPICA 0 — Fundaciones compartidas
+
+> Desbloquean el feedback visual, la geometría y los efectos de fin de turno. →TR.1
+
+## 🎟️ T0.1 — Canal de eventos de turno
+
+**Historia de usuario:** Como desarrollador de frontend, quiero que el servidor
+informe de qué pasó cada acción/turno (daños, curaciones, KOs, revelados,
+empujes, capturas), para poder animarlo sin adivinar diffeando estados.
+
+**Objetivos de desarrollo:**
+1. Añadir a `packages/shared` un tipo `TurnEvent` (`{ kind: 'damage'|'heal'|'ko'|
+   'reveal'|'knockback'|'dash'|'capture', pokemonId?, hex?, delta?, from?, to? }`) y un
+   campo `events: TurnEvent[]` en el DTO de estado (`match.ts` / `getStateDTO`).
+2. Poblar `events` durante `GameService.cast` (daños/KO), fin de turno (terreno) y
+   futuras acciones. Vaciarlo por difusión.
+3. Difundir en `GameActionService.apply` (ya hace `broadcastPersonalized`).
+
+**Dudas resueltas:** feedback visual completo (D4); eventos estructurados, no diff de HP.
+
+**Criterios de aceptación:**
+- [x] Cada respuesta/difusión de acción incluye `events` con lo ocurrido.
+- [x] Un ataque que hace 2 daños y 1 KO emite los eventos coherentes (damage + ko).
+- [x] `events` se reinicia entre acciones (no se acumula).
+
+**Investigación:** `GameService.cast` (`GameService.ts:388-470`), fog en
+`getStateDTO` (`GameService.ts:192-226`), difusión en `GameActionService.apply`
+(`GameActionService.ts:55-74`), DTO en `packages/shared/src/match.ts`.
+
+**Dependencias:** ninguna (tras TR.1). **Paralelizable:** sí.
+
+### ✅ Resolución (lo realmente hecho)
+
+Sin desviaciones de alcance; se modeló sobre el patrón efímero `defeats`/`rewards` ya
+presente tras el merge (TR.1). Cambios:
+- `packages/shared/src/match.ts`: `TurnEventKind`, `TurnEvent` y `events?: TurnEvent[]` en el DTO.
+- `services/frontend/src/models/Types.ts`: reexport de `TurnEvent`/`TurnEventKind`.
+- `GameService.ts`: campo `events`; reset en las 5 acciones (deploy/play/cast/endTurn/abandon);
+  emite `damage` (delta negativo) + `ko` en el KO del `cast` on-map y en `applyLavaDamage`;
+  ensamblado en `getStateDTO` con **filtro de niebla** (omite eventos de un enemigo aún oculto
+  para el solicitante; conserva los `ko` de piezas ya retiradas). No se serializa.
+- Tests: `services/game-service/test/turnEvents.test.ts` (damage, ko, reset, niebla).
+
+**Nota de scope:** T0.1 solo **emite** `damage`/`ko` (lo que ya existe); `heal`/`reveal`/
+`knockback`/`dash`/`capture` los emitirán sus tickets. Doc detallado:
+[`15-TURN_EVENTS.md`](15-TURN_EVENTS.md).
+
+**Verificación:** tsc 3 workspaces limpio · game-service 13/13 · frontend 17/17 · revisión
+escéptica SAFE (sin issues). Sin cambio visual (el consumo lo hará T0.4).
+
+## 🎟️ T0.2 — Refactor de efectos de fin de turno + curación + fix SWAMP
+
+**Historia de usuario:** Como jugador, quiero que el terreno aplique al final del
+turno todos sus efectos (daño de lava, **daño de pantano** y curaciones), no solo la
+lava, para que los biomas importen de verdad.
+
+**Objetivos de desarrollo:**
+1. Renombrar `applyLavaDamage()` → `applyEndOfTurnEffects()` y generalizarlo: recorrer
+   ocupantes y aplicar `terrainDamage` según su bioma actual (no solo `'FIRE'`).
+2. **Activar el daño de pantano** (hoy muerto: `terrainDamage` lo calcula pero nunca
+   se invoca con `'SWAMP'`).
+3. Permitir que `terrainDamage` devuelva **valores negativos = curación** (preparado
+   para T2.2), aplicando `hp = clamp(hp - dmg, 0, maxHp)`.
+4. Emitir eventos (T0.1) de daño/curación/KO.
+
+**Dudas resueltas:** el pantano sí debe dañar (fix del código muerto); curación se
+habilita aquí y la usa T2.2.
+
+**Criterios de aceptación:**
+- [x] Un Pokémon (no Veneno/Acero) sobre pantano pierde HP al final del turno.
+- [x] La lava sigue escalando (×2 por turno consecutivo, `lavaTurns`).
+- [x] `terrainDamage` puede devolver negativo sin romper nada (HP no supera `maxHp`).
+- [x] Tests unitarios del motor cubren lava (escalado), pantano y curación.
+
+**Investigación:** `applyLavaDamage` (`GameService.ts:518-540`), `terrainDamage`
+(`engine/environment.ts:67-85`), llamada desde `endTurn` (`GameService.ts:492`).
+
+**Dependencias:** ninguna (tras TR.1). Coordina con T0.1 para emitir eventos.
+**Paralelizable:** sí.
+
+### ✅ Resolución (lo realmente hecho) — con ampliación de alcance (mapa)
+
+El núcleo del ticket salió sin desviaciones; se **amplió** para que el pantano sea
+jugable de verdad (aparecía como código muerto pero **tampoco existía en el mapa**).
+
+- **`GameService.ts`:** `applyLavaDamage()` → **`applyEndOfTurnEffects()`**, generalizado a
+  todos los biomas: recorre ocupantes (dedup por id de cara a `large`), aplica
+  `terrainDamage(occ, tile.biome)` (fix del hardcode a `'FIRE'`), clamp
+  `hp = max(0, min(maxHp, hp - dmg))` (soporta curación negativa), emite `damage`/`heal`/`ko`
+  (canal T0.1) con logs por bioma (lava con `lavaTurns`, `☠️` pantano, `♻️` curación).
+- **`engine/environment.ts`:** sin cambios (ya calculaba 2 para `SWAMP`); el bug era del
+  consumidor. La regla de curación de Planta se deja para T2.2 (aquí solo la maquinaria).
+- **Ampliación — mapa (`engine/mapGenerator.ts`):** `classify` nunca producía `SWAMP`. Se
+  añade una regla de **humedal cálido de tierras bajas** (humedad alta + templado + poca
+  elevación) → pantanos contiguos junto al agua. Con la seed por defecto: **68** losetas en
+  el mapa normal (~10% de tierra) y **415** en arena. Los spawns ya evitan `SWAMP`.
+- **Ampliación — render (`frontend`):** `BoardView.drawHex` acepta un `tint` opcional; el
+  pantano se pinta con la textura de hierba + tinte turbio `rgba(58,74,44,0.62)` (sin asset
+  nuevo). `MinimapView` añade `SWAMP: '#4a5a34'`.
+
+**Verificación:** `tsc` limpio en los 3 workspaces · game-service **24/24** (11 nuevos en
+`test/environment.test.ts` + 13 de T0.1) · las 4 imágenes Docker compilan y arrancan sanas ·
+`make up` funcionando y comprobación visual del usuario (pantanos visibles, HP baja sobre
+pantano). Sin feedback de números flotantes (es T2.3). Doc detallado:
+[`16-TERRAIN_EFFECTS.md`](16-TERRAIN_EFFECTS.md).
+
+## 🎟️ T0.3 — Geometría hexagonal: `hexRound` + `hexLineDraw`
+
+**Historia de usuario:** Como desarrollador del motor, quiero trazar la línea recta
+real entre dos hexágonos, para implementar línea de visión, bodyblocking y direcciones
+de empuje/dash de forma correcta.
+
+**Objetivos de desarrollo:**
+1. Añadir a `engine/hex.ts`: conversión axial↔cube, `hexRound(fractional)` (redondeo
+   cúbico) y `hexLineDraw(a, b): Hex[]` (interpolación + `hexRound`, línea punto a punto).
+2. Tests unitarios exhaustivos (líneas rectas, diagonales, casos degenerados a==b).
+
+**Dudas resueltas:** hoy no existe trazado de línea real; `getLineArea` de shared es un
+rayo en una de 6 direcciones, no sirve para LoS punto a punto.
+
+**Criterios de aceptación:**
+- [x] `hexLineDraw(a, b)` devuelve la secuencia contigua de hexes de A a B, ambos incluidos.
+- [x] Tests cubren líneas en varias direcciones y longitudes.
+
+**Investigación:** `engine/hex.ts` (exports actuales: `createHex`, `hexAdd`,
+`hexSubtract`, `hexDistance`, `hexNeighbor(s)`, `hexEqual`; sin conversión cube ni
+line-draw). Referencia de AoE existente: `packages/shared/src/combat.ts`.
+
+**Dependencias:** ninguna (tras TR.1). **Paralelizable:** sí.
+
+### ✅ Resolución (lo realmente hecho)
+
+Sin desviaciones de alcance; lógica pura del motor en `engine/hex.ts`:
+- `Cube` + `axialToCube`/`cubeToAxial` (3ª coord `s = -q-r`).
+- `hexRound(frac)`: redondeo cúbico canónico (corrige la coord de mayor error para mantener
+  `q+r+s=0`; normaliza `-0`→`0`). Misma técnica que el `axialRound` del frontend, ahora en
+  el motor.
+- `hexLineDraw(a, b)`: interpolación + `hexRound` con nudge `(ε,ε,-2ε)`; secuencia contigua
+  A→B (ambos incluidos, longitud `dist+1`), determinista y simétrica. Reutiliza el
+  `hexDistance` cúbico existente. A diferencia de `getLineArea` (encaja a 1 de 6
+  direcciones), sigue la recta punto a punto.
+
+**Verificación:** `tsc` limpio · game-service **33/33** (9 nuevos en `test/hex.test.ts` +
+24 previos) · imagen Docker compila y arranca sana. Sin runtime todavía (lo consumen T3.1
+empuje, T3.3 dash, T4.3 LoS). Doc detallado: [`17-HEX_GEOMETRY.md`](17-HEX_GEOMETRY.md).
+
+## 🎟️ T0.4 — Primitivas de feedback visual (frontend)
+
+**Historia de usuario:** Como jugador, quiero ver animaciones claras (números que
+flotan, destellos, deslizamientos) de lo que ocurre en el tablero, para entender el
+combate de un vistazo.
+
+**Objetivos de desarrollo:**
+1. Crear utilidades frontend reutilizables sobre `#entities-layer`: componente de
+   **número flotante** (`-5` rojo / `+10` verde con animación CSS), **flash/"!"** de
+   aparición, y **helper de tween** de posición (desplazar un sprite de hex a hex).
+2. Consumir el `events` del DTO (T0.1) en `GameController.onRealtimeMessage`/`applyMatchState`
+   para disparar estas animaciones.
+
+**Dudas resueltas:** feedback visual completo (D4). Hoy solo hay un `transition` CSS de
+0.1s en `EntityView` y ningún sistema de números flotantes/flash/tween.
+
+**Criterios de aceptación:**
+- [x] Existe una API frontend para "mostrar número flotante en hex", "flash en hex" y
+      "tween de sprite de A a B".
+- [x] Un evento `damage` del servidor produce un número rojo sobre el objetivo.
+
+**Investigación:** `EntityView.ts` (render de sprites, transición L59/96/118),
+`GameController.ts` (`applyMatchState` L322-357, `onRealtimeMessage` L239-253),
+`GameState.pokeGifs`. Nuevo util en `services/frontend/src/utils/`.
+
+**Dependencias:** →T0.1. **Paralelizable:** no (necesita el canal de eventos).
+
+### ✅ Resolución (lo realmente hecho)
+
+- **Capa `#fx-layer`** propia en `index.html` (separada de `#entities-layer`, cuyo bucle de
+  limpieza borra hijos no-ocupantes); z-30, sobre sprites y bajo el HUD.
+- **`BoardView.hexToScreen`**: se extrae la transformación hex→pantalla (antes duplicada en
+  `EntityView`) a un método público; `EntityView` se refactoriza para reutilizarlo.
+- **`FxLayer`** (`utils/fx.ts`): `floatingNumber`/`flash`/`tween` con Web Animations API,
+  auto-limpieza y contorno negro nítido de 8 direcciones (constante `OUTLINE`). El número
+  dura ~1.5s con fase de permanencia (tras iterar el estilo con el usuario: se descartó el
+  trazo blanco `-webkit-text-stroke` por emborronar; rojo `#ff5252` con contorno negro).
+- **`GameController.dispatchEvents`**: consume `state.events` en `applyMatchState`; omite la
+  carga inicial y **deduplica por firma** (`turn|player|events`) el doble disparo online
+  (respuesta HTTP + eco WS). Cablea `damage` → número rojo; el resto de `kind`, sus tickets.
+
+**Verificación:** `tsc` frontend limpio · tests frontend 17/17 · imagen Docker reconstruida
+y stack sano (frontend HTTP 200) · OK visual del usuario (número rojo con contorno, ~1.5s,
+sin duplicados). Doc detallado: [`18-VISUAL_FEEDBACK.md`](18-VISUAL_FEEDBACK.md).
+
+---
+
+# ÉPICA 1 — Completar Sigilo (Fase 3)
+
+## 🎟️ T1.0 — Terrenos completos en el mapa + gráficos únicos (PRERREQUISITO)
+
+**Historia de usuario:** Como jugador, quiero que el mapa tenga hierba alta y montañas de
+verdad (con gráfico y relieve propios), para que el sigilo y el terreno importen.
+
+**Objetivos de desarrollo:** generar `TALL_GRASS` y `MOUNTAIN` en el generador procedural
+(nunca aparecían) y dar gráfico distintivo a hierba alta / montaña / pantano, con relieve
+(altura) en los dos primeros; colores de minimapa.
+
+**Dudas resueltas (con el usuario):** assets PNG propios (1024²); los terrenos con relieve
+llevan un dibujo adicional encima para dar altura; alcance = hierba alta + montaña + pantano.
+
+**Criterios de aceptación:**
+- [x] El mapa genera `TALL_GRASS` y `MOUNTAIN` (además de `SWAMP`) en cantidades visibles; test lo verifica.
+- [x] Hierba alta, montaña y pantano tienen gráfico propio; hierba alta y montaña muestran relieve/altura.
+- [x] El minimapa refleja los tres terrenos con color propio.
+
+### ✅ Resolución (lo realmente hecho)
+
+- **`mapGenerator.classify`**: MOUNTAIN en alta cota no-fría/no-seca; TALL_GRASS en tierras
+  medias húmedas. Los 8 biomas presentes (normal y arena); FIRE reequilibrado (umbral 0.58).
+- **Assets (usuario)**: `swamp/tall_grass/mountain.png` (base) + `*_relief.png` (relieve).
+  `BoardView`: texturas + `drawRelief` (altura, ocluido por Y, oscurecido en niebla), fin
+  del tinte-hack de SWAMP; `MinimapView`: colores nuevos.
+- **Fix**: el relieve escalaba al ² con el zoom (se quitó el `*zoom` redundante).
+- Test `mapGenerator.test.ts` (presencia de biomas). Doc: [`19-TERRAIN_MAP.md`](19-TERRAIN_MAP.md).
+
+**Dependencias:** →TR.1. **Paralelizable:** sí (prerrequisito de T1.1/T1.2).
+
+## 🎟️ T1.3 — Ocultación local desde la perspectiva del humano (frontend)
+
+**Historia de usuario:** Como jugador vs-IA, no quiero ver los Pokémon ocultos del rival
+(sí los míos, translúcidos), y en hot-seat (pantalla compartida) da igual mostrar todo.
+
+**Criterios de aceptación:**
+- [x] En vs-IA, los ocultos de la IA no se renderizan (tablero y minimapa); los míos, translúcidos.
+- [x] Hot-seat muestra todo; online sin cambios (server ya censura).
+
+### ✅ Resolución
+
+`GameState.hiddenAllySlots` (null en online/hot-seat; equipo humano en vs-IA), calculado en
+`GameController.updateStealthPerspective`; `EntityView`/`MinimapView` omiten los ocultos
+enemigos y pintan translúcidos los propios. Doc: [`20-LOCAL_PRESENTATION.md`](20-LOCAL_PRESENTATION.md).
+
+**Dependencias:** →TR.1. **Paralelizable:** sí.
+
+## 🎟️ T1.4 — Presentación y control local (cámara, agua, nombres, turno vs-IA)
+
+**Historia de usuario:** Como jugador, quiero mover la cámara con teclado, que los Pokémon
+no "bailen", ver nombres reales (y a la IA como tal), un efecto de agua, y no poder actuar
+en el turno de la IA.
+
+**Criterios de aceptación:**
+- [x] Cámara con WASD/flechas (suave), sprites estáticos sobre el mapa al mover cámara.
+- [x] En vs-IA, el humano no actúa ni ve el botón FINALIZAR TURNO en el turno de la IA.
+- [x] Etiquetas con nombre real de jugador; la IA se llama "IA".
+- [x] Pokémon en agua medio sumergido (2/3) con línea de flotación; zoom disponible en despliegue.
+
+### ✅ Resolución
+
+`GameController`: paneo `panKeys`/`startPanLoop` (WASD solo sin pieza; flechas siempre),
+`isMyTurn` local = `!isBotSlot`, `endTurn(fromBot)`, botón por `updateTurnControls`, IA
+bautizada en `setBots`, zoom bloqueado solo en `finished`. `GameState.cameraMoving` +
+`EntityView` (sin transición al mover; agua: máscara 2/3 + recentrado + línea de flotación
+`wl-`; nombre por `labelFor`). Doc: [`20-LOCAL_PRESENTATION.md`](20-LOCAL_PRESENTATION.md).
+
+**Dependencias:** →T1.0. **Paralelizable:** no (surge de probar el terreno).
+
+## 🎟️ T1.1 — Revelación por daño AoE (backend)
+
+**Historia de usuario:** Como jugador, quiero que un Pokémon oculto en hierba alta se
+revele si lo alcanza un ataque de área, para que el sigilo no sea inmune al fuego a ciegas.
+
+**Objetivos de desarrollo:**
+1. En el bucle de daño de `GameService.cast` (~L435-458), tras dañar a un
+   `tile.occupant` con `isHidden === true`, ponerlo `isHidden = false`, registrar log
+   ("👁️ ¡X descubierto!") y emitir evento `reveal` (T0.1).
+2. No afecta al multiplicador de emboscada del atacante (se sigue evaluando por su
+   `isHidden` al inicio del cálculo).
+
+**Dudas resueltas:** el flash visual va en T1.2 (feedback completo, D4).
+
+**Criterios de aceptación:**
+- [x] Un AoE sobre hierba con un oculto enemigo en el radio lo revela (pasa a visible
+      en el DTO del rival).
+- [x] La emboscada ×1.5 solo aplica si el **atacante** estaba oculto al lanzar.
+- [x] Test unitario/integración del revelado por daño.
+
+**Investigación:** `GameService.cast` bucle de daño (`GameService.ts:435-458`, KO en
+452), `updateStealthVisibility` (`GameService.ts:343-385`), emboscada en
+`engine/combat.ts:27`.
+
+**Dependencias:** ninguna (mejor con T0.1 para el evento). **Paralelizable:** sí.
+
+### ✅ Resolución (lo realmente hecho)
+
+- Flag **`revealed`** en `Pokemon` (`packages/shared/src/domain.ts`): un oculto golpeado por
+  AoE que sobrevive pasa a `isHidden=false`, `revealed=true`, log `👁️` y evento `reveal`.
+- **Desviación necesaria:** `updateStealthVisibility` re-ocultaba al Pokémon en la misma
+  acción (corre tras `cast`); ahora su rama de re-ocultado exige `!revealed`. El flag se
+  limpia al **moverse** (`play`) para poder re-esconderse.
+- Emboscada intacta (depende de `caster.isHidden`, aún activo durante el cálculo).
+- Tests: `stealthReveal.test.ts` (revelado persistente, emboscada, KO); actualizado el test
+  de niebla de T0.1 (un oculto golpeado ahora se revela). game-service 39/39.
+- Doc: [`21-STEALTH_REVEAL.md`](21-STEALTH_REVEAL.md).
+
+## 🎟️ T1.2 — Flash de revelado "!" (frontend)
+
+**Historia de usuario:** Como jugador, quiero un destello/"!" estilo Metal Gear cuando
+un enemigo oculto aparece de golpe, para notar la emboscada revelada.
+
+**Objetivos de desarrollo:**
+1. Al recibir un evento `reveal` (o cuando un sprite enemigo pasa de ausente→presente),
+   reproducir el flash/"!" de T0.4 sobre su hex.
+
+**Dudas resueltas:** animación "!" (D4).
+
+**Criterios de aceptación:**
+- [x] Al revelarse un enemigo, se ve el flash/"!" antes de asentar el sprite.
+
+**Investigación:** `EntityView.ts` (aparición de nodos, sin animación de entrada hoy),
+util de T0.4.
+
+**Dependencias:** →T1.1, →T0.4. **Paralelizable:** no.
+
+### ✅ Resolución (lo realmente hecho)
+
+Cambio de una línea: `GameController.dispatchEvents` añade `case 'reveal'` →
+`fxLayer.flash(ev.hex)` (primitiva `flash` de T0.4). El servidor solo emite el `reveal`
+cuando la pieza ya es visible (filtro de niebla), así que el flash aparece solo para quien
+debe verlo. Verificado (usuario) en vs-IA. Doc: [`21-STEALTH_REVEAL.md`](21-STEALTH_REVEAL.md).
+**Cierra la Épica 1 (Sigilo).**
+
+---
+
+# ÉPICA 2 — Pasivas y Terreno Avanzado (Fase 4)
+
+## 🎟️ T2.1 — Fantasmas atraviesan unidades (backend)
+
+**Historia de usuario:** Como estratega, quiero que mis Pokémon Fantasma atraviesen a
+otras unidades al moverse, para posicionarlos de forma etérea.
+
+**Objetivos de desarrollo:**
+1. En `getMoveOptions` (`movement.ts:71-83`), si `pokemon.type === 'GHOST'`, no cortar
+   el Dijkstra al encontrar un ocupante (seguir expandiendo).
+2. Excluir los hexes ocupados como **destino final** válido (no puede terminar encima).
+3. Mantener el marcado de enemigos adyacentes como objetivos de ataque.
+
+**Dudas resueltas (D1):** paso libre por todos (aliados y enemigos), sin ataque de
+oportunidad; solo no puede terminar en casilla ocupada.
+
+**Criterios de aceptación:**
+- [x] Un Fantasma calcula rutas atravesando montañas y otras piezas.
+- [x] No puede terminar su movimiento en una casilla ocupada.
+- [x] Un no-Fantasma sigue bloqueado por ocupantes (sin regresión).
+- [x] Tests del motor para ambos casos.
+
+**Investigación:** `getMoveOptions` occupant-skip (`movement.ts:71` check, `:83`
+`continue`), tipos con coste 1 ya en `environment.ts:31` (FLYING/GHOST).
+
+**Dependencias:** ninguna (tras TR.1). **Paralelizable:** sí.
+
+### ✅ Resolución (lo realmente hecho)
+
+En `getMoveOptions`, para `GHOST` se expande el Dijkstra a través de la casilla ocupada
+(coste 1, registrada en `costSoFar`/`queue`) **sin añadirla a `moves`** (no puede terminar
+encima); se conserva el ataque a enemigos adyacentes y no se ataca a aliados. `play` ya
+rechaza terminar sobre pieza (valida contra `moves`). Test `movement.test.ts` (4 casos).
+game-service 43/43. Doc: [`22-PASSIVES_TERRAIN.md`](22-PASSIVES_TERRAIN.md).
+
+## 🎟️ T2.2 — Curación de Planta en hierba + daño de pantano visible
+
+**Historia de usuario:** Como jugador con Pokémon de Planta, quiero que se regeneren al
+acabar el turno sobre hierba alta, y que el pantano envenene a quien no sea Veneno/Acero.
+
+**Objetivos de desarrollo:**
+1. En `terrainDamage`, si `terrain === 'TALL_GRASS' && pokemon.type === 'GRASS'`,
+   devolver curación negativa = **8% de maxHp** (D9).
+2. Confirmar el daño de pantano ya activado en T0.2; emitir eventos heal/damage (T0.1).
+3. Logs apropiados ("♻️ X se regenera", "☠️ X sufre el pantano").
+
+**Dudas resueltas (D9):** 8% maxHP/turno de curación.
+
+**Criterios de aceptación:**
+- [x] Un Planta sobre hierba alta recupera ~8% maxHp al final de su turno (sin pasar maxHp).
+- [x] Un no-Veneno/Acero pierde HP en pantano.
+- [x] Tests del motor para curación y pantano.
+
+**Investigación:** `terrainDamage` (`environment.ts:67-85`, TALL_GRASS cae a `return 0`
+en L84), fin de turno de T0.2.
+
+**Dependencias:** →T0.2. **Paralelizable:** no.
+
+### ✅ Resolución (lo realmente hecho)
+
+`terrainDamage`: `TALL_GRASS`+`GRASS` → `-Math.round(0.08*maxHp)`. `applyEndOfTurnEffects`
+emite el **delta real aplicado** (`applied = hp - before`; sin `heal` fantasma a HP lleno).
+Tests en `environment.test.ts` (curación, clamp, sin evento a tope). game-service 46/46.
+Doc: [`22-PASSIVES_TERRAIN.md`](22-PASSIVES_TERRAIN.md).
+
+## 🎟️ T2.3 — Números flotantes de daño/curación (frontend)
+
+**Historia de usuario:** Como jugador, quiero ver los números de daño y curación sobre
+los Pokémon, en combate y al final del turno, para seguir lo que pasa sin mirar el log.
+
+**Objetivos de desarrollo:**
+1. Consumir eventos `damage`/`heal` (T0.1) y pintar el número flotante (T0.4) sobre el
+   sprite correspondiente, tanto en `cast` como en efectos de fin de turno.
+
+**Dudas resueltas:** feedback completo (D4).
+
+**Criterios de aceptación:**
+- [x] Al recibir daño de un ataque, aparece `-N` rojo sobre el objetivo.
+- [x] Al curarse en hierba, aparece `+N` verde al final del turno.
+
+**Investigación:** util de T0.4, `EntityView`/`GameController` para localizar el hex→pixel.
+
+**Dependencias:** →T0.1, →T0.2, →T0.4. **Paralelizable:** no.
+
+### ✅ Resolución (lo realmente hecho)
+
+`GameController.dispatchEvents` añade `case 'heal'` → `fxLayer.floatingNumber(hex, '+N',
+'heal')` (verde). El `-N` rojo de combate y de fin de turno ya se pintaba desde T0.4.
+Verificado (usuario). Doc: [`22-PASSIVES_TERRAIN.md`](22-PASSIVES_TERRAIN.md). **Cierra la Épica 2.**
+
+## 🎟️ FIX-voladores — Los voladores sufrían daño de suelo (lava/pantano) ✅
+
+**Historia:** Como jugador, quiero que mis Pokémon voladores **no** sufran daño de pantano ni
+de lava (no pisan el suelo), aunque en el juego tengan otro tipo (Charizard, Gyarados…).
+
+**Bug:** `terrainDamage` solo eximía al tipo de dominio `FLYING`, pero con el modelo de **tipo
+único** casi ningún volador Gen 1 tiene Flying como primario, así que recibían daño de suelo.
+
+**Criterios de aceptación:**
+- [x] Una especie voladora (Flying en cualquier slot) es inmune a lava y pantano.
+- [x] No cambia el movimiento, solo el daño de terreno. Tests.
+
+### ✅ Resolución (lo realmente hecho)
+
+Ver [`16-TERRAIN_EFFECTS.md`](16-TERRAIN_EFFECTS.md) §FIX-voladores. Marca `airborne` derivada
+por especie (`engine/airborne.ts`, set curado Gen 1), fijada en `getTemplate` como `size`/
+`scale`; `terrainDamage` devuelve 0 en FIRE/SWAMP para `airborne`. game-service 105/105.
+
+---
+
+# ÉPICA 3 — Movimientos Tácticos (Fase 5)
+
+## 🎟️ T3.1 — Empuje / Knockback (backend)
+
+**Historia de usuario:** Como jugador táctico, quiero ataques que empujen al enemigo
+hacia atrás, para descolocarlo, alejarlo de un aliado o estamparlo contra un obstáculo.
+
+**Objetivos de desarrollo:**
+1. Extender `PokemonMove` (`domain.ts`) con `knockback?: number` (1-3).
+2. Mapa curado manual (D5): nombres de moves PokeAPI → `knockback` (ej. `roar`,
+   `whirlwind`, `dragon-tail`, `bulldoze`…), aplicado en la curación de moves
+   (`PokemonService`).
+3. En `GameService.cast`, tras el daño, si `move.knockback`, calcular la dirección hex
+   (vector atacante→víctima) y mover al defensor N hexes con `board.moveOccupant`.
+   **Large inmunes** (no se mueven). Si choca con obstáculo/pieza/borde, se detiene y
+   recibe **10% maxHp** de colisión. Emitir evento `knockback` (T0.1).
+
+**Dudas resueltas (D2):** distancia por movimiento (1-3); Large inmunes; colisión 10%.
+
+**Criterios de aceptación:**
+- [x] Un ataque con knockback empuja al defensor su nº de hexes en la dirección correcta.
+- [x] Si choca con obstáculo/pieza/borde, se detiene y recibe 10% maxHp.
+- [x] Un defensor `large` no se mueve por empuje.
+- [x] Tests del motor: dirección, tope por colisión, inmunidad large.
+
+**Investigación:** `PokemonMove` (`domain.ts:39-58`), `moveOccupant` (colisión atómica,
+`board.ts:70-102`), `getOccupiedHexes` (`board.ts:36-41`), `cast` (`GameService.ts:388-470`),
+`getCuratedMoves`/`toMove` (`PokemonService.ts:199-228`).
+
+**Dependencias:** →T0.1 (evento); recomendable →T0.3 (dirección). **Paralelizable:** parcial.
+
+### ✅ Resolución (lo realmente hecho)
+
+`PokemonMove.knockback?` + lista curada `engine/moveTactics.ts` (`KNOCKBACK_MOVES`/`getKnockback`,
+solo moves con daño); `toMove` la aplica. `hexDirection` en `engine/hex.ts`.
+`GameService.applyKnockback`: empuja N hexes (Large inmunes), colisión con obstáculo/pieza/borde
+= 10% maxHp (posible KO), evento `knockback` (from→to). Tests `knockback.test.ts` (61/61).
+Doc: [`25-TACTICAL_MOVES.md`](25-TACTICAL_MOVES.md).
+
+## 🎟️ T3.2 — Deslizamiento de empuje (frontend)
+
+**Historia de usuario:** Como jugador, quiero ver al Pokémon empujado deslizarse hacia
+atrás, para percibir el impacto.
+
+**Objetivos de desarrollo:** consumir evento `knockback` y animar el tween (T0.4) del
+defensor de su hex origen al destino.
+
+**Criterios de aceptación:**
+- [x] El defensor se desliza (no salta) a su nueva casilla tras el empuje.
+
+**Investigación:** util tween de T0.4, `EntityView`.
+
+**Dependencias:** →T3.1, →T0.4. **Paralelizable:** no.
+
+### ✅ Resolución (T3.2 + T3.4)
+
+`GameState.slidingIds` (one-shot) marcado en `dispatchEvents` al recibir `knockback`/`dash`;
+`EntityView` usa transición `left/top` de 0.28s para esos sprites → deslizan a su nuevo hex.
+Doc: [`25-TACTICAL_MOVES.md`](25-TACTICAL_MOVES.md).
+
+## 🎟️ T3.3 — Dash / Desplazamiento-ataque (backend)
+
+**Historia de usuario:** Como jugador, quiero ataques que me lancen en línea recta
+hacia el enemigo dañando a lo que atraviese, para cerrar distancias con estilo.
+
+**Objetivos de desarrollo:**
+1. `PokemonMove.dash?: boolean` + mapa curado (D5) (ej. `extreme-speed`, `quick-attack`).
+2. Nueva variante en el `GameAction` union (`GameActionService.ts:7-13`) o reutilizar
+   `cast` con flag; calcular la línea atacante→objetivo (`hexLineDraw`, T0.3), mover al
+   atacante a la casilla adyacente al objetivo y aplicar daño a lo atravesado.
+3. Emitir evento `dash` (T0.1).
+
+**Dudas resueltas (D5):** dash por lista curada.
+
+**Criterios de aceptación:**
+- [x] Un ataque dash mueve al atacante junto al objetivo y daña a los atravesados.
+- [x] Validación de turno/propiedad/alcance como el resto de acciones.
+- [x] Tests del motor de la trayectoria y el daño en línea.
+
+**Investigación:** `GameAction` union y `run` (`GameActionService.ts:7-13,30-46`),
+`cast` (`GameService.ts:388-470`), `hexLineDraw` (T0.3).
+
+**Dependencias:** →T0.3, →T0.1. **Paralelizable:** parcial.
+
+### ✅ Resolución (lo realmente hecho)
+
+`PokemonMove.dash?` + `DASH_MOVES`/`isDash` (moveTactics) con alcance en `MOVE_SHAPES`;
+`toMove` lo aplica. `GameService.castDash` (reutiliza `cast`): traza `hexLineDraw`, daña al
+primer enemigo embestido (KO/revelado incluidos), aterriza junto al objetivo (o en su
+casilla si lo mata), evento `dash`. Tests `dash.test.ts` (65/65). Doc:
+[`25-TACTICAL_MOVES.md`](25-TACTICAL_MOVES.md).
+
+## 🎟️ T3.4 — Deslizamiento de dash (frontend)
+
+**Historia de usuario:** Como jugador, quiero ver el desplazamiento del dash animado.
+
+**Objetivos de desarrollo:** consumir evento `dash` y animar el tween del atacante.
+
+**Criterios de aceptación:**
+- [x] El atacante se desliza por la línea hasta junto al objetivo.
+
+**Dependencias:** →T3.3, →T0.4. **Paralelizable:** no.
+
+## 🎟️ (DIFERIDO) T3.5 — Ataques de 2 turnos / carga (Vuelo, Excavar)
+
+**Estado:** **feature opcional, aplazada** (D7) — la más compleja (estado intermedio
+persistente + interacción con fog e IA). Se documenta el diseño (campo
+`Pokemon.chargingMove`, invulnerabilidad, acción de aterrizaje, UI de carga) pero **no
+se desarrolla en este lote**. Retomar tras estabilizar el resto de la Fase 5.
+
+---
+
+# ÉPICA 4 — Tamaños, Línea de Visión y Bodyblocking (Fase 6)
+
+## 🎟️ T4.1 — Tamaño por especie para los 151 (backend)
+
+**Historia de usuario:** Como jugador, quiero que cada especie tenga su tamaño real
+(Snorlax gigante, Pikachu pequeño), para que el tamaño tenga peso táctico.
+
+**Objetivos de desarrollo:**
+1. En `PokemonService.getTemplate`, derivar `size` de `height`/`weight` de PokeAPI
+   (umbrales ajustables) en vez del `'medium'` hardcodeado (L119/L135).
+2. Mapa de **overrides** para excepciones (ej. Onix alto pero fino; Snorlax pesado).
+3. Cubre los 151 (D6, D11).
+
+**Dudas resueltas (D6):** auto por height/weight + overrides.
+
+**Criterios de aceptación:**
+- [x] Snorlax/Lapras/Onix salen `large`; Pikachu/Clefairy/etc. `small`; el grueso `medium`.
+- [x] Un `large` ocupa 7 hexes en partida (ya soportado por `getOccupiedHexes`).
+- [x] Tests de la clasificación (con casos de override).
+
+**Investigación:** `getTemplate` size (`PokemonService.ts:119,135`), `getOccupiedHexes`
+(`board.ts:36-41`), `canEnter` large→montaña (`environment.ts:57-59`), tipo
+`PokemonSize` (`domain.ts:29-30`).
+
+**Dependencias:** ninguna (tras TR.1). **Paralelizable:** sí.
+
+### ✅ Resolución (lo realmente hecho)
+
+`engine/sizes.ts` (`sizeForSpecies`, mapa curado LARGE/SMALL de Gen 1 — D6, más fiable que
+height/weight). `getTemplate` lo aplica al template nuevo y al **cacheado** (cache-safe, sin
+reset de BD). `build`/`buildPokemon` ya propagan el size. Test `sizes.test.ts` (68/68).
+Doc: [`26-SIZES_LOS.md`](26-SIZES_LOS.md).
+
+## 🎟️ T4.2 — Render de Pokémon Large (frontend)
+
+**Historia de usuario:** Como jugador, quiero ver a los Pokémon grandes más grandes y
+las 7 casillas que ocupan resaltadas, para leer el tablero.
+
+**Objetivos de desarrollo:**
+1. `EntityView`: escalar el sprite (~2×) cuando `size === 'large'` (hoy `sSize` es fijo).
+2. `BoardView`: highlight de los 7 hexes ocupados por un large.
+
+**Criterios de aceptación:**
+- [x] Un large se ve claramente mayor y su huella (7 hexes) está resaltada.
+
+**Investigación:** `EntityView.ts` (`sSize = HEX_SIZE*1.5*zoom`, no lee `size`),
+`BoardView.ts` (sin concepto de huella multi-hex).
+
+**Dependencias:** →T4.1. **Paralelizable:** no.
+
+### ✅ Resolución (lo realmente hecho)
+
+`EntityView` agrupa por id y dibuja el sprite una vez en el **centro** (centroide), con
+escalado por tamaño (large ×2, small ×0.75). `BoardView` resalta la huella (ámbar) de cada
+casilla de un large. Doc: [`26-SIZES_LOS.md`](26-SIZES_LOS.md).
+
+## 🎟️ T4.3 — Línea de visión + Bodyblocking (backend)
+
+**Historia de usuario:** Como defensor, quiero usar a mis Pokémon grandes como muro
+para bloquear proyectiles y ondas y proteger a los que están detrás.
+
+**Objetivos de desarrollo:**
+1. Al resolver el daño de un ataque en `cast`, para cada hex del AoE trazar la línea
+   (`hexLineDraw`, T0.3) desde el atacante; si un hex intermedio está ocupado por un
+   `large`, el proyectil/onda **impacta en él** y no llega a lo que hay detrás.
+2. Aplica a ataques `line` **y** a radiales/cono desde detrás del coloso (D3).
+3. Un ataque `line` no puede seleccionar como objetivo válido a quien esté tras un large.
+
+**Dudas resueltas (D3):** bloquea línea Y radiales-detrás (LoS por hex del AoE).
+
+**Criterios de aceptación:**
+- [x] Un Hiperrayo contra alguien tras un `large` impacta en el `large`.
+- [x] Una explosión radial no daña a los hexes en sombra del `large`.
+- [x] Tests del motor de LoS/oclusión para line y radius/cone.
+
+**Investigación:** `cast` daño (`GameService.ts:435-458`), `calculateAoE`
+(`packages/shared/src/combat.ts:94-102`, sin conocimiento de ocupantes → el filtrado va
+en el llamador game-service), `hexLineDraw` (T0.3), `getOccupiedHexes` (`board.ts:36-41`).
+
+**Dependencias:** →T0.3, →T4.1. **Paralelizable:** no.
+
+### ✅ Resolución (lo realmente hecho)
+
+`GameService.losBlocker` (línea `hexLineDraw`, busca un large enemigo intermedio); el bucle
+de daño usa `victim = blocker ?? occupant` → el coloso recibe daño/KO/knockback/revelado y lo
+de detrás queda a la sombra. Aliados no bloquean; dedup por id. Tests `bodyblock.test.ts`
+(71/71). Doc: [`26-SIZES_LOS.md`](26-SIZES_LOS.md).
+
+## 🎟️ T4.4 — Feedback de intercepción (frontend)
+
+**Historia de usuario:** Como jugador, quiero ver que el proyectil impacta en el muro y
+no en mi objetivo, para entender por qué no hice daño.
+
+**Objetivos de desarrollo:** al recibir el resultado, mostrar el impacto sobre el `large`
+interceptor (flash/número) en vez de sobre el objetivo original.
+
+**Criterios de aceptación:**
+- [x] Un ataque bloqueado muestra el impacto en el coloso.
+
+**Dependencias:** →T4.3, →T0.4. **Paralelizable:** no.
+
+### ✅ Resolución (lo realmente hecho)
+
+El daño interceptado ya se emite en el hex del coloso (número flotante ahí). `TurnEvent.blocked?`
+marca el evento; `dispatchEvents` añade un flash de escudo 🛡️ sobre el coloso. Doc:
+[`26-SIZES_LOS.md`](26-SIZES_LOS.md).
+
+---
+
+# ÉPICA G — Gacha y coleccionismo (features en paralelo)
+
+> Trabajo desarrollado **en paralelo** por el usuario sobre la economía/tienda venida de
+> `origin/main` (TR.1). Se documenta a posteriori como tickets **ya resueltos**. Detalle:
+> [`23-SHINY_GACHA.md`](23-SHINY_GACHA.md).
+
+## 🎟️ TG.1 — Pokémon Shiny ✅
+
+**Historia de usuario:** Como coleccionista, quiero que los Pokémon puedan salir **shiny**
+(variante rara de color), con más probabilidad cuanto mejor es la Pokéball.
+
+**Criterios de aceptación:**
+- [x] `owned_pokemon.is_shiny` persistido (con migración defensiva).
+- [x] Probabilidad shiny por precio de bola (1% / 3% ≥1000 / 7% ≥2000 / 20% ≥10000) en
+      tienda y cofres.
+- [x] Sprites shiny de PokeAPI (`front_shiny`) y distintivo ✨ en inventario y ficha.
+
+### ✅ Resolución
+Backend: `db.ts` (columna + migración), `OwnedPokemonModel.grantMany(isShiny)`,
+`ShopController`/`InventoryController` (probabilidad + `isShiny` en respuesta), listado con
+`isShiny`. Frontend: `PokeSprites.getSprite(name, isShiny)` (fallback shiny, caché
+`name-shiny`), `InventoryView`/`PokemonDetailModal` (✨ + sprite shiny). Doc:
+[`23-SHINY_GACHA.md`](23-SHINY_GACHA.md).
+
+## 🎟️ TG.2 — Apertura cinemática de gacha + audio ✅
+
+**Historia de usuario:** Como jugador, quiero una apertura de Pokéball espectacular (tensión,
+escena sideral, revelado) con sonido y dramatismo según la rareza.
+
+**Criterios de aceptación:**
+- [x] Secuencia multi-fase (temblor → explota-zoom → escena sideral con meteoritos → flash →
+      revelado a pantalla completa → ficha), con color por tier y soporte shiny.
+- [x] Audio sintetizado (Web Audio) por fase + pistas `catch.mp3`/`victory.mp3`.
+
+### ✅ Resolución
+`ShopMenuView` (máquina de estados `opening/sky_cinematic/fullscreen_reveal/reveal`,
+nebulosa/starfield/meteoritos), `GachaAudio` (síntesis: tensión/meteoro/épico/explosión/
+victoria por tier + `playTrack`), `style.css` (keyframes), sonidos nuevos. Doc:
+[`23-SHINY_GACHA.md`](23-SHINY_GACHA.md).
+
+---
+
+## 🎟️ T4.5 — Fix de selección y movimiento de grandes ✅
+
+**Historia:** Como jugador, quiero seleccionar y mover a mis Pokémon grandes de forma
+consistente y real (ver su huella, mismo rango se clique donde se clique, y que se muevan
+solo si caben).
+
+**Criterios de aceptación:**
+- [x] Selección consistente por cualquier casilla del grande (se normaliza al centro).
+- [x] La huella (7 hexes) del seleccionado se resalta.
+- [x] `getMoveOptions` rutea desde el centro, no bloquea con el cuerpo propio y solo ofrece
+      destinos donde la huella cabe.
+- [x] `play` no dice "se mueve" si `moveOccupant` falla (no cabe).
+- [x] Tests del motor (`largeMovement.test.ts`); medium sin regresión.
+
+**Resolución:** ver [`26-SIZES_LOS.md`](26-SIZES_LOS.md) §T4.5. game-service 82/82.
+
+---
+
+# ÉPICA A — Sistema de ataques (rango, forma y selección)
+
+> El combate on-map (skillshot AoE) usa `move.range`/`move.aoe`, pero hoy se derivan con
+> una heurística rudimentaria (`PokemonService.toMove`): rangos irreales, formas sin
+> sentido y `radius` **castable en cualquier casilla** (exento de la validación de rango en
+> `GameService.cast`). La selección de los 4 moves también se siente arbitraria. Esta épica
+> arregla **rango/forma** (para poder previsualizarlos bien) y la **selección**.
+> Decisiones (usuario): rango/forma **híbrido** (lista curada + defaults); selección por
+> **heurística mejorada**; tutor de movimientos **diferido**. Alinea con **D5**.
+
+## 🎟️ TA.1 — Catálogo de rango y forma (AoE) por movimiento (backend)
+
+**Historia de usuario:** Como jugador, quiero que cada ataque tenga un rango y una forma de
+área coherentes (melee corto, proyectil a distancia, onda radial, cono, línea), para poder
+ver dónde llega y a quién afecta antes de lanzarlo.
+
+**Objetivos de desarrollo:**
+1. Reemplazar la heurística de `toMove` (`PokemonService.ts:199-228`) por un **mapeo
+   híbrido**: fichero curado `engine/moveShapes.ts` (`nombre PokeAPI → { range, aoe,
+   radius? }`) para los moves relevantes de Gen 1 (terratemblor = `radius` con radio propio
+   y alcance real; hiperrayo = `line`; proyectiles = `single`/`line` con `range` N; melee =
+   `single` `range` 1; barridos = `cone`), + un **clasificador por defecto** sensato para el
+   resto (a partir de `target` + `damage_class` + `power`, sin rangos fijos irreales).
+2. `PokemonMove` (`packages/shared/src/domain.ts`): añadir `radius?: number` (separar el
+   radio del AoE del alcance `range`). `calculateAoE` (`combat.ts`) usa `radius` propio en
+   lugar de `floor(range/2)`.
+3. **Arreglar el "rango infinito"**: `GameService.cast` deja de eximir a `radius` de la
+   validación de rango — el **centro** del AoE debe estar dentro de `range`.
+
+**Dudas resueltas (D5):** mapeo por lista curada manual + defaults.
+
+**Criterios de aceptación:**
+- [x] Cada move tiene `range`/forma coherente; el radio de las ondas es explícito (`radius`).
+- [x] Ningún move es lanzable fuera de su rango (incluido `radius`).
+- [x] Tests del motor del mapeo (radius con alcance/radio, línea, cono, melee, proyectil).
+
+**Investigación:** `toMove`/`getCuratedMoves` (`PokemonService.ts:199-249`), `calculateAoE`
+(`packages/shared/src/combat.ts:94-102`), validación de rango en `cast`
+(`GameService.ts:547-557`), `PokemonMove` (`domain.ts`).
+
+**Dependencias:** →TR.1 (recomendable →T0.3 para líneas reales). **Paralelizable:** sí.
+
+### ✅ Resolución (lo realmente hecho)
+
+`engine/moveShapes.ts` (nuevo): `MOVE_SHAPES` curado + `getMoveShape` (default por
+`target`/`damageClass`); `toMove` lo usa. `PokemonMove.radius?` + `calculateAoE(…, radius?)`
+(radio explícito, no `floor(range/2)`). `cast` valida `dist > range` para todos (fin del
+"rango infinito" de `radius`; auto-cast solo autocentrado). Preview del frontend pasa
+`move.radius`. Tests `moveShapes.test.ts` (52/52). El gating visual del preview es TA.3.
+Doc: [`24-ATTACK_SHAPES.md`](24-ATTACK_SHAPES.md).
+
+## 🎟️ TA.2 — Selección de los 4 moves representativos (backend, heurística)
+
+**Historia de usuario:** Como jugador, quiero que cada Pokémon lleve sus 4 ataques más
+representativos/útiles, no 4 casi al azar.
+
+**Objetivos de desarrollo:**
+1. Mejorar `getCuratedMoves`: puntuar candidatos por **STAB + potencia + cobertura de tipos
+   + bonus a moves emblemáticos** y elegir **4 variados** (evitar 4 del mismo tipo/forma).
+2. Mantener ≥1 físico gratuito; ampliar `CANDIDATE_CAP` si hace falta para no perder los
+   moves emblemáticos.
+
+**Dudas resueltas:** selección por **heurística mejorada** (no lista por especie); es la
+base del futuro tutor (TA.4).
+
+**Criterios de aceptación:**
+- [x] Para varias especies, los 4 elegidos incluyen su STAB principal y variedad de forma.
+- [x] Se conserva ≥1 físico gratuito.
+- [x] Tests de la heurística de selección.
+
+**Investigación:** `getCuratedMoves` (`PokemonService.ts:172-249`), `CANDIDATE_CAP`/
+`CURATED_COUNT` (`PokemonService.ts:37-38`).
+
+**Dependencias:** →TR.1. **Paralelizable:** sí (con TA.1).
+
+### ✅ Resolución (lo realmente hecho)
+
+`engine/moveSelection.ts` (nuevo): `scoreMove` (potencia + STAB + bonus a emblemáticos de
+`MOVE_SHAPES`) y `selectMoves` (orden por score, 1ª pasada máx 2/tipo para variedad, 2ª de
+relleno, sin duplicados). `getCuratedMoves` lo usa; `CANDIDATE_CAP` 14→18; se mantiene ≥1
+físico gratis. Tests `moveSelection.test.ts` (57/57). Doc: [`24-ATTACK_SHAPES.md`](24-ATTACK_SHAPES.md).
+
+## 🎟️ TA.3 — Previsualización de rango y forma en el mapa (frontend)
+
+**Historia de usuario:** Como jugador, quiero ver al seleccionar un ataque hasta dónde llega
+y qué forma tendrá, para apuntar bien antes de lanzarlo.
+
+**Objetivos de desarrollo:**
+1. Al seleccionar un move (`activeMoveIndex`), **resaltar los hexes de alcance legal** (según
+   `range`) y dibujar la **forma AoE** en el hover **solo dentro de rango** (atenuada/oculta
+   fuera), de modo que el preview **coincida con la validación de `cast`**.
+2. Feedback si el objetivo está fuera de rango. Reutiliza `calculateAoE` (compartido) y, si
+   aplica, `hexLineDraw` (T0.3).
+
+**Criterios de aceptación:**
+- [x] Se ven los hexes de alcance y la forma del AoE antes de lanzar; el preview no engaña.
+- [x] Un objetivo fuera de rango se distingue (no se resalta como válido).
+
+**Investigación:** preview de AoE (`BoardView.ts:411-419`), `isAttackTarget`/`isMoveTarget`
+(`GameState.ts`), `activeMoveIndex`.
+
+**Dependencias:** →TA.1. **Paralelizable:** no.
+
+### ✅ Resolución (lo realmente hecho)
+
+`BoardView.buildAttackPreview()` precalcula alcance/forma del move QWER activo; los overlays
+pintan alcance legal (cian), forma AoE en hover dentro de rango (naranja) y fuera de rango
+(rojo), coincidiendo con la validación de `cast`. Doc: [`24-ATTACK_SHAPES.md`](24-ATTACK_SHAPES.md).
+
+## 🎟️ TA.5 — Traducción de moves + iconos en la UI (QWER)
+
+**Historia de usuario:** Como jugador, quiero ver el nombre del ataque **en mi idioma** y un
+**icono** por cada uno en la barra QWER (estilo League of Legends), para reconocerlos de un
+vistazo.
+
+**Objetivos de desarrollo:**
+1. **Traducción:** poblar/usar `displayName` de cada move con el nombre localizado de PokeAPI
+   (`/move/{name}` trae `names[]` por idioma). Mostrarlo en la UI en vez del `name` crudo.
+2. **Iconos QWER:** mostrar un icono por move en la barra de acciones (hotkeys Q/W/E/R),
+   estilo LoL. Mapeo probable **por tipo de move (+ categoría: daño/curación/estado/forma
+   AoE)**, no uno por move. Assets generados a partir de la **imagen de referencia aportada
+   por el usuario** (estilo: iconos cuadrados, arte cartoon pulido, temáticos por elemento,
+   borde de color; ver memoria `move-ability-icons-style`). El usuario aportará el PNG de
+   referencia al repo (`services/frontend/public/assets/icons/`).
+
+**Dudas resueltas:** iconos por tipo/categoría (no por move individual); estilo del referente
+aportado; nombres localizados de PokeAPI.
+
+**Criterios de aceptación:**
+- [x] Los moves se muestran con su nombre traducido (no el slug PokeAPI).
+- [x] Cada botón/hotkey QWER muestra un icono coherente con el tipo/efecto del move.
+
+### ✅ Resolución (lo realmente hecho)
+
+Traducción ya funcionaba (backend guarda `displayName` en español de PokeAPI; `HUDView` lo
+muestra). Iconos QWER: icono de **tipo** (`MOVE_TYPE_EMOJI`) + badge de clase, **provisional
+con emoji**; el arte definitivo (PNG estilo LoL, ref. del usuario) irá en
+`public/assets/icons/` en un follow-up. Doc: [`24-ATTACK_SHAPES.md`](24-ATTACK_SHAPES.md).
+
+**Investigación:** `displayName` en `PokemonMove`/`MoveRow` (ya existe, `PokemonService.toMove`
+`:208`); `names[]` de PokeAPI en `hydrateMove` (`PokemonService.ts:143-171`); barra de
+acciones/hotkeys QWER en el frontend (`GameController` `setupKeyboardShortcuts`, panel de
+acciones); `PokemonMove.type`/`aoe`/`damageClass` para el mapeo de icono.
+
+**Dependencias:** →TR.1 (icono independiente; mejor tras TA.1 para conocer la forma AoE).
+**Paralelizable:** parcial.
+
+## 🎟️ (DIFERIDO) TA.4 — Tutor de movimientos (meta/hub)
+
+**Estado:** **futuro** (pedido por el usuario). Elegir/asignar los moves de cada Pokémon en
+el hub, sobre su learnset (reutiliza `pokemon_moves` de doc 04). **Dependencias:** →TA.1, →TA.2.
+
+## 🎟️ FIX-IA — La IA hacía movimientos ilegales y congelaba la partida ✅
+
+**Historia:** Como jugador contra la IA, quiero que el bot juegue turnos válidos y que la
+partida **avance siempre**, sin quedarse congelada.
+
+**Bug:** al migrar el combate a on-map por rango (`/cast`, Épica A), la IA del bot siguió
+ejecutando sus decisiones de ataque como `/move` a la casilla del enemigo. Mover a una casilla
+ocupada es **ilegal** → el servidor lo rechaza; y como el rechazo no reprogramaba al bot (el
+bucle avanza al aplicar estado nuevo), el turno **se quedaba congelado**.
+
+**Criterios de aceptación:**
+- [x] Los ataques de la IA se lanzan por `/cast` (nunca por `/move` a casilla ocupada).
+- [x] La IA elige el ataque de mayor potencia cuyo **alcance real** llega al objetivo.
+- [x] Si el objetivo está fuera de alcance, la pieza se **acerca** en vez de perder el turno.
+- [x] Cualquier acción rechazada por el servidor **pasa turno** (la partida nunca se congela).
+- [x] Tests puros de la elección de ataque por rango (`pickCastMove`).
+
+### ✅ Resolución (lo realmente hecho)
+
+Ver [`28-BOT_CAST_FIX.md`](28-BOT_CAST_FIX.md). `performMove`/`performCast` devuelven ahora
+`boolean` (éxito real); `runBotTurn` enruta `type:'attack'` por `botCast` (elige move por
+alcance con `pickCastMove`), con fallback de acercamiento y `endTurn` garantizado. frontend
+22/22.
+
+## 🎟️ FIX-ondas — Terratemblor (autocentrado) no lanzable por colosos ✅
+
+**Historia:** Como jugador con un coloso (Snorlax), quiero lanzar ondas autocentradas
+(terratemblor, surf…) y que alcancen a los enemigos que rodean su cuerpo.
+
+**Bug:** una onda autocentrada (`aoe:'radius'`, `range 0`) exigía clicar el **hex-centro**
+exacto del coloso (los otros 6 hexes de su huella daban «fuera de rango»), y su `radius 2`
+partía del centro cuando el cuerpo ya llena el anillo 1 → apenas alcanzaba 1 anillo más allá.
+
+**Criterios de aceptación:**
+- [x] Una onda autocentrada se centra **siempre** en el lanzador, se clique donde se clique.
+- [x] El radio se **expande por la huella** del caster (`large` → alcanza más allá del cuerpo).
+- [x] El preview dibuja el AoE alrededor de la pieza (no depende del ratón) y basta clicar.
+- [x] Las ondas radiales **con alcance** siguen respetando su rango (sin rango infinito).
+- [x] La IA usa autocentrados cuando hay enemigos en el radio. Tests server+cliente.
+
+### ✅ Resolución (lo realmente hecho)
+
+Ver [`24-ATTACK_SHAPES.md`](24-ATTACK_SHAPES.md) §FIX-ondas. Helpers compartidos
+`isAutocentered`/`autocenteredRadius`; `cast` centra en el lanzador y expande el radio por
+tamaño; `buildAttackPreview` dibuja el AoE siempre; `pickCastMove` valora autocentrados por
+radio. game-service 86/86, frontend 23/23.
+
+---
+
+# ÉPICA 5 — Scope Gen 1 (151) y catálogo de especies
+
+## 🎟️ T5.1 — Clamp a #1-151 (fuente única de verdad)
+
+**Historia de usuario:** Como jugador de la v1, quiero que el juego use exactamente los
+151 Pokémon de Gen 1, de forma consistente en tienda, starters y todo.
+
+**Objetivos de desarrollo:**
+1. Regenerar `lootPool.ts` a los 151 (hoy son 200, #1-200 con Gen 2).
+2. Validar/limitar `PokemonService.getTemplate` a Gen 1 (rechazar fuera de rango).
+3. Unificar los pools (tienda/starters) contra esa fuente única.
+
+**Dudas resueltas (D11):** clamp a #1-151.
+
+**Criterios de aceptación:**
+- [x] Ningún flujo concede/instancia un Pokémon fuera de #1-151.
+- [x] Tienda/starters/loot usan la misma lista de 151.
+- [x] Tests de los límites.
+
+**Investigación:** `lootPool.ts` (`LOOT_POOL_TIERS`, 200 estáticos),
+`PokemonService.getTemplate` (`PokemonService.ts:97-140`, sin límite de dex),
+`loot.ts` (`BALLS`, `rollTier`, `pickFromTier`), `MatchManager` `STARTER_POOL`.
+
+**Dependencias:** ninguna (tras TR.1). **Paralelizable:** sí.
+
+### ✅ Resolución (lo realmente hecho)
+
+`engine/gen1.ts` (`GEN1_NAMES` 151 + `isGen1`) como fuente única. `lootPool.ts` regenerada a
+los 151 (filtrada del pool #1-200; tienda/cofres tiran de aquí). `STARTER_POOL` ya era Gen 1.
+Desviación: `getTemplate` no rechaza (sirve cualquiera para no romper owned Gen 2 previos);
+lo clampado son las fuentes que conceden. Test `gen1.test.ts` (75/75). Doc:
+[`27-GEN1_SCOPE.md`](27-GEN1_SCOPE.md).
+
+## 🎟️ T5.2 — Catálogo de especies: cadenas de evolución de PokeAPI
+
+**Historia de usuario:** Como sistema, quiero conocer para cada especie su evolución
+(disparador y forma destino), para poder evolucionar fielmente a Pokémon.
+
+**Objetivos de desarrollo:**
+1. Extender `PokemonService` para consultar `/pokemon-species/{name}` y
+   `/evolution-chain/{id}` (hoy solo se usa `/pokemon/{name}` y `/move/{name}`).
+2. Persistir por especie: `{ trigger: 'level'|'stone'|'trade', item?, minLevel?, evolvesTo }`
+   en una tabla/columna nueva (junto a `pokemons`).
+
+**Dudas resueltas (D13):** fiel a PokeAPI.
+
+**Criterios de aceptación:**
+- [x] Para cualquier especie de Gen 1 se puede consultar su evolución y disparador.
+- [x] Tests con casos: nivel (Charmander), piedra (Vulpix), intercambio (Kadabra).
+
+**Investigación:** `PokemonService.getTemplate` (`PokemonService.ts:97-140`), tablas
+`pokemons`/`moves`/`pokemon_moves` (`db.ts:36-140`), sin datos de evolución hoy.
+
+**Dependencias:** ninguna (tras TR.1). **Paralelizable:** sí.
+
+### ✅ Resolución (lo realmente hecho)
+
+`engine/evolution.ts` (`parseEvolutionChain`, puro, mapea level/stone/trade), tabla
+`evolutions` + `EvolutionModel`, `PokemonService.getEvolution` (species→chain→parse→cache).
+Guarda la primera rama (Eevee multi-evolución = una forma, se afina en Épica 9). Test
+`evolution.test.ts` (79/79). Doc: [`27-GEN1_SCOPE.md`](27-GEN1_SCOPE.md).
+
+---
+
+# ÉPICA 6 — Progresión: Niveles, XP y equipos por instancia
+
+## 🎟️ T6.1 — XP y subida de nivel (backend)
+
+**Historia de usuario:** Como entrenador, quiero que mis Pokémon ganen experiencia
+combatiendo y suban de nivel, para progresar con mi colección.
+
+**Objetivos de desarrollo:**
+1. Añadir columna `xp` a `owned_pokemon` (hoy solo `level`, siempre 1).
+2. Otorgar XP por KO/victoria (engancha donde ya se reparten monedas:
+   `EconomyService.awardForResult` / fin de partida), atribuyendo a la instancia
+   (`ownedId`) — requiere el mapeo de T6.3 para saber qué instancia participó.
+3. Subir de nivel según curva (default lineal, cap 100, ajustable).
+
+**Dudas resueltas (D14):** XP en batalla + subida de nivel.
+
+**Criterios de aceptación:**
+- [x] Un Pokémon que combate y hace KOs gana XP y puede subir de nivel (persistente).
+- [x] Tests de la curva de XP y el level-up.
+
+**Investigación:** `owned_pokemon` (`db.ts:120-129`, `level` default 1 nunca mutado),
+`OwnedPokemonModel` (sin `xp`, `grantMany` fija level=1), `EconomyService.awardForResult`
+(`EconomyService.ts:19-39`, usa `slotUserMap`), `defeats` (`GameService.ts:452`).
+
+**Dependencias:** ninguna para el nivel/XP base; la atribución fina depende de T6.3.
+**Paralelizable:** sí (parte).
+
+### ✅ Resolución (lo realmente hecho)
+
+Ver [`29-PROGRESSION_LEVELS.md`](29-PROGRESSION_LEVELS.md) §T6.1. Columna `xp`; curva pura
+`xpToNext`/`applyXp` (lineal, cap 100, cascada); `OwnedPokemonModel.addXp` persiste;
+`defeats.killerOwnedId` para atribuir; `ProgressionService.awardMatchXp` (+30 por KO al
+atacante, +40 a supervivientes ganadores) enganchado junto a la economía. game-service
+103/103.
+
+## 🎟️ T6.2 — Escalado de stats por nivel
+
+**Historia de usuario:** Como jugador, quiero que un Pokémon de nivel alto sea
+notablemente más fuerte que uno recién obtenido.
+
+**Objetivos de desarrollo:**
+1. Que la creación de la pieza de partida y el combate usen el nivel: escalar
+   hp/atk/def por nivel (fórmula ajustable) en `effectiveAtk`/`effectiveDef`/creación.
+
+**Dudas resueltas (D14):** escalado de stats.
+
+**Criterios de aceptación:**
+- [x] Dos instancias de la misma especie a niveles distintos tienen stats distintos en partida.
+- [x] Tests del escalado.
+
+**Investigación:** `computeMoveDamage` (`engine/combat.ts:14-30`),
+`effectiveAtk/Def` (`environment.ts:7-22`), creación de pieza (`MatchManager` `build`
+L101-106 / `buildPokemon` L302-304, hoy `level:1`).
+
+**Dependencias:** →T6.1. **Paralelizable:** no.
+
+### ✅ Resolución (lo realmente hecho)
+
+Ver [`29-PROGRESSION_LEVELS.md`](29-PROGRESSION_LEVELS.md) §T6.2. `engine/progression.ts`
+puro: `levelMultiplier` (+4 %/nivel, 1.0 a Lv.1, saturado a [1,100]) + `scaledVitals`.
+Aplicado en `MatchManager.build`/`buildPokemon` (fuente única al crear la pieza; el combate
+lee la stat ya escalada, sin doble escalado). A Lv.1 idéntico al anterior. game-service 94/94.
+
+## 🎟️ T6.3 — Equipos por instancia (`ownedId`)
+
+**Historia de usuario:** Como jugador, quiero llevar a la partida MIS Pokémon concretos
+(con su nivel/forma), no plantillas genéricas a nivel 1.
+
+**Objetivos de desarrollo:**
+1. `SubmitTeamRequest` pasa a enviar **`ownedId[]`** (hoy `string[]` de nombres).
+2. `resolveOwnedTeams`/`addToArena` cargan la instancia real (nivel/stats/forma) desde
+   `owned_pokemon`, no solo el nombre a nivel 1.
+3. Añadir `ownedId` al engine `Pokemon` (`domain.ts`) para arrastrar la identidad de la
+   instancia (necesario también para captura, Épica 8).
+4. Pickers frontend (`OwnedTeamPickerView`) ya seleccionan por id: enviar el id, no el nombre.
+
+**Dudas resueltas (D12):** equipos por instancia con stats reales.
+
+**Criterios de aceptación:**
+- [x] El equipo se valida y construye por `ownedId`; la partida refleja el nivel real de la instancia.
+- [x] La validación de propiedad sigue siendo autoritativa (solo tus instancias, no en subasta).
+- [x] Tests de la carga/propiedad por id con instancias de distinto nivel.
+
+**Investigación:** `SubmitTeamRequest`/`DRAFT_TEAM_SIZE` (`packages/shared/src/lobby.ts`),
+`RoomService.submitTeam` (validación por nombre, `RoomService.ts:145-191`),
+`resolveOwnedTeams` (`MatchManager.ts:190-204`), `build`/`buildPokemon` (level:1),
+`OwnedTeamPickerView` (selecciona por id, envía nombres, L114-123), engine `Pokemon`
+(`domain.ts:60-85`, sin `ownedId`).
+
+**Dependencias:** →T6.2. **Paralelizable:** no.
+
+### ✅ Resolución (lo realmente hecho)
+
+Ver [`29-PROGRESSION_LEVELS.md`](29-PROGRESSION_LEVELS.md) §T6.3. `Pokemon.ownedId?` en el
+engine; `OwnedPokemonModel.findManyByIds`/`allOwnedBy`; `RoomService` valida por id;
+`MatchManager.ownedTeamFromIds` carga la instancia real (nivel + `ownedId`) y `placements`/
+`buildPokemon` la propagan; el picker envía `ownedId`. **Reordenado**: se hizo antes que
+T6.2/T6.1 por ser fundacional (trae el nivel real que aquéllos escalan/otorgan). El escalado
+de stats es T6.2; la XP, T6.1. game-service 90/90.
+
+## 🎟️ T6.4 — UI de nivel/XP (frontend)
+
+**Historia de usuario:** Como jugador, quiero ver el nivel y el progreso de XP de mis
+Pokémon en el inventario y en la partida.
+
+**Objetivos de desarrollo:** mostrar nivel/barra de XP en `InventoryView`,
+`PokemonDetailModal` y HUD de combate.
+
+**Criterios de aceptación:**
+- [x] El inventario y la ficha muestran nivel y progreso; el HUD muestra el nivel en partida.
+
+**Investigación:** `InventoryView.ts`, `PokemonDetailModal.ts`, `HUDView.ts`.
+
+**Dependencias:** →T6.2. **Paralelizable:** no.
+
+### ✅ Resolución (lo realmente hecho)
+
+Ver [`29-PROGRESSION_LEVELS.md`](29-PROGRESSION_LEVELS.md) §T6.4. `/api/inventory` expone
+`xp`/`xpToNext` (+ hp/atk/def escalados por nivel); la ficha dibuja una barra de XP (`xpBar`,
+«★ NIVEL MÁXIMO» en el cap); el HUD muestra `· Lv.N` en el activo y `Lv.N` en cada pieza del
+roster. **Épica 6 completa.**
+
+---
+
+# ÉPICA 7 — Draft con pool aleatorio (revisión de D15)
+
+## 🎟️ T7.1 — Draft con pool aleatorio en local/IA; propios en online ✅
+
+> **Cambio de alcance (decisión del usuario, revisa D15).** El plan original era *eliminar*
+> el draft. El usuario decidió **mantenerlo** en local y vs-IA (el hot-seat y la IA no tienen
+> inventario propio), pero con un **pool aleatorio de 50 Pokémon Gen-1 por draft**. Los modos
+> online de equipo propio (BR/ARENA) ya usan `ownedId` (Épica 6).
+
+**Historia de usuario:** Como jugador, quiero que los drafts locales y vs-IA sean **variados**
+(un pool distinto cada vez), no siempre la misma lista fija.
+
+**Criterios de aceptación:**
+- [x] El draft local/vs-IA ofrece 50 Pokémon Gen-1 **aleatorios**, distintos cada draft.
+- [x] La validación del servidor acepta cualquier Gen-1 (unicidad cruzada intacta).
+- [x] Online 1v1/2v2 sigue con roster estable; BR/ARENA con inventario propio.
+- [x] Tests del pool aleatorio.
+
+**Dudas resueltas (D15, revisada):** draft **mantenido** en local/IA con pool aleatorio.
+
+### ✅ Resolución (lo realmente hecho)
+
+Ver [`30-DRAFT_POOL.md`](30-DRAFT_POOL.md). `randomGen1Names` (puro) + `MatchManager.draftPool(50)`
++ ruta `/api/game/draft-pool`; `resolveTeams` acepta cualquier Gen-1 (unicidad intacta);
+`DraftView.poolEndpoint` y `main.ts` local/IA usan el pool aleatorio (la IA, del mismo pool).
+Online 1v1/2v2 conserva `getRoster`/`ROSTER_NAMES`. game-service 108/108.
+
+---
+
+# ÉPICA 8 — Captura ("tazos")
+
+## 🎟️ T8.1 — Modo Survival (1 jugador vs IA)
+
+**Historia de usuario:** Como jugador en solitario, quiero un modo Survival contra la IA
+donde capturo lo que derroto, para construir mi colección jugando.
+
+**Objetivos de desarrollo:**
+1. Nuevo `GameMode 'survival'` (shared) y su flujo (single-player vs IA existente).
+2. Habilitar la UI ya esbozada: botón "SURVIVAL MODE" (`SinglePlayerMenuView`, hoy
+   `disabled`).
+
+**Dudas resueltas (D10):** Survival = 1J vs IA con captura.
+
+**Criterios de aceptación:**
+- [x] Se puede iniciar una partida Survival vs IA desde el menú de un jugador.
+- [x] Arranque con equipo propio (inventario) vs IA salvaje; propiedad validada.
+
+**Investigación:** `GameMode` (`lobby.ts:12`), `SinglePlayerMenuView.ts:35` (botón
+disabled), IA local (`controllers/botStrategy.ts`, `aiDraft.ts`).
+
+**Dependencias:** ninguna (tras TR.1). **Paralelizable:** sí.
+
+### ✅ Resolución (lo realmente hecho)
+
+Ver [`31-CAPTURE.md`](31-CAPTURE.md) §T8.1. `GameMode 'survival'`; `startMatch` acepta
+`ownerUserId` y `resolveSurvivalTeams` (player1 = `ownedId` propios validados con `allOwnedBy`;
+player2 = salvajes por nombre); `localMeta` guarda modo+dueño para T8.2/T8.3; botón SURVIVAL
+habilitado → `startSurvival` con picker de inventario + IA salvaje del draft-pool.
+
+## 🎟️ T8.2 — Captura al derrotar (backend)
+
+**Historia de usuario:** Como jugador, quiero que al derrotar a un Pokémon rival pase a
+mi inventario, como en una partida de tazos.
+
+**Objetivos de desarrollo:**
+1. Arrastrar `ownedId` en la pieza del engine (de T6.3) y el mapeo `slot→userId`
+   (`RoomService.slotUserMap`).
+2. Incluir `victimOwnedId` en los registros de `defeats` (`GameService.cast:452` y KO por
+   lava/fin de turno).
+3. Al resolver, llamar `OwnedPokemonModel.transfer(victimOwnedId, ganadorUserId)`
+   (`acquired_via='capture'`, 🎯). Aplica en Survival (vs IA/wild) y BR (ver T8.4).
+4. Emitir evento `capture` (T0.1).
+
+**Dudas resueltas (D10):** captura al derrotar; el stub `transfer` ya existe sin uso.
+
+**Criterios de aceptación:**
+- [x] Derrotar a un salvaje en Survival lo añade a tu inventario (🎯, nueva instancia).
+- [x] La captura/robo usa la instancia correcta (`ownedId`/especie), no un nombre suelto.
+- [x] Tests de la captura (Survival) y del robo (BR).
+
+**Investigación:** `OwnedPokemonModel.transfer` (`OwnedPokemonModel.ts:67-75`, 0 llamadas),
+`defeats` (`GameService.ts:183,452` solo slots), `slotUserMap` (`RoomService.ts:245-249`),
+`EconomyService.awardForResult` (punto natural de enganche, `EconomyService.ts:19-39`),
+engine `Pokemon` (sin `ownedId` hoy).
+
+**Dependencias:** →T6.3, →T8.1. **Paralelizable:** no.
+
+### ✅ Resolución (lo realmente hecho)
+
+Ver [`31-CAPTURE.md`](31-CAPTURE.md) §T8.2. `defeats` lleva `victimOwnedId`/`victimName`;
+`OwnedPokemonModel.capture` (nueva instancia salvaje) + `transfer` (robo); `CaptureService.resolve`
+(survival→capture salvaje, br→robo instancia) enganchado en el path local de Survival, con
+mensaje `capture` para el feedback. El robo online/BR se activa en T8.4. game-service 113/113.
+
+## 🎟️ T8.3 — Pérdida permanente + recuperar en tienda (Survival)
+
+**Historia de usuario:** Como jugador de Survival, acepto perder de verdad a mis
+Pokémon caídos, pero quiero poder recuperar uno pagando, para no perderlo para siempre.
+
+**Objetivos de desarrollo:**
+1. En Survival, un Pokémon propio derrotado se retira del inventario (pérdida real).
+2. Opción "RECUPERA UN POKÉMON" en tienda por **10000 🪙** (habilitar botón
+   `ShopMenuView`, hoy `disabled`), que restaura el último perdido en Survival.
+
+**Dudas resueltas (D10):** pérdida permanente + recuperación 10000.
+
+**Criterios de aceptación:**
+- [x] Perder un Pokémon en Survival lo quita del inventario (y de los equipos).
+- [x] La tienda permite recuperar el último por 10000 (con saldo suficiente).
+- [x] Tests de pérdida y recuperación.
+
+**Investigación:** `ShopMenuView.ts:53` (botón disabled), `ShopController`/`shop.routes.ts`,
+`OwnedPokemonModel`, `UserModel.addCoins`.
+
+**Dependencias:** →T8.2. **Paralelizable:** no.
+
+### ✅ Resolución (lo realmente hecho)
+
+Ver [`31-CAPTURE.md`](31-CAPTURE.md) §T8.3. Soft-delete `owned_pokemon.lost_at` (excluida de
+`listByUser`/`allOwnedBy`); `markLost`/`hasLost`/`recoverLast`; `CaptureService` marca la
+pérdida en Survival (`kind:'lost'`); `POST /api/shop/recover-pokemon` (10000 🪙) + botón
+habilitado. game-service 116/116.
+
+## 🎟️ T8.4 — Robo PvP en Battle Royale
+
+**Historia de usuario:** Como jugador hardcore de Battle Royale, quiero que al derrotar
+al Pokémon de otro jugador me lo quede, para que el modo tenga riesgo real.
+
+**Objetivos de desarrollo:**
+1. Aplicar la transferencia de T8.2 en modo `br`: el ganador de un KO roba la instancia
+   del rival (permanente).
+
+**Dudas resueltas (D10):** robo PvP solo en Battle Royale.
+
+**Criterios de aceptación:**
+- [x] En BR, un KO transfiere la instancia derrotada al vencedor.
+- [x] En 1v1/2v2/arena NO hay robo.
+- [x] Tests del robo en BR y no-robo en el resto.
+
+**Investigación:** misma ruta que T8.2 filtrando por `gameMode === 'br'`;
+`EconomyService.awardForResult`, `slotUserMap`.
+
+**Dependencias:** →T8.2. **Paralelizable:** no.
+
+### ✅ Resolución (lo realmente hecho)
+
+Ver [`31-CAPTURE.md`](31-CAPTURE.md) §T8.4. `RoomService.gameModeOf`; `GameActionService`
+resuelve capturas online cuando el modo es `br` (transfiere la instancia rival al ganador,
+`kind:'steal'`). El resto de modos no roban. game-service 116/116.
+
+## 🎟️ T8.5 — Feedback de captura/robo (frontend)
+
+**Historia de usuario:** Como jugador, quiero una señal clara (🎯/animación) cuando
+capturo o me roban un Pokémon.
+
+**Objetivos de desarrollo:** consumir evento `capture` y animar; el inventario ya marca
+🎯 los `acquired_via==='capture'`.
+
+**Criterios de aceptación:**
+- [x] Al capturar/robar/perder, hay feedback visible en partida y el capturado aparece con 🎯 en inventario.
+
+**Investigación:** `InventoryView.ts:94` (tag 🎯 ya existe), util de T0.4.
+
+**Dependencias:** →T8.2, →T0.4. **Paralelizable:** no.
+
+### ✅ Resolución (lo realmente hecho)
+
+Ver [`31-CAPTURE.md`](31-CAPTURE.md) §T8.5. Mensaje WS `capture`; `GameController.showCaptureFeedback`
+(toast + flash sobre la pieza) con variantes 🎯 captura / 💰 robo / 💀 pérdida. Inventario ya
+marca 🎯. **Épica 8 completa.**
+
+---
+
+# ÉPICA 9 — Evolución (meta + in-match, fiel a PokeAPI)
+
+## 🎟️ T9.1 — Resolución de evolución por especie
+
+**Historia de usuario:** Como sistema, dado un Pokémon y su contexto (nivel/objeto),
+quiero saber si evoluciona y a qué forma, para aplicarlo.
+
+**Objetivos de desarrollo:** función que, usando el catálogo de T5.2, resuelve
+`{ puedeEvolucionar, formaDestino, requisito }` para una instancia.
+
+**Dudas resueltas (D13):** fiel a PokeAPI (nivel/piedra/intercambio).
+
+**Criterios de aceptación:**
+- [x] Resuelve correctamente evolución por nivel, por piedra y marca las de intercambio.
+- [x] Tests con Charmander (nivel), Vulpix (piedra), Kadabra (intercambio).
+
+**Investigación:** catálogo de T5.2; `PokemonService`.
+
+**Dependencias:** →T5.2. **Paralelizable:** no.
+
+### ✅ Resolución (lo realmente hecho)
+
+Ver [`32-EVOLUTION.md`](32-EVOLUTION.md) §T9.1. `resolveEvolution(info, {level, items})` →
+`{target, trigger, requirement, canEvolve}` (nivel≥minLevel; piedra en inventario; trade/other
+no evolucionan aquí) + `requirementLabel`/`STONE_ES`. Puro. game-service 121/121.
+
+## 🎟️ T9.2 — Objetos de evolución como drops + tienda
+
+**Historia de usuario:** Como jugador, quiero conseguir piedras evolutivas jugando (drops)
+y comprándolas, para evolucionar a mis Pokémon.
+
+**Objetivos de desarrollo:**
+1. Catálogo de objetos de evolución de Gen 1 (piedras Fuego/Agua/Trueno/Hoja/Lunar y las
+   necesarias) en `owned_items`.
+2. **Reutilizar el sistema de cofres-botín** (venido de `origin/main` en TR.1) para
+   dropearlos en el mapa + compra en tienda.
+
+**Dudas resueltas (D16):** drops post-combate + tienda; reutiliza cofres.
+
+**Criterios de aceptación:**
+- [x] Las piedras aparecen como botín en cofres (35%) y en la tienda (3000 🪙).
+- [x] Se acumulan en el inventario de objetos (kind `stone`, con sprite y etiqueta ES).
+- [x] Tests del catálogo/otorgamiento.
+
+**Investigación:** `owned_items`/`ItemModel`, sistema de cofres (post-TR.1: `f6a6134`),
+`ShopController`.
+
+**Dependencias:** →T5.2, →TR.1. **Paralelizable:** parcial.
+
+### ✅ Resolución (lo realmente hecho)
+
+Ver [`32-EVOLUTION.md`](32-EVOLUTION.md) §T9.2. `services/stones.ts` (5 piedras Gen 1);
+`GET /api/shop/stones` + `POST /api/shop/stone` + sección en la tienda; drop 35% en cofres
+(`EconomyService`); inventario muestra piedras con sprite PokeAPI + etiqueta ES compartida.
+game-service 123/123.
+
+## 🎟️ T9.3 — Evolución meta en el hub
+
+**Historia de usuario:** Como jugador, quiero evolucionar a mis Pokémon desde el
+inventario cuando cumplen el requisito (nivel o piedra), de forma permanente.
+
+**Objetivos de desarrollo:**
+1. `OwnedPokemonModel.evolve(id, nuevaForma)` (`UPDATE ... SET name=?`), asegurando la
+   plantilla destino vía `getTemplate`.
+2. Acción en `InventoryController` + ruta; botón "Evolucionar" en `InventoryView`/
+   `PokemonDetailModal` cuando `T9.1` lo permita (consume piedra/valida nivel).
+
+**Dudas resueltas (D13):** evolución meta persistente.
+
+**Criterios de aceptación:**
+- [x] Un Pokémon que cumple requisito puede evolucionar desde el inventario (persistente).
+- [x] Consume la piedra correspondiente / valida el nivel.
+- [x] Tests del flujo meta.
+
+**Investigación:** `OwnedPokemonModel`, `InventoryController`/`inventory.routes.ts`
+(ampliados en TR.1), `InventoryView.ts`, `PokemonDetailModal.ts`.
+
+**Dependencias:** →T9.1, →T9.2, →T6.1. **Paralelizable:** no.
+
+### ✅ Resolución (lo realmente hecho)
+
+Ver [`32-EVOLUTION.md`](32-EVOLUTION.md) §T9.3. `OwnedPokemonModel.evolve`;
+`GET .../evolution` (resuelve por instancia) + `POST .../evolve` (valida requisito, consume
+piedra, cambia especie); botón **✨ EVOLUCIONAR** en la ficha (o el requisito si no cumple),
+refresca inventario. game-service 124/124.
+
+## 🎟️ T9.4 — Evolución in-match
+
+**Historia de usuario:** Como jugador, quiero evolucionar a un Pokémon durante la
+batalla (gastando recursos), para dar la vuelta a un combate.
+
+**Objetivos de desarrollo:**
+1. Nueva acción `evolve` en el `GameAction` union → `GameService.evolve(from)`:
+   valida requisito, consume candies (`this.resources`, hoy **nunca se gastan**) y/o
+   nivel, cambia `name`/stats de la pieza y emite evento; el sprite se refresca solo
+   (lookup por nombre en frontend).
+2. Persistir la forma si procede (D13: ambos flujos).
+
+**Dudas resueltas (D13):** evolución in-match; candies pasan a tener uso real.
+
+**Criterios de aceptación:**
+- [x] Se puede evolucionar en partida cumpliendo el coste (candies); el sprite cambia sin recargar.
+- [x] Tests de la acción y del consumo de recursos.
+
+**Investigación:** `GameAction` union (`GameActionService.ts:7-13`), `this.resources`
+(`GameService.ts:35`, `collectTurnResources` L550-558, nunca se decrementan), sprite por
+nombre (`net/PokeSprites.ts`, `EntityView` lee `occupant.name`).
+
+**Dependencias:** →T9.1. **Paralelizable:** no.
+
+### ✅ Resolución (lo realmente hecho)
+
+Ver [`32-EVOLUTION.md`](32-EVOLUTION.md) §T9.4. Acción `evolve` (rutas local+online);
+`GameActionService.resolveEvolve` (async: catálogo+plantilla, persiste `ownedId`);
+`GameService.evolvePiece` (coste 4 candies por tipo, gate de nivel, stats sin curar, consume
+acción, evento `evolve`); hotkey **V** + flash ✨ (sprite cambia solo). **Épica 9 completa.**
+game-service 129/129.
+
+---
+
+# ÉPICA 10 — Intercambio entre jugadores
+
+## 🎟️ T10.1 — Backend de intercambio (Pokémon + objetos + monedas)
+
+**Historia de usuario:** Como jugador, quiero intercambiar Pokémon, objetos y monedas
+con mis amigos de forma segura, para completar mi colección y evolucionar por intercambio.
+
+**Objetivos de desarrollo:**
+1. Nuevo `TradeModel`/`TradeController`/rutas: proponer, aceptar, cancelar un intercambio
+   entre dos amigos, con **escrow** (patrón de `AuctionService`) para retener lo ofertado
+   hasta que ambos confirmen.
+2. **Extender** el "regalar/vender" ya existente (venido en TR.1: `InventoryController` +
+   `ContextMenu`), no reinventarlo.
+3. Mover propiedad con `OwnedPokemonModel.transfer`/`ItemModel`/`UserModel.addCoins`.
+
+**Dudas resueltas (D17):** sistema de intercambio propio, sobre amigos/escrow.
+
+**Criterios de aceptación:**
+- [x] Dos amigos pueden intercambiar Pokémon+objetos+monedas con confirmación por ambos.
+- [x] El escrow impide perder lo ofertado si el trato se cancela.
+- [x] Tests del flujo y del escrow.
+
+**Investigación:** `FriendModel`/`FriendController` (amistad), `AuctionService` (patrón
+escrow), `OwnedPokemonModel`/`ItemModel`/`UserModel.addCoins`, "regalar" post-TR.1
+(`531d6f5`), `CommunityMenuView` step `gift`.
+
+**Dependencias:** →TR.1. **Paralelizable:** sí (parte).
+
+### ✅ Resolución (lo realmente hecho)
+
+Ver [`33-TRADING.md`](33-TRADING.md) §T10.1. Tabla `trades` + escrow `owned_pokemon.trade_id`;
+`TradeService` (propose escrowa lo ofertado, accept cruza propiedades, cancel reembolsa);
+`TradeController` + rutas `GET/POST /api/trades`, `.../accept`, `.../cancel`. game-service
+135/135.
+
+## 🎟️ T10.2 — UI de intercambio (frontend)
+
+**Historia de usuario:** Como jugador, quiero una pantalla clara para ofertar y aceptar
+intercambios desde Comunidad y desde el inventario.
+
+**Objetivos de desarrollo:** menú de intercambio en `CommunityMenuView` (junto a "ENVIAR
+REGALO", ya funcional tras TR.1) y opción en el `ContextMenu` del inventario.
+
+**Criterios de aceptación:**
+- [x] Se puede montar una oferta (Pokémon + monedas), enviarla y aceptarla/cancelarla desde la UI.
+
+**Investigación:** `CommunityMenuView.ts` (step `gift`/`dm`), `ContextMenu.ts` (post-TR.1),
+`net/api.ts`.
+
+**Dependencias:** →T10.1. **Paralelizable:** no.
+
+### ✅ Resolución (lo realmente hecho)
+
+Ver [`33-TRADING.md`](33-TRADING.md) §T10.2. Menú contextual **🔄 Intercambiar** en el inventario
+(ofrece el Pokémon + pide monedas a un amigo); panel **INTERCAMBIOS** en Comunidad (aceptar/
+cancelar los pendientes). MVP: un Pokémon por monedas (pedir un Pokémon concreto = follow-up).
+**Épica 10 completa; roadmap del doc 12 cerrado.**
+
+## 🎟️ T10.3 — Evoluciones por intercambio
+
+**Historia de usuario:** Como jugador, quiero que Kadabra, Machoke, Graveler y Haunter
+evolucionen al ser intercambiados, fiel a Gen 1.
+
+**Objetivos de desarrollo:** al completar un intercambio, comprobar con T9.1 si la
+instancia intercambiada evoluciona por intercambio y aplicarlo.
+
+**Dudas resueltas (D17, D13):** el intercambio dispara Kadabra→Alakazam, Machoke→Machamp,
+Graveler→Golem, Haunter→Gengar.
+
+**Criterios de aceptación:**
+- [x] Intercambiar un Kadabra lo convierte en Alakazam para quien lo recibe.
+- [x] Tests de las evoluciones por intercambio.
+
+**Investigación:** T9.1 (resolución), T10.1 (completar trade).
+
+**Dependencias:** →T10.1, →T9.1. **Paralelizable:** no.
+
+### ✅ Resolución (lo realmente hecho)
+
+Ver [`33-TRADING.md`](33-TRADING.md) §T10.3. `TradeService.applyTradeEvolution` (enganchado en
+`accept`): las instancias movidas que evolucionan por `trigger:'trade'` (Kadabra/Machoke/
+Graveler/Haunter) evolucionan al completar el intercambio. game-service 138/138.
+
+---
+
+## Grafo de dependencias (resumen)
+
+- **Raíz (bloquea todo):** TR.1.
+- **Arranque en paralelo tras TR.1:** T0.1, T0.2, T0.3, T1.1, T2.1, T4.1, T5.1, T5.2,
+  T6.1, T8.1, T10.1.
+- **Ruta crítica frontend:** T0.1 → T0.4 → (T1.2, T2.3, T3.2/3.4, T4.4, T8.5).
+- **Ruta crítica progresión:** T6.1 → T6.2 → T6.3 → {T7.1, T8.2}.
+- **Ruta crítica evolución:** T5.2 → T9.1 → {T9.3, T9.4, T10.3}; T9.2 → T9.3.
+
+## Orden de desarrollo sugerido
+
+1. **TR.1** (reconciliación).
+2. **Épica 0** (fundaciones) en paralelo con los tickets `[P]` de bajo riesgo (T1.1, T2.1,
+   T4.1, T5.1, T5.2, T6.1, T8.1).
+3. **Épicas 1-4** (completar las mecánicas tácticas del doc 11), apoyadas en Épica 0.
+4. **Épicas 5-7** (Gen 1, progresión, unificación a Pokémon propios) — habilitan el resto.
+5. **Épica 8** (captura) y **Épica 9** (evolución).
+6. **Épica 10** (intercambio + evoluciones por intercambio).
+
+> Cada épica debe dejar el stack acumulado levantando (`make up`) sin romper lo anterior,
+> y (donde aplica) mergear `tactics → main` al cerrarla.
