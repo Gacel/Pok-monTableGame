@@ -221,6 +221,15 @@ autoritativo en lo que guarda.
 
 **Dependencias:** ninguna. **Paralelizable:** sí.
 
+### ✅ Resolución (lo realmente hecho)
+
+- [x] Los objetos con `qty === 0` no aparecen en la cuadrícula de objetos.
+- [x] Los objetos con `qty > 0` siguen mostrándose correctamente.
+- [x] La sección "Sin objetos todavía" aparece si no hay ningún objeto con qty > 0.
+
+**Implementación:** Filtro `items.filter(it => it.qty > 0)` en `InventoryView.draw`
+antes de renderizar; el contador del panel del entrenador también usa la lista filtrada.
+
 ---
 
 ## 🎟️ T11.6 — Animación de evolución guay (frontend)
