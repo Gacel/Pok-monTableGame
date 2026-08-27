@@ -399,6 +399,153 @@ la mecánica shiny a los jugadores nuevos.
 
 ---
 
+## 🎟️ T11.12 — Nombres y descripciones de ataques en español en la ficha modal
+
+**Historia de usuario:** Como jugador hispanohablante, quiero ver los nombres y
+descripciones de los ataques en español en la ficha del Pokémon (botón ℹ), igual que
+los tipos ya aparecen en español, para entender bien cada movimiento.
+
+**Objetivos de desarrollo:**
+1. En `PokemonService.hydrateMove` (`PokemonService.ts:201`), cambiar la fuente del
+   `shortEffect` de `language.name === 'en'` a `language.name === 'es'`, con fallback
+   a `'en'` si el idioma español no está disponible para ese movimiento.
+2. Dado que los `shortEffect` ya están cacheados en SQLite **en inglés**, añadir una
+   migración en `db.ts` que resetee la columna `short_effect` a `NULL` en la tabla
+   `moves`, de modo que los efectos se re-hidraten en español en la próxima petición
+   (patrón cache-miss sin perder el resto del registro).
+3. El `displayName` (nombre en español) ya se guarda correctamente (`language.name ===
+   'es'`, L203) — no hay que tocarlo.
+
+**Dudas resueltas:** PokeAPI sí tiene `effect_entries` en español para la mayoría de
+los moves Gen-1; el fallback a inglés cubre los que no.
+
+**Criterios de aceptación:**
+- [ ] La ficha de un Pokémon muestra los nombres de ataque en español (`displayName`).
+- [ ] Las descripciones (`shortEffect`) aparecen en español (no inglés).
+- [ ] Si un move no tiene traducción al español, aparece en inglés (fallback).
+- [ ] Tras el deploy, los efectos cacheados en inglés se reemplazan en la primera
+      consulta (no hace falta vaciar la BD manualmente).
+
+**Investigación:**
+- `PokemonService.hydrateMove` (`PokemonService.ts:188-205`): `effect_entries` en `'en'`
+  (L201); `names` en `'es'` (L203). Solo hay que cambiar `'en'` → `'es'` con fallback.
+- `MoveModel.saveMove` (`MoveModel.ts:36-50`): guarda `shortEffect` en columna
+  `short_effect`. La migración resetea esa columna a `NULL`.
+- `GameController.getPokedex` (`GameController.ts:115-155`): llama `MoveModel.findMove`
+  (cache-first) → si `shortEffect` es null, `hydrateMove` re-fetcha de PokeAPI y
+  actualiza el cache con el texto en español.
+
+**Dependencias:** ninguna. **Paralelizable:** sí.
+
+---
+
+## 🎟️ T11.13 — Botón "Volver" en la pantalla de draft
+
+**Historia de usuario:** Como jugador, quiero poder volver al menú anterior desde la
+pantalla de selección de Pokémon (draft), en caso de haberla abierto por error o
+haber cambiado de opinión.
+
+**Objetivos de desarrollo:**
+1. Añadir un campo opcional `onBack?: () => void` al tipo `DraftConfig`
+   (`DraftView.ts:17`).
+2. En `DraftView.draw()`, renderizar un botón "VOLVER" (usando el helper `backButton`
+   de `panel.ts`, al igual que hacen `InventoryView` y `OwnedTeamPickerView`) junto al
+   botón "CONFIRMAR". Solo visible si `config.onBack` está definido.
+3. Cablear el evento `click` del botón al callback `config.onBack`.
+4. Pasar el callback desde los sitios que instancian `DraftView`:
+   - `showSinglePlayerDraft` (`main.ts:266`): `onBack: () => showSinglePlayerMenu()`.
+   - `showOnlineDraft` (si existe): `onBack: () => showLobby()` o similar.
+   - Cualquier otro punto donde se cree un `DraftView`.
+
+**Dudas resueltas:** el botón solo aparece si el caller pasa `onBack`; los usos que
+no necesiten volver no lo reciben y la UI no cambia.
+
+**Criterios de aceptación:**
+- [ ] En el draft de "un jugador vs IA", hay un botón "VOLVER" que lleva al menú
+      anterior.
+- [ ] Al pulsar "VOLVER" no se inicia ninguna partida ni se envían datos al servidor.
+- [ ] El botón no rompe el draft online (que no pasa `onBack`).
+
+**Investigación:**
+- `DraftConfig` (`DraftView.ts:17`): tipo union sin `onBack`.
+- `DraftView.draw()` (render del botón CONFIRMAR, área inferior): añadir el botón
+  junto a `#draft-confirm`.
+- `showSinglePlayerDraft` (`main.ts:266`): punto donde se instancia `DraftView` para
+  la IA; recibe `DraftConfig` como segundo parámetro.
+- `backButton` helper (`views/hub/panel.ts`): referencia de estilo del botón volver.
+
+**Dependencias:** ninguna. **Paralelizable:** sí.
+
+---
+
+## 🎟️ T11.14 — Bug: abandonar Arena → partida local muestra el mapa de Arena
+
+**Historia de usuario:** Como jugador, quiero que al abandonar la Arena y empezar
+una partida local (vs IA o hot-seat), se cargue el mapa local correcto — no el gran
+mapa de la Arena vacío.
+
+**Descripción del bug:** tras jugar en la Arena online, al pulsar "ABANDONAR" y
+volver al menú, si el usuario inicia una nueva partida local (ej. vs IA fácil),
+la pantalla del tablero muestra el mapa de la Arena (con su radio mucho mayor) sin
+piezas, en lugar del mapa local de la nueva partida.
+
+**Causas identificadas (investigación):**
+1. **Estado renderizado persistente:** en `abandonGame` (`GameController.ts:964`),
+   el método llama a `applyMatchState(abandonedArenaState)` justo antes de llamar a
+   `exitToMenu()`. Esto actualiza `state.currentTiles` al mapa grande de la Arena y
+   re-renderiza el canvas. Cuando el usuario inicia la partida local, si `start()`
+   falla o hay latencia, el canvas sigue mostrando la Arena.
+2. **`gameController` nunca se destruye:** `enterGame` reutiliza la misma instancia
+   (`if (!gameController) …`). Si `start()` lanza en la nueva partida (error de red,
+   imagen que tarda), la capa `gameLayer` ya está visible (L516) con el mapa viejo.
+3. **`MatchSession` no se limpia en `return-to-menu`:** si el usuario cierra la pestaña
+   o recarga mientras está en Arena (sin pulsar "ABANDONAR" correctamente), la sesión
+   `{ matchId: 'arena' }` queda en `sessionStorage`. Al recargar, `tryRejoinOnline()`
+   la lee y llama a `enterOnlineGame(arenaRoom)` de nuevo.
+
+**Objetivos de desarrollo:**
+1. En el handler `return-to-menu` (`main.ts:530`), añadir `MatchSession.clear()` para
+   limpiar la sesión independientemente de cómo se llegue al menú.
+2. En `abandonGame` (`GameController.ts:964`), **no llamar a `applyMatchState`** con el
+   estado de la Arena antes de salir — solo disparar `exitToMenu()` directamente (la
+   información de recompensas se pasa al modal de bolas sin actualizar el tablero).
+3. En `enterGame` (`main.ts:515`), al reutilizar `gameController`, llamar a un método
+   de limpieza (`gameController.resetBoard()` o similar) que borre los tiles actuales
+   de `state.currentTiles` antes de la nueva `start()`, para que el canvas no muestre
+   el estado anterior mientras carga.
+4. Verificar que el `scheduleLocalForceStart` del `MatchManager` no dispara sobre la
+   partida arena (el timer viejo captura la referencia correcta; ya tiene la guardia
+   `if (this.match === target)`, pero verificar que no hay otro timer activo de la
+   arena que dispare sobre el `this.match` local).
+
+**Dudas resueltas:** el bug es de gestión de sesión/estado en frontend; el backend
+no tiene ningún bug (Arena y local son instancias totalmente independientes: `this.match`
+vs `onlineMatches.get('arena')`).
+
+**Criterios de aceptación:**
+- [ ] Abandonar Arena y empezar una partida local muestra el mapa local correcto.
+- [ ] Recargar la página durante una partida de Arena **no** reinicia la Arena (o la
+      reanuda correctamente si la sesión se restaura y la sala sigue activa).
+- [ ] Si la sesión de Arena ya no es válida (sala inactiva), `tryRejoinOnline` limpia
+      la sesión y muestra el menú principal.
+- [ ] Después de volver de la Arena, el canvas está limpio antes de cargar la nueva
+      partida.
+
+**Investigación:**
+- `abandonGame` (`GameController.ts:964-990`): llama `applyMatchState(state)` (L973)
+  antes de `exitToMenu()`; reemplazar por solo guardar las bolas en variable local
+  sin pintar el estado de arena.
+- `exitToMenu` (`GameController.ts:1025`): ya limpia WS y session.
+- `return-to-menu` handler (`main.ts:530`): no llama a `MatchSession.clear()`.
+- `enterGame` (`main.ts:515`): `if (!gameController)` reutiliza la instancia vieja.
+- `connectRealtime` (`GameController.ts:331`): guard `if (this.wsClient) return` — OK.
+- `tryRejoinOnline` (`main.ts:493`): llama a `MatchSession.load()` y puede re-entrar
+  a la Arena si `sessionStorage` no se limpió.
+
+**Dependencias:** ninguna. **Paralelizable:** sí.
+
+---
+
 ## Resumen de tickets
 
 | Ticket | Área | Paralelizable | Dependencias |
@@ -414,7 +561,10 @@ la mecánica shiny a los jugadores nuevos.
 | T11.9 — Selector y confirmación recuperar Pokémon | Backend + Frontend | Sí | — |
 | T11.10 — Skip animación gacha | Frontend (tienda) | Sí | — |
 | T11.11 — Mensaje pokéball menciona shiny | Frontend (tienda) | Sí | — |
+| T11.12 — Moves en español en ficha modal | Backend + cache | Sí | — |
+| T11.13 — Botón volver en draft | Frontend (hub) | Sí | — |
+| T11.14 — Bug Arena → partida local | Frontend + Backend | Sí | — |
 
 > Todos los tickets son independientes entre sí y pueden desarrollarse en paralelo.
-> Se sugiere empezar por los más sencillos (T11.5, T11.11) para tener victorias rápidas,
-> y T11.1/T11.2/T11.3 para el impacto mayor en la sensación de combate.
+> Se sugiere empezar por los más sencillos (T11.5, T11.11, T11.13) para tener victorias
+> rápidas, y T11.14 como fix prioritario al ser un bug bloqueante de flujo.
