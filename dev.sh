@@ -139,6 +139,16 @@ issue_cert() {
 }
 
 COMPOSE=$(detect_compose)
+
+# --- 5. Modo produccion ----------------------------------------------------
+# Compose auto-carga docker-compose.override.yml, que es de DESARROLLO. Para
+# produccion hay que nombrar los ficheros explicitamente, lo que ademas evita
+# que el override se cuele. Se activa con:  PROD=1 ./dev.sh up-d
+if [ -n "${PROD:-}" ]; then
+  COMPOSE="$COMPOSE -f docker-compose.yml -f docker-compose.prod.yml"
+  echo "[modo PRODUCCION] frontend estatico, sin bind mounts, sin HMR" >&2
+fi
+
 setup_docker_host
 
 usage() {
@@ -158,6 +168,10 @@ Uso: ./dev.sh <comando> [servicio]
   doctor             Diagnostica el entorno sin levantar nada
   cert-dry-run       Ensaya la emisión del certificado (NO consume cuota)
   cert               Emite/renueva el certificado Let's Encrypt de verdad
+
+Modo produccion: prefija cualquier comando con PROD=1
+  PROD=1 ./dev.sh up-d      frontend estatico (nginx), sin HMR ni bind mounts
+  PROD=1 ./dev.sh ps
 EOF
 }
 

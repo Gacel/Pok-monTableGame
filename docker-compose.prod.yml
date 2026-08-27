@@ -1,0 +1,48 @@
+# docker-compose.prod.yml — modo PRODUCCIÓN. Ver docs/02-LOCAL_DEV.md §14.
+#
+# NO se carga automáticamente. Compose solo auto-carga docker-compose.yml y
+# docker-compose.override.yml, y ese override es de DESARROLLO (bind mounts del
+# código fuente, dev server de Vite con HMR, tsx watch). Por eso producción
+# exige nombrar los ficheros explícitamente:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# o, más corto:  PROD=1 ./dev.sh up-d
+#
+# Diferencias frente a desarrollo:
+#   - El frontend se sirve como ficheros ESTÁTICOS ya construidos (nginx), no
+#     con el dev server de Vite. Permite endurecer la CSP: sin HMR ya no hacen
+#     falta unsafe-eval ni unsafe-inline en script-src.
+#   - NO se monta el código fuente. La imagen es inmutable: lo que se despliega
+#     es exactamente lo que se construyó.
+#   - Solo el gateway publica puertos. Los servicios internos quedan accesibles
+#     únicamente a través de él, por la red interna de contenedores.
+
+services:
+  frontend:
+    build:
+      # Etapa final del Dockerfile: nginx + dist/, sin Node ni código fuente.
+      target: production
+    environment:
+      NODE_ENV: production
+
+  game-service:
+    environment:
+      NODE_ENV: production
+      LOG_LEVEL: info
+    volumes:
+      # La BD SQLite se queda en el HOST, no en el volumen nombrado del compose
+      # base. Es deliberado, por dos razones:
+      #   (a) es la MISMA ruta que usa desarrollo, asi que no acabas con dos
+      #       bases de datos divergentes segun el modo en que arranques. Sin
+      #       esto, un PROD=1 monta el volumen nombrado (vacio) y la web
+      #       aparece sin cuentas ni partidas.
+      #   (b) el respaldo es un tar de un directorio, sin gimnasia con
+      #       volumenes nombrados.
+      # Bind-montear DATOS es correcto. Lo que produccion no debe montar es
+      # CODIGO, y eso este overlay ya no lo hace.
+      - ./services/game-service/data:/app/services/game-service/data
+
+  hello:
+    environment:
+      NODE_ENV: production

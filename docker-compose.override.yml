@@ -22,6 +22,10 @@ services:
       - ./tsconfig.base.json:/app/tsconfig.base.json
     command: ['npm', 'run', 'dev']
   frontend:
+    # `production` es la ultima etapa del Dockerfile y por tanto el destino por
+    # defecto; en desarrollo hay que pedir la etapa dev explicitamente.
+    build:
+      target: dev
     ports:
       - '${HOST_FRONTEND:-15173}:5173'
     volumes:
@@ -33,3 +37,10 @@ services:
       - ./services/frontend/test:/app/services/frontend/test
       - ./packages/shared:/app/packages/shared
     command: ['npm', 'run', 'dev', '--', '--host', '0.0.0.0']
+
+  gateway:
+    environment:
+      # Relaja la CSP para que funcione el HMR de Vite. nginx.conf lleva la
+      # politica endurecida de produccion (script-src 'self'), que rompe el dev
+      # server. Lo aplica el entrypoint 97-csp-dev.sh. NUNCA en produccion.
+      CSP_DEV: 1
