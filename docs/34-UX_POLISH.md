@@ -29,3 +29,13 @@ Se añade un div HP bar flotante por cada pieza con ocupante visible:
   (`panKeys.size === 0`).
 - En `applyMatchState`, el centrado por cambio de turno (rama no-deployment) se
   condiciona a `panKeys.size === 0` para no interrumpir paneo con teclado.
+
+## T11.3 — Audio de combate (hit + death)
+
+**Archivos:** `services/frontend/src/utils/CombatAudio.ts`,
+`services/frontend/src/controllers/GameController.ts`
+
+- `CombatAudio.ts`: singleton con `playHit()` (ruido blanco filtrado, 0.15s) y
+  `playDeath()` (oscilador square descendente 440→80 Hz + ruido lowpass, 0.7s).
+- `dispatchEvents` calcula `inFog` por evento (ocupante oculto de slot enemigo);
+  solo reproduce audio si `!inFog`.
