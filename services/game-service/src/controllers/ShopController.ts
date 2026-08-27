@@ -11,6 +11,7 @@ interface BuyBody {
 }
 interface BuyStoneBody {
   stone?: string;
+  qty?: number;
 }
 
 /** Precio de recuperar un Pokémon perdido en Survival (T8.3). */
@@ -81,15 +82,21 @@ export const ShopController = {
     const stone = stoneByKey((request.body?.stone ?? '').trim());
     if (!stone) return reply.code(400).send({ success: false, error: 'Piedra inválida' });
 
+    const qty = Math.floor(Number(request.body?.qty) || 1);
+    if (qty < 1 || qty > 10) {
+      return reply.code(400).send({ success: false, error: 'Cantidad inválida (1-10)' });
+    }
+
+    const totalPrice = stone.price * qty;
     const user = await UserModel.findById(uid);
     if (!user) return reply.code(404).send({ success: false, error: 'Usuario no encontrado' });
-    if (user.coins < stone.price) {
+    if (user.coins < totalPrice) {
       return reply.code(402).send({ success: false, error: 'Monedas insuficientes', coins: user.coins });
     }
 
-    await UserModel.addCoins(uid, -stone.price);
-    await ItemModel.add(uid, STONE_KIND, stone.key, 1);
-    return { success: true, stone: { key: stone.key, label: stone.label }, coins: user.coins - stone.price };
+    await UserModel.addCoins(uid, -totalPrice);
+    await ItemModel.add(uid, STONE_KIND, stone.key, qty);
+    return { success: true, stone: { key: stone.key, label: stone.label }, qty, coins: user.coins - totalPrice };
   },
 
   /**
