@@ -138,6 +138,17 @@ hit y muerte; respeta la niebla de guerra (sin spoilers sonoros).
 
 **Dependencias:** ninguna. **Paralelizable:** sí.
 
+### ✅ Resolución (lo realmente hecho)
+
+- [x] Un ataque que hace daño reproduce un sonido de golpe.
+- [x] Un Pokémon que muere en combate reproduce un sonido de muerte diferente.
+- [x] Sin sonido para eventos de piezas ocultas en niebla.
+- [x] El audio no bloquea el hilo principal (Web Audio API, no `<audio>`).
+
+**Implementación:** `CombatAudio.ts` con síntesis Web Audio (ruido + filtro para hit,
+oscilador descendente + ruido para death). `dispatchEvents` filtra por niebla antes
+de reproducir audio.
+
 ---
 
 ## 🎟️ T11.4 — Draft y picker muestran sprites shiny de las instancias propias

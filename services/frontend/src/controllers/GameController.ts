@@ -15,6 +15,7 @@ import { BALL_SPRITE, BALL_LABEL } from '@transcendence/shared';
 import type { CaptureResult } from '@transcendence/shared';
 import { authState } from '../auth/AuthState';
 import { decideBotAction, hexDistance, pickCastMove } from './botStrategy';
+import { combatAudio } from '../utils/CombatAudio';
 import type { BotLevel, BotPieceOptions, EnemyPiece } from './botStrategy';
 
 /**
@@ -499,12 +500,16 @@ export class GameController {
     if (sig === this.lastEventsSig) return;
     this.lastEventsSig = sig;
 
+    const allies = this.state.hiddenAllySlots;
     for (const ev of events) {
       if (!ev.hex) continue;
+      const evTile = state.tiles.find(t => t.hex.q === ev.hex!.q && t.hex.r === ev.hex!.r);
+      const inFog = evTile?.occupant?.isHidden && allies && !allies.includes(evTile.occupant.playerId);
       switch (ev.kind) {
         case 'damage':
           this.fxLayer.floatingNumber(ev.hex, String(ev.delta ?? 0), 'damage');
-          if (ev.blocked) this.fxLayer.flash(ev.hex, '🛡️'); // intercepción de un coloso (T4.4)
+          if (ev.blocked) this.fxLayer.flash(ev.hex, '🛡️');
+          if (!inFog) combatAudio.playHit();
           break;
         case 'heal':
           this.fxLayer.floatingNumber(ev.hex, `+${ev.delta ?? 0}`, 'heal'); // +N verde (T2.3)
@@ -523,7 +528,9 @@ export class GameController {
             this.centerOnTile(evTile);
           }
           break;
-        // capture → su ticket (T8.5).
+        case 'ko':
+          if (!inFog) combatAudio.playDeath();
+          break;
         default:
           break;
       }
