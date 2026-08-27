@@ -271,6 +271,16 @@ el sprite se actualiza solo tras el event (backend ya lo hace).
 
 **Dependencias:** ninguna (trabaja sobre código ya existente). **Paralelizable:** sí.
 
+### ✅ Resolución (lo realmente hecho)
+
+- [x] Al evolucionar en combate, se ve una animación multi-fase vistosa (>1.5s) en el hex.
+- [x] Al evolucionar en el hub, la misma animación precede al refresh del inventario.
+- [x] Al final, el sprite muestra la forma evolucionada.
+- [x] La animación no bloquea otras interacciones (animación no-modal).
+
+**Implementación:** `EvolutionFx.ts` con 3 fases (halo, estrellas en espiral, flash final
++ label). Integrado en `dispatchEvents` (case 'evolve') y `doEvolve` (PokemonDetailModal).
+
 ---
 
 ## 🎟️ T11.7 — Comprar más de una piedra evolutiva a la vez

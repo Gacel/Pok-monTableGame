@@ -16,6 +16,7 @@ import type { CaptureResult } from '@transcendence/shared';
 import { authState } from '../auth/AuthState';
 import { decideBotAction, hexDistance, pickCastMove } from './botStrategy';
 import { combatAudio } from '../utils/CombatAudio';
+import { playEvolutionFx } from '../utils/EvolutionFx';
 import type { BotLevel, BotPieceOptions, EnemyPiece } from './botStrategy';
 
 /**
@@ -517,9 +518,15 @@ export class GameController {
         case 'reveal':
           this.fxLayer.flash(ev.hex); // "!" de emboscada revelada (T1.2)
           break;
-        case 'evolve':
-          this.fxLayer.flash(ev.hex, '✨'); // evolución in-match (T9.4); el sprite cambia solo
+        case 'evolve': {
+          const fxLayer = document.getElementById('fx-layer');
+          if (fxLayer) {
+            const pos = this.boardView.hexToScreen(ev.hex!);
+            const evolvedTile = state.tiles.find(t => t.hex.q === ev.hex!.q && t.hex.r === ev.hex!.r);
+            playEvolutionFx(fxLayer, pos.x, pos.y, evolvedTile?.occupant?.name);
+          }
           break;
+        }
         case 'knockback':
         case 'dash':
           if (ev.pokemonId) this.state.slidingIds.add(ev.pokemonId);
