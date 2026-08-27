@@ -57,6 +57,7 @@
 | 31 | [`31-CAPTURE.md`](31-CAPTURE.md) | Captura (Épica 8, completa): modo Survival con equipo propio vs IA salvaje (T8.1), captura al derrotar (T8.2), pérdida real + recuperación en tienda (T8.3), robo PvP en BR (T8.4) y feedback (T8.5). |
 | 32 | [`32-EVOLUTION.md`](32-EVOLUTION.md) | Evolución (Épica 9, completa): resolución por especie (T9.1), piedras como drops+tienda (T9.2), evolución meta en inventario (T9.3) e in-match por candies (T9.4), ambas persistentes. |
 | 33 | [`33-TRADING.md`](33-TRADING.md) | Intercambio (Épica 10, completa): backend con escrow (T10.1), UI de oferta/gestión (T10.2) y evoluciones por intercambio Gen 1 (T10.3). Cierra el roadmap del doc 12. |
+| 34 | [`34-UX_POLISH.md`](34-UX_POLISH.md) | Pulido de UI/UX (Épica 11): barra de vida en combate, cámara, audio, sprites shiny, inventario, tienda, draft y bugfixes. |
 
 ## Archivo (histórico, no numerado)
 
