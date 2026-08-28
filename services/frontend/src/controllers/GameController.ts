@@ -111,6 +111,11 @@ export class GameController {
     if (winMenuBtn) winMenuBtn.style.display = session ? 'none' : '';
   }
 
+  public resetBoard(): void {
+    this.state.clearMatch();
+    this.renderAll();
+  }
+
   /** Configura los slots controlados por la IA (solo local). */
   public setBots(bots: Record<string, BotLevel> | null): void {
     this.bots = bots ?? {};
@@ -986,8 +991,9 @@ export class GameController {
       if (res.ok && data.success) {
         this.state.selectedHex = null;
         const state = data.state as MatchState;
-        this.applyMatchState(state);
         // ARENA: si te llevas bolas al abandonar, muéstralas antes de salir.
+        // No pintamos el estado de arena (applyMatchState) para evitar que el
+        // canvas quede con el mapa grande si el usuario inicia una local después.
         const slot = this.session?.mySlot ?? 'player1';
         const balls = state.rewards?.find((r) => r.slot === slot)?.balls ?? [];
         // Quien abandona sale SIEMPRE al menú principal (la partida sigue para

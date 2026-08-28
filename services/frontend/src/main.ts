@@ -522,6 +522,8 @@ function enterGame(session: OnlineSession | null, bots?: Record<string, BotLevel
   resizeGameArea();
   if (!gameController) {
     gameController = new GameController(canvas);
+  } else {
+    gameController.resetBoard();
   }
   gameController.setSession(session);
   // La IA solo aplica en local (sin sesión online).
@@ -531,6 +533,7 @@ function enterGame(session: OnlineSession | null, bots?: Record<string, BotLevel
 
 // Salir de la partida al menú principal (p. ej. tras pulsar ABANDONAR).
 document.addEventListener('return-to-menu', () => {
+  MatchSession.clear();
   gameLayer.classList.add('hidden');
   const sidebar = document.getElementById('right-sidebar');
   if (sidebar) sidebar.classList.add('hidden');

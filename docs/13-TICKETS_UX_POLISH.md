@@ -676,6 +676,21 @@ vs `onlineMatches.get('arena')`).
 
 **Dependencias:** ninguna. **Paralelizable:** sí.
 
+### ✅ Resolución T11.14
+
+- [x] Abandonar Arena y empezar una partida local muestra el mapa local correcto.
+- [x] Recargar la página durante una partida de Arena no reinicia la Arena (sesión se limpia en `return-to-menu`).
+- [x] Si la sesión de Arena ya no es válida, `tryRejoinOnline` limpia la sesión y muestra el menú principal.
+- [x] Después de volver de la Arena, el canvas está limpio antes de cargar la nueva partida.
+
+**Cambios realizados:**
+1. `GameController.abandonGame`: eliminada la llamada a `applyMatchState(state)` — las recompensas se extraen del JSON sin pintar el mapa de arena.
+2. `main.ts` handler `return-to-menu`: añadido `MatchSession.clear()` al principio para limpiar `sessionStorage` independientemente de cómo se llegue al menú.
+3. `GameState.clearMatch()`: nuevo método que resetea `_match`, selección, moves, hover y sliding ids.
+4. `GameController.resetBoard()`: método público que limpia el estado y repinta (canvas vacío).
+5. `main.ts` `enterGame`: cuando reutiliza `gameController`, llama `resetBoard()` antes de configurar la nueva sesión, para que el canvas no muestre el mapa anterior.
+6. `scheduleLocalForceStart` verificado: la guarda `this.match === target` impide que un timer viejo de arena dispare sobre una partida local.
+
 ---
 
 ## Resumen de tickets
