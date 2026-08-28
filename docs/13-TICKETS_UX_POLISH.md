@@ -501,6 +501,14 @@ la mecánica shiny a los jugadores nuevos.
 
 **Dependencias:** ninguna. **Paralelizable:** sí.
 
+### ✅ Resolución (lo realmente hecho)
+
+- [x] El texto en la sección de Pokéballs menciona explícitamente los Pokémon shiny.
+- [x] La redacción es coherente con el tono retro del juego.
+
+**Implementación:** Añadido ", legendarios y shiny" al texto informativo de la sección
+de Pokéballs en `ShopMenuView.ts`.
+
 ---
 
 ## 🎟️ T11.12 — Nombres y descripciones de ataques en español en la ficha modal

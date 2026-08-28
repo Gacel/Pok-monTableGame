@@ -309,7 +309,7 @@ export class ShopMenuView {
       ${panelCard(
         `<div class="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4 w-full max-w-3xl">${BALLS.map(ballCard).join('')}</div>
          ${this.notice ? `<p class="text-red-500 text-center mt-4" style="${FONT} font-size:9px;">⚠ ${this.notice}</p>` : ''}
-         <p class="text-gray-500 text-center mt-4" style="${FONT} font-size:7px;">A mayor calidad de la Pokéball, mayor probabilidad de capturar Pokémon inusuales y legendarios.</p>`,
+         <p class="text-gray-500 text-center mt-4" style="${FONT} font-size:7px;">A mayor calidad de la Pokéball, mayor probabilidad de capturar Pokémon inusuales, legendarios y shiny.</p>`,
         'flex flex-col items-center'
       )}
       ${backButton()}
