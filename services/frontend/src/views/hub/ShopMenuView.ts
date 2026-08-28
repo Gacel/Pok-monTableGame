@@ -44,6 +44,8 @@ export class ShopMenuView {
     sprite: string;
     isShiny: boolean;
   } | null = null;
+  private gachaTimers: number[] = [];
+  private gachaSkipVisible = false;
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -338,11 +340,12 @@ export class ShopMenuView {
         this.reveal = { name: data.pokemon.name, tier: data.pokemon.tier, isShiny: !!data.pokemon.isShiny, sprite: '' };
         this.openingBall = ball;
         this.step = 'opening';
+        this.gachaTimers = [];
         gachaAudio.playTension();
         this.render();
+        this.attachGachaSkip();
 
-        // A los 2.0s la bola explota hacia nosotros y la interfaz desaparece
-        setTimeout(() => {
+        this.gachaTimers.push(window.setTimeout(() => {
           const pb = document.getElementById('opening-pokeball');
           if (pb) {
             // Sacamos la bola al body para que sobreviva al fundido de la UI
@@ -361,22 +364,21 @@ export class ShopMenuView {
           this.container.style.transition = 'opacity 0.4s ease-in, transform 0.4s ease-in';
           this.container.style.opacity = '0';
           this.container.style.transform = 'scale(0.95)';
-        }, 2000);
+        }, 2000));
 
-        setTimeout(() => {
+        this.gachaTimers.push(window.setTimeout(() => {
           const pb = document.getElementById('opening-pokeball');
           if (pb) pb.remove();
-          
+
           this.container.style.transition = 'none';
           this.container.style.opacity = '1';
           this.container.style.transform = 'none';
-          
+
           this.step = 'sky_cinematic';
           gachaAudio.playEpicSky();
           this.render();
-          
-          // Sky cinematic takes 5.0s now for dramatic pause
-          setTimeout(async () => {
+
+          this.gachaTimers.push(window.setTimeout(async () => {
             await this.loadRevealSprite();
             this.step = 'fullscreen_reveal';
             gachaAudio.playExplosion();
@@ -437,9 +439,9 @@ export class ShopMenuView {
             this.busy = false;
             gachaAudio.playTrack('/assets/sounds/victory.mp3');
             
-          }, 5000);
-          
-        }, 2500);
+          }, 5000));
+
+        }, 2500));
         
         return;
       }
@@ -456,14 +458,66 @@ export class ShopMenuView {
     this.reveal.sprite = await getSprite(this.reveal.name, this.reveal.isShiny);
   }
 
+  private async skipToReveal(): Promise<void> {
+    for (const t of this.gachaTimers) clearTimeout(t);
+    this.gachaTimers = [];
+    gachaAudio.stopTrack();
+    const pb = document.getElementById('opening-pokeball');
+    if (pb) pb.remove();
+    const fs = document.getElementById('fullscreen-gacha');
+    if (fs) fs.remove();
+    this.container.style.transition = 'none';
+    this.container.style.opacity = '1';
+    this.container.style.transform = 'none';
+    await this.loadRevealSprite();
+    this.step = 'reveal';
+    this.busy = false;
+    this.gachaSkipVisible = false;
+    this.render();
+    gachaAudio.playTrack('/assets/sounds/victory.mp3');
+  }
+
+  private attachGachaSkip(): void {
+    this.gachaSkipVisible = false;
+    const handler = (e: Event) => {
+      if (this.step !== 'opening' && this.step !== 'sky_cinematic' && this.step !== 'fullscreen_reveal') {
+        cleanup();
+        return;
+      }
+      e.preventDefault();
+      const skipBtn = document.getElementById('gacha-skip-btn');
+      if (!this.gachaSkipVisible) {
+        this.gachaSkipVisible = true;
+        if (skipBtn) skipBtn.classList.remove('hidden');
+        return;
+      }
+      const isSkipClick = e.type === 'click' && skipBtn && (e.target === skipBtn || skipBtn.contains(e.target as Node));
+      if (e.type === 'keydown' || isSkipClick) {
+        cleanup();
+        void this.skipToReveal();
+      }
+    };
+    const keyHandler = (e: KeyboardEvent) => {
+      if (e.key === ' ' || e.key === 'Enter' || e.key === 'Escape') handler(e);
+    };
+    const cleanup = () => {
+      document.removeEventListener('keydown', keyHandler);
+      document.removeEventListener('click', handler);
+    };
+    document.addEventListener('keydown', keyHandler);
+    document.addEventListener('click', handler);
+  }
+
   private renderOpening() {
     const ballObj = BALLS.find(b => b.key === this.openingBall) || BALLS[0];
     this.container.innerHTML = hubPanel(
       `
       <div class="relative flex flex-col items-center justify-center w-full h-full" style="min-height: 560px;">
-        <!-- Shaking Ball -->
         <img id="opening-pokeball" src="${BALL_SPRITE}/${ballObj.sprite}" class="w-48 h-48 object-contain animate-gacha-shake relative z-10" style="image-rendering: pixelated; filter: drop-shadow(0 0 20px rgba(255,255,255,0.5)); transform-origin: center center;" />
       </div>
+      <button id="gacha-skip-btn" class="${this.gachaSkipVisible ? '' : 'hidden '}fixed bottom-24 right-0 bg-gray-900/90 border-4 border-gray-500 border-r-0 text-white px-5 py-4 z-[10001] hover:bg-gray-700 transition-colors flex items-center gap-4 text-xs" style="${FONT} box-shadow: -4px 4px 0 rgba(0,0,0,0.8);">
+        SALTAR ▸▸
+      </button>
       `,
       { minHeight: 560 }
     );
