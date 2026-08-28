@@ -15,8 +15,8 @@ interface RosterEntry {
 
 /** Configuración del draft: local secuencial (N jugadores) u online (solo tú). */
 export type DraftConfig =
-  | { mode: 'local'; players: number; gameMode: GameMode; poolEndpoint?: string }
-  | { mode: 'online'; playerLabel: string; reserved?: string[]; poolEndpoint?: string };
+  | { mode: 'local'; players: number; gameMode: GameMode; poolEndpoint?: string; onBack?: () => void }
+  | { mode: 'online'; playerLabel: string; reserved?: string[]; poolEndpoint?: string; onBack?: () => void };
 
 const TEAM_SIZE = 3;
 
@@ -175,6 +175,7 @@ export class DraftView {
         <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2 w-full max-w-4xl">${cards}</div>
         <div class="mt-4 flex flex-col sm:flex-row gap-2 sm:gap-4 items-center justify-between w-full max-w-4xl px-2 sm:px-4 bg-gray-900 bg-opacity-80 p-2 rounded border border-gray-700">
           <span class="text-[8px] text-gray-300 text-center sm:text-left" style="font-family:'Press Start 2P',monospace;">Elegidos: <span class="text-yellow-400 font-bold">${picks.map((n) => n.toUpperCase()).join('  ') || '—'}</span></span>
+          ${this.config.onBack ? `<button id="draft-back" class="px-4 py-3 text-xs rounded border-2 border-gray-600 bg-gray-800 text-gray-300 hover:bg-gray-700 transition-all" style="font-family:'Press Start 2P',monospace;">◀ VOLVER</button>` : ''}
           <button id="draft-confirm" ${isReady ? '' : 'disabled'}
             class="px-6 py-3 text-xs rounded border-2 transition-all ${btnStyle}"
             style="font-family:'Press Start 2P',monospace;">
@@ -201,6 +202,7 @@ export class DraftView {
     });
 
     this.container.querySelector('#draft-confirm')?.addEventListener('click', () => this.confirm());
+    this.container.querySelector('#draft-back')?.addEventListener('click', () => this.config.onBack?.());
   }
 
   /** Abre la ficha del Pokémon del roster con lo ya conocido (tipo/patrón/stats/sprite). */

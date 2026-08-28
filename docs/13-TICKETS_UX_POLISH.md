@@ -599,6 +599,15 @@ no necesiten volver no lo reciben y la UI no cambia.
 
 **Dependencias:** ninguna. **Paralelizable:** sí.
 
+### ✅ Resolución (lo realmente hecho)
+
+- [x] En el draft de "un jugador vs IA", hay un botón "VOLVER" que lleva al menú anterior.
+- [x] Al pulsar "VOLVER" no se inicia ninguna partida ni se envían datos al servidor.
+- [x] El botón no rompe el draft online (que no pasa `onBack`).
+
+**Implementación:** `onBack?: () => void` en DraftConfig; botón "◀ VOLVER" condicional
+en `draw()`; `showSinglePlayerDraft` pasa callback que oculta el draft y restaura el menú.
+
 ---
 
 ## 🎟️ T11.14 — Bug: abandonar Arena → partida local muestra el mapa de Arena
