@@ -269,7 +269,10 @@ async function showSinglePlayerDraft(level: BotLevel) {
   draftLayer.classList.remove('hidden');
   const view = new DraftView(
     draftLayer,
-    { mode: 'online', playerLabel: 'TU EQUIPO', poolEndpoint: '/api/game/draft-pool' },
+    {
+      mode: 'online', playerLabel: 'TU EQUIPO', poolEndpoint: '/api/game/draft-pool',
+      onBack: () => { draftLayer.classList.add('hidden'); hubLayer.style.display = ''; hubLayer.classList.remove('opacity-0'); showSinglePlayerMenu(); },
+    },
     (teams) => void onSinglePlayerDraftConfirmed(draftLayer, level, teams[0] ?? [])
   );
   await view.render();
@@ -519,6 +522,8 @@ function enterGame(session: OnlineSession | null, bots?: Record<string, BotLevel
   resizeGameArea();
   if (!gameController) {
     gameController = new GameController(canvas);
+  } else {
+    gameController.resetBoard();
   }
   gameController.setSession(session);
   // La IA solo aplica en local (sin sesión online).
@@ -528,6 +533,7 @@ function enterGame(session: OnlineSession | null, bots?: Record<string, BotLevel
 
 // Salir de la partida al menú principal (p. ej. tras pulsar ABANDONAR).
 document.addEventListener('return-to-menu', () => {
+  MatchSession.clear();
   gameLayer.classList.add('hidden');
   const sidebar = document.getElementById('right-sidebar');
   if (sidebar) sidebar.classList.add('hidden');

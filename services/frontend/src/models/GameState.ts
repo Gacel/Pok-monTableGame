@@ -81,6 +81,17 @@ export class GameState {
     this.notify();
   }
 
+  clearMatch(): void {
+    this._match = null;
+    this._moveOptions = null;
+    this._selectedHex = null;
+    this._activeMoveIndex = null;
+    this.selectedReserveId = null;
+    this.hoverHex = null;
+    this.slidingIds.clear();
+    this.notify();
+  }
+
   set moveOptions(opts: MoveOptions | null) {
     this._moveOptions = opts;
     this.notify();

@@ -44,6 +44,8 @@ export class ShopMenuView {
     sprite: string;
     isShiny: boolean;
   } | null = null;
+  private gachaTimers: number[] = [];
+  private gachaSkipVisible = false;
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -94,19 +96,28 @@ export class ShopMenuView {
     document.getElementById('btn-back')?.addEventListener('click', () => showMainMenu());
   }
 
-  /** Tienda de PIEDRAS evolutivas (T9.2). */
+  /** Tienda de PIEDRAS evolutivas (T9.2, T11.7 qty). */
   private renderStones() {
     const coins = this.coins();
     const card = (s: (typeof STONES)[number]) => {
       const afford = coins >= s.price && !this.busy;
       return `
-      <button data-stone="${s.key}" ${afford ? '' : 'disabled'} class="stone-card flex flex-col items-center justify-between gap-2 rounded border-4 border-gray-800 shadow-[4px_4px_0_#000] transition-all ${
-        afford ? 'bg-white hover:bg-yellow-100 active:mt-1' : 'bg-gray-300 opacity-60 cursor-not-allowed'
+      <div class="stone-card flex flex-col items-center justify-between gap-2 rounded border-4 border-gray-800 shadow-[4px_4px_0_#000] ${
+        afford ? 'bg-white' : 'bg-gray-300 opacity-60'
       }" style="padding:16px 12px;">
         <img src="${BALL_SPRITE}/${s.key}.png" alt="${s.key}" class="w-16 h-16 object-contain" style="image-rendering: pixelated;" />
         <span class="text-black text-center" style="${FONT} font-size:8px;">${stoneLabelEs(s.key)}</span>
         <span class="text-gray-700" style="${FONT} font-size:10px;">${s.price} 🪙</span>
-      </button>`;
+        <div class="flex items-center gap-1 mt-1">
+          <button data-stone="${s.key}" data-delta="-1" class="stone-qty-btn w-6 h-6 rounded bg-gray-700 text-white" style="${FONT} font-size:10px;">-</button>
+          <span data-stone-qty="${s.key}" class="text-black" style="${FONT} font-size:10px; min-width:20px; text-align:center;">1</span>
+          <button data-stone="${s.key}" data-delta="1" class="stone-qty-btn w-6 h-6 rounded bg-gray-700 text-white" style="${FONT} font-size:10px;">+</button>
+        </div>
+        <span data-stone-total="${s.key}" class="text-gray-600" style="${FONT} font-size:8px;">${s.price} 🪙</span>
+        <button data-buy-stone="${s.key}" data-price="${s.price}" ${afford ? '' : 'disabled'} class="stone-buy-btn mt-1 px-3 py-1 rounded border-b-4 ${
+          afford ? 'bg-green-600 hover:bg-green-500 text-white border-green-800 active:border-b-0' : 'bg-gray-400 text-gray-600 border-gray-500 cursor-not-allowed'
+        }" style="${FONT} font-size:8px;">COMPRAR</button>
+      </div>`;
     };
 
     this.container.innerHTML = hubPanel(
@@ -123,8 +134,32 @@ export class ShopMenuView {
       { minHeight: 600 }
     );
 
-    this.container.querySelectorAll<HTMLButtonElement>('.stone-card').forEach((btn) => {
-      btn.addEventListener('click', () => void this.buyStone(btn.dataset.stone!));
+    const qtys: Record<string, number> = {};
+    for (const s of STONES) qtys[s.key] = 1;
+
+    this.container.querySelectorAll<HTMLButtonElement>('.stone-qty-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const key = btn.dataset.stone!;
+        const delta = Number(btn.dataset.delta);
+        qtys[key] = Math.max(1, Math.min(10, (qtys[key] ?? 1) + delta));
+        const qtyEl = this.container.querySelector(`[data-stone-qty="${key}"]`);
+        if (qtyEl) qtyEl.textContent = String(qtys[key]);
+        const stone = STONES.find(s => s.key === key);
+        const totalEl = this.container.querySelector(`[data-stone-total="${key}"]`);
+        if (totalEl && stone) totalEl.textContent = `${stone.price * qtys[key]} 🪙`;
+        const buyBtn = this.container.querySelector<HTMLButtonElement>(`[data-buy-stone="${key}"]`);
+        if (buyBtn && stone) {
+          const canAfford = coins >= stone.price * qtys[key] && !this.busy;
+          buyBtn.disabled = !canAfford;
+        }
+      });
+    });
+
+    this.container.querySelectorAll<HTMLButtonElement>('.stone-buy-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const key = btn.dataset.buyStone!;
+        void this.buyStone(key, qtys[key] ?? 1);
+      });
     });
     document.getElementById('btn-back')?.addEventListener('click', () => {
       this.step = 'root';
@@ -132,16 +167,16 @@ export class ShopMenuView {
     });
   }
 
-  /** Compra una piedra evolutiva (T9.2). */
-  private async buyStone(stone: string): Promise<void> {
+  /** Compra una piedra evolutiva (T9.2, T11.7 qty). */
+  private async buyStone(stone: string, qty = 1): Promise<void> {
     if (this.busy) return;
     this.busy = true;
     try {
-      const res = await apiFetch('/api/shop/stone', { method: 'POST', body: JSON.stringify({ stone }) });
+      const res = await apiFetch('/api/shop/stone', { method: 'POST', body: JSON.stringify({ stone, qty }) });
       const data = await res.json();
       if (res.ok && data.success) {
         if (authState.user) authState.user.coins = data.coins;
-        alert(`💎 Comprada: ${stoneLabelEs(stone)} · saldo ${data.coins} 🪙`);
+        alert(`💎 ${qty}× ${stoneLabelEs(stone)} comprada(s) · saldo ${data.coins} 🪙`);
         this.render();
       } else {
         alert(data.error ?? 'No se pudo comprar');
@@ -153,17 +188,95 @@ export class ShopMenuView {
     }
   }
 
-  /** Recupera el último Pokémon perdido en Survival por 10000 🪙 (T8.3). */
   private async recoverPokemon() {
     if (this.busy) return;
     this.busy = true;
     try {
-      const res = await apiFetch('/api/shop/recover-pokemon', { method: 'POST' });
+      const res = await apiFetch('/api/shop/lost-pokemon');
+      const data = await res.json();
+      const lost: Array<{ id: string; name: string; level: number; price: number }> = data.pokemon ?? [];
+      if (lost.length === 0) {
+        alert('No tienes Pokémon perdidos.');
+        this.busy = false;
+        return;
+      }
+      const sprites: Record<string, string> = {};
+      await Promise.all(lost.map(async (p) => { sprites[p.name] = await getSprite(p.name); }));
+      this.showLostPicker(lost, sprites);
+    } catch {
+      alert('Error de red');
+    } finally {
+      this.busy = false;
+    }
+  }
+
+  private showLostPicker(lost: Array<{ id: string; name: string; level: number; price: number }>, sprites: Record<string, string>) {
+    const cards = lost.map(p => `
+      <button data-recover-id="${p.id}" class="recover-card flex flex-col items-center gap-1 rounded border-4 border-gray-800 bg-white hover:bg-yellow-100 active:mt-1 shadow-[4px_4px_0_#000]" style="padding:12px 8px;">
+        <img src="${sprites[p.name] ?? ''}" alt="${p.name}" class="w-14 h-14 object-contain" style="image-rendering:pixelated;" />
+        <span class="text-black text-center" style="${FONT} font-size:8px;">${p.name.toUpperCase()}</span>
+        <span class="text-gray-600" style="${FONT} font-size:7px;">Lv.${p.level}</span>
+        <span class="text-yellow-600" style="${FONT} font-size:8px;">${p.price} 🪙</span>
+      </button>
+    `).join('');
+
+    this.container.innerHTML = hubPanel(
+      `${panelTitle('RECUPERAR POKÉMON')}
+       <p class="text-white text-center mb-3" style="${FONT} font-size:11px;">Tu saldo: <span class="text-yellow-300">${this.coins()} 🪙</span></p>
+       ${panelCard(
+         `<div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 sm:gap-3 w-full max-w-3xl">${cards}</div>`,
+         'flex flex-col items-center'
+       )}
+       ${backButton()}`,
+      { minHeight: 400 }
+    );
+
+    this.container.querySelectorAll<HTMLButtonElement>('.recover-card').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.recoverId!;
+        const p = lost.find(x => x.id === id);
+        if (p) this.showRecoverConfirm(p);
+      });
+    });
+    document.getElementById('btn-back')?.addEventListener('click', () => {
+      this.step = 'root';
+      this.render();
+    });
+  }
+
+  private showRecoverConfirm(p: { id: string; name: string; level: number; price: number }) {
+    const overlay = document.createElement('div');
+    overlay.className = 'fixed inset-0 z-[300] flex items-center justify-center p-4';
+    overlay.style.background = 'rgba(0,0,0,0.72)';
+    overlay.innerHTML = `
+      <div class="bg-gray-900 rounded-xl border-4 border-white p-6 text-center" style="max-width:340px; box-shadow:0 0 0 4px #000, 0 0 30px rgba(0,0,0,0.8);">
+        <p class="text-white mb-4" style="${FONT} font-size:12px;">¿Recuperar a <span class="text-yellow-300">${p.name.toUpperCase()}</span> (Lv.${p.level}) por <span class="text-yellow-300">${p.price} 🪙</span>?</p>
+        <div class="flex gap-3 justify-center">
+          <button id="recover-confirm" class="px-4 py-2 rounded bg-green-600 hover:bg-green-500 text-white border-b-4 border-green-800 active:border-b-0" style="${FONT} font-size:10px;">CONFIRMAR</button>
+          <button id="recover-cancel" class="px-4 py-2 rounded bg-red-600 hover:bg-red-500 text-white border-b-4 border-red-800 active:border-b-0" style="${FONT} font-size:10px;">CANCELAR</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+
+    overlay.querySelector('#recover-confirm')?.addEventListener('click', async () => {
+      overlay.remove();
+      await this.doRecover(p.id);
+    });
+    overlay.querySelector('#recover-cancel')?.addEventListener('click', () => overlay.remove());
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+  }
+
+  private async doRecover(id: string) {
+    if (this.busy) return;
+    this.busy = true;
+    try {
+      const res = await apiFetch('/api/shop/recover-pokemon', { method: 'POST', body: JSON.stringify({ id }) });
       const data = await res.json();
       if (res.ok && data.success) {
         if (authState.user) authState.user.coins = data.coins;
         const p = data.pokemon ?? {};
         alert(`💾 Recuperado: ${String(p.name ?? '').toUpperCase()} (Lv.${p.level ?? 1}) · saldo ${data.coins} 🪙`);
+        this.step = 'root';
         this.render();
       } else {
         alert(data.error ?? 'No se pudo recuperar');
@@ -196,7 +309,7 @@ export class ShopMenuView {
       ${panelCard(
         `<div class="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4 w-full max-w-3xl">${BALLS.map(ballCard).join('')}</div>
          ${this.notice ? `<p class="text-red-500 text-center mt-4" style="${FONT} font-size:9px;">⚠ ${this.notice}</p>` : ''}
-         <p class="text-gray-500 text-center mt-4" style="${FONT} font-size:7px;">A mayor calidad de la Pokéball, mayor probabilidad de capturar Pokémon inusuales y legendarios.</p>`,
+         <p class="text-gray-500 text-center mt-4" style="${FONT} font-size:7px;">A mayor calidad de la Pokéball, mayor probabilidad de capturar Pokémon inusuales, legendarios y shiny.</p>`,
         'flex flex-col items-center'
       )}
       ${backButton()}
@@ -227,11 +340,12 @@ export class ShopMenuView {
         this.reveal = { name: data.pokemon.name, tier: data.pokemon.tier, isShiny: !!data.pokemon.isShiny, sprite: '' };
         this.openingBall = ball;
         this.step = 'opening';
+        this.gachaTimers = [];
         gachaAudio.playTension();
         this.render();
+        this.attachGachaSkip();
 
-        // A los 2.0s la bola explota hacia nosotros y la interfaz desaparece
-        setTimeout(() => {
+        this.gachaTimers.push(window.setTimeout(() => {
           const pb = document.getElementById('opening-pokeball');
           if (pb) {
             // Sacamos la bola al body para que sobreviva al fundido de la UI
@@ -250,22 +364,21 @@ export class ShopMenuView {
           this.container.style.transition = 'opacity 0.4s ease-in, transform 0.4s ease-in';
           this.container.style.opacity = '0';
           this.container.style.transform = 'scale(0.95)';
-        }, 2000);
+        }, 2000));
 
-        setTimeout(() => {
+        this.gachaTimers.push(window.setTimeout(() => {
           const pb = document.getElementById('opening-pokeball');
           if (pb) pb.remove();
-          
+
           this.container.style.transition = 'none';
           this.container.style.opacity = '1';
           this.container.style.transform = 'none';
-          
+
           this.step = 'sky_cinematic';
           gachaAudio.playEpicSky();
           this.render();
-          
-          // Sky cinematic takes 5.0s now for dramatic pause
-          setTimeout(async () => {
+
+          this.gachaTimers.push(window.setTimeout(async () => {
             await this.loadRevealSprite();
             this.step = 'fullscreen_reveal';
             gachaAudio.playExplosion();
@@ -326,9 +439,9 @@ export class ShopMenuView {
             this.busy = false;
             gachaAudio.playTrack('/assets/sounds/victory.mp3');
             
-          }, 5000);
-          
-        }, 2500);
+          }, 5000));
+
+        }, 2500));
         
         return;
       }
@@ -345,14 +458,66 @@ export class ShopMenuView {
     this.reveal.sprite = await getSprite(this.reveal.name, this.reveal.isShiny);
   }
 
+  private async skipToReveal(): Promise<void> {
+    for (const t of this.gachaTimers) clearTimeout(t);
+    this.gachaTimers = [];
+    gachaAudio.stopTrack();
+    const pb = document.getElementById('opening-pokeball');
+    if (pb) pb.remove();
+    const fs = document.getElementById('fullscreen-gacha');
+    if (fs) fs.remove();
+    this.container.style.transition = 'none';
+    this.container.style.opacity = '1';
+    this.container.style.transform = 'none';
+    await this.loadRevealSprite();
+    this.step = 'reveal';
+    this.busy = false;
+    this.gachaSkipVisible = false;
+    this.render();
+    gachaAudio.playTrack('/assets/sounds/victory.mp3');
+  }
+
+  private attachGachaSkip(): void {
+    this.gachaSkipVisible = false;
+    const handler = (e: Event) => {
+      if (this.step !== 'opening' && this.step !== 'sky_cinematic' && this.step !== 'fullscreen_reveal') {
+        cleanup();
+        return;
+      }
+      e.preventDefault();
+      const skipBtn = document.getElementById('gacha-skip-btn');
+      if (!this.gachaSkipVisible) {
+        this.gachaSkipVisible = true;
+        if (skipBtn) skipBtn.classList.remove('hidden');
+        return;
+      }
+      const isSkipClick = e.type === 'click' && skipBtn && (e.target === skipBtn || skipBtn.contains(e.target as Node));
+      if (e.type === 'keydown' || isSkipClick) {
+        cleanup();
+        void this.skipToReveal();
+      }
+    };
+    const keyHandler = (e: KeyboardEvent) => {
+      if (e.key === ' ' || e.key === 'Enter' || e.key === 'Escape') handler(e);
+    };
+    const cleanup = () => {
+      document.removeEventListener('keydown', keyHandler);
+      document.removeEventListener('click', handler);
+    };
+    document.addEventListener('keydown', keyHandler);
+    document.addEventListener('click', handler);
+  }
+
   private renderOpening() {
     const ballObj = BALLS.find(b => b.key === this.openingBall) || BALLS[0];
     this.container.innerHTML = hubPanel(
       `
       <div class="relative flex flex-col items-center justify-center w-full h-full" style="min-height: 560px;">
-        <!-- Shaking Ball -->
         <img id="opening-pokeball" src="${BALL_SPRITE}/${ballObj.sprite}" class="w-48 h-48 object-contain animate-gacha-shake relative z-10" style="image-rendering: pixelated; filter: drop-shadow(0 0 20px rgba(255,255,255,0.5)); transform-origin: center center;" />
       </div>
+      <button id="gacha-skip-btn" class="${this.gachaSkipVisible ? '' : 'hidden '}fixed bottom-24 right-0 bg-gray-900/90 border-4 border-gray-500 border-r-0 text-white px-5 py-4 z-[10001] hover:bg-gray-700 transition-colors flex items-center gap-4 text-xs" style="${FONT} box-shadow: -4px 4px 0 rgba(0,0,0,0.8);">
+        SALTAR ▸▸
+      </button>
       `,
       { minHeight: 560 }
     );

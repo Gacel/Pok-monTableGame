@@ -15,6 +15,8 @@ import { BALL_SPRITE, BALL_LABEL } from '@transcendence/shared';
 import type { CaptureResult } from '@transcendence/shared';
 import { authState } from '../auth/AuthState';
 import { decideBotAction, hexDistance, pickCastMove } from './botStrategy';
+import { combatAudio } from '../utils/CombatAudio';
+import { playEvolutionFx } from '../utils/EvolutionFx';
 import type { BotLevel, BotPieceOptions, EnemyPiece } from './botStrategy';
 
 /**
@@ -107,6 +109,11 @@ export class GameController {
     // Online: la "revancha" ya lleva al menú → sobra el botón MENÚ extra.
     const winMenuBtn = document.getElementById('btn-win-menu');
     if (winMenuBtn) winMenuBtn.style.display = session ? 'none' : '';
+  }
+
+  public resetBoard(): void {
+    this.state.clearMatch();
+    this.renderAll();
   }
 
   /** Configura los slots controlados por la IA (solo local). */
@@ -471,7 +478,7 @@ export class GameController {
            const centerTile = newState.tiles.find(t => t.hex.q === centerQ && t.hex.r === centerR) || newState.tiles.find(t => t.hex.q === zones[0].q && t.hex.r === zones[0].r);
            this.centerOnTile(centerTile, animateCamera && !!oldPlayer);
         }
-      } else {
+      } else if (this.panKeys.size === 0) {
         const targetTile = this.state.getLastInteractedTile(newState.currentPlayer);
         this.centerOnTile(targetTile, animateCamera && !!oldPlayer);
       }
@@ -499,12 +506,16 @@ export class GameController {
     if (sig === this.lastEventsSig) return;
     this.lastEventsSig = sig;
 
+    const allies = this.state.hiddenAllySlots;
     for (const ev of events) {
       if (!ev.hex) continue;
+      const evTile = state.tiles.find(t => t.hex.q === ev.hex!.q && t.hex.r === ev.hex!.r);
+      const inFog = evTile?.occupant?.isHidden && allies && !allies.includes(evTile.occupant.playerId);
       switch (ev.kind) {
         case 'damage':
           this.fxLayer.floatingNumber(ev.hex, String(ev.delta ?? 0), 'damage');
-          if (ev.blocked) this.fxLayer.flash(ev.hex, '🛡️'); // intercepción de un coloso (T4.4)
+          if (ev.blocked) this.fxLayer.flash(ev.hex, '🛡️');
+          if (!inFog) combatAudio.playHit();
           break;
         case 'heal':
           this.fxLayer.floatingNumber(ev.hex, `+${ev.delta ?? 0}`, 'heal'); // +N verde (T2.3)
@@ -512,16 +523,26 @@ export class GameController {
         case 'reveal':
           this.fxLayer.flash(ev.hex); // "!" de emboscada revelada (T1.2)
           break;
-        case 'evolve':
-          this.fxLayer.flash(ev.hex, '✨'); // evolución in-match (T9.4); el sprite cambia solo
+        case 'evolve': {
+          const fxLayer = document.getElementById('fx-layer');
+          if (fxLayer) {
+            const pos = this.boardView.hexToScreen(ev.hex!);
+            const evolvedTile = state.tiles.find(t => t.hex.q === ev.hex!.q && t.hex.r === ev.hex!.r);
+            playEvolutionFx(fxLayer, pos.x, pos.y, evolvedTile?.occupant?.name);
+          }
           break;
+        }
         case 'knockback':
         case 'dash':
-          // Deslizamiento del sprite (T3.2/T3.4): se marca el id para que EntityView use
-          // una transición de posición larga en el render que lo mueve a su nuevo hex.
           if (ev.pokemonId) this.state.slidingIds.add(ev.pokemonId);
+          if (!this.isMyTurn() && this.panKeys.size === 0) {
+            const evTile = state.tiles.find(t => t.hex.q === ev.hex!.q && t.hex.r === ev.hex!.r);
+            this.centerOnTile(evTile);
+          }
           break;
-        // capture → su ticket (T8.5).
+        case 'ko':
+          if (!inFog) combatAudio.playDeath();
+          break;
         default:
           break;
       }
@@ -970,8 +991,9 @@ export class GameController {
       if (res.ok && data.success) {
         this.state.selectedHex = null;
         const state = data.state as MatchState;
-        this.applyMatchState(state);
         // ARENA: si te llevas bolas al abandonar, muéstralas antes de salir.
+        // No pintamos el estado de arena (applyMatchState) para evitar que el
+        // canvas quede con el mapa grande si el usuario inicia una local después.
         const slot = this.session?.mySlot ?? 'player1';
         const balls = state.rewards?.find((r) => r.slot === slot)?.balls ?? [];
         // Quien abandona sale SIEMPRE al menú principal (la partida sigue para

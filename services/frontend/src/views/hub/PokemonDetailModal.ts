@@ -1,6 +1,7 @@
 import { apiFetch } from '../../net/api';
 import { getSprite } from '../../net/PokeSprites';
 import { escapeHtml } from '../../utils/html';
+import { playEvolutionFx } from '../../utils/EvolutionFx';
 import { FONT } from './panel';
 import { POKEMON_TYPES, typeAdvantage, typeLabelEs } from '@transcendence/shared';
 import type { PokemonMove, PokemonType } from '../../models/Types';
@@ -341,7 +342,12 @@ async function doEvolve(seed: PokemonDetailSeed): Promise<void> {
     const res = await apiFetch(`/api/inventory/pokemon/${seed.ownedId}/evolve`, { method: 'POST' });
     const json = await res.json();
     if (res.ok && json.success) {
-      alert(`✨ ${String(json.from ?? seed.name).toUpperCase()} evolucionó a ${String(json.evolvedTo ?? '').toUpperCase()}!`);
+      const card = document.getElementById('pkmn-modal-card');
+      if (card) {
+        card.style.position = 'relative';
+        const rect = card.getBoundingClientRect();
+        await playEvolutionFx(card, rect.width / 2, rect.height / 3, String(json.evolvedTo ?? ''));
+      }
       closePokemonDetail();
       seed.onEvolved?.();
     } else {

@@ -429,8 +429,9 @@ export class InventoryView {
     const pokeGrid = pokemon.length
       ? pokemon.map((p) => this.pokemonCell(p)).join('')
       : `<p class="text-gray-400" style="${FONT} font-size:9px;">Sin Pokémon todavía.</p>`;
-    const itemGrid = items.length
-      ? items.map((it) => this.itemCell(it)).join('')
+    const visibleItems = items.filter(it => it.qty > 0);
+    const itemGrid = visibleItems.length
+      ? visibleItems.map((it) => this.itemCell(it)).join('')
       : `<p class="text-gray-400" style="${FONT} font-size:9px;">Sin objetos todavía.</p>`;
 
     this.container.innerHTML = `
@@ -441,14 +442,14 @@ export class InventoryView {
         </div>
 
         <div class="flex flex-col md:flex-row flex-1 gap-3 md:gap-6 min-h-0">
-          <!-- IZQUIERDA: entrenador (>=50% alto) -->
-          <div class="w-full md:w-1/3 flex">
+          <!-- IZQUIERDA: entrenador (compacto) -->
+          <div class="w-full md:w-56 flex-shrink-0 flex">
             ${panelCard(
-              `<div class="w-full h-full flex flex-col items-center justify-center text-center gap-4" style="min-height:min(50vh, 320px);">
-                 <img src="${this.trainerSprite()}" alt="entrenador" class="pixelated block mx-auto" style="width:clamp(120px,30vw,220px);height:clamp(120px,30vw,220px);object-fit:contain;image-rendering:pixelated;" />
-                 <span class="text-black" style="${FONT} font-size:16px;">${u?.username ?? ''}</span>
-                 <span class="text-gray-600" style="${FONT} font-size:11px;">Lv. ${u?.level ?? 1} · 🪙 ${u?.coins ?? 0}</span>
-                 <span class="text-gray-500" style="${FONT} font-size:9px;">${pokemon.length} Pokémon · ${items.length} objetos</span>
+              `<div class="w-full h-full flex flex-col items-center justify-center text-center gap-2" style="min-height:min(30vh, 200px);">
+                 <img src="${this.trainerSprite()}" alt="entrenador" class="pixelated block mx-auto" style="width:clamp(80px,20vw,140px);height:clamp(80px,20vw,140px);object-fit:contain;image-rendering:pixelated;" />
+                 <span class="text-black" style="${FONT} font-size:13px;">${u?.username ?? ''}</span>
+                 <span class="text-gray-600" style="${FONT} font-size:10px;">Lv. ${u?.level ?? 1} · 🪙 ${u?.coins ?? 0}</span>
+                 <span class="text-gray-500" style="${FONT} font-size:8px;">${pokemon.length} Pokémon · ${visibleItems.length} objetos</span>
                </div>`,
               'flex-1 flex w-full'
             )}
