@@ -459,6 +459,17 @@ input muestra el botón, segundo lo activa); `'reveal'` es el estado final al qu
 
 **Dependencias:** ninguna. **Paralelizable:** sí.
 
+### ✅ Resolución (lo realmente hecho)
+
+- [x] Al pulsar Space/Enter/Escape o hacer clic durante la animación, aparece el botón "Saltar".
+- [x] Al pulsar de nuevo (o el botón), se salta directamente al reveal del Pokémon.
+- [x] La música se detiene al saltar.
+- [x] La animación completa sigue funcionando si no se interactúa.
+
+**Implementación:** `gachaTimers` para rastrear los setTimeout; `attachGachaSkip` con
+handler de dos pasos (mostrar botón → saltar); `skipToReveal` limpia timers, detiene
+audio y salta a `'reveal'`.
+
 ---
 
 ## 🎟️ T11.11 — Mensaje de Pokéball sorpresa: incluir referencia a Pokémon shiny
