@@ -549,6 +549,17 @@ los moves Gen-1; el fallback a inglés cubre los que no.
 
 **Dependencias:** ninguna. **Paralelizable:** sí.
 
+### ✅ Resolución (lo realmente hecho)
+
+- [x] La ficha de un Pokémon muestra los nombres de ataque en español (`displayName`).
+- [x] Las descripciones (`shortEffect`) aparecen en español (no inglés).
+- [x] Si un move no tiene traducción al español, aparece en inglés (fallback).
+- [x] Tras el deploy, los efectos cacheados en inglés se reemplazan en la primera consulta.
+
+**Implementación:** `hydrateMove` prioriza `language.name === 'es'` con fallback a `'en'`.
+Migración en `db.ts` resetea `short_effect` cacheados en inglés (heurístico LIKE).
+`findMove` re-hidrata si `shortEffect` es null.
+
 ---
 
 ## 🎟️ T11.13 — Botón "Volver" en la pantalla de draft

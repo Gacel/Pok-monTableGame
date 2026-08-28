@@ -187,7 +187,7 @@ export const PokemonService = {
   /** Hidrata (y cachea) los detalles de un movimiento desde PokeAPI. */
   async hydrateMove(name: string): Promise<MoveRow | null> {
     const existing = await MoveModel.findMove(name);
-    if (existing) return existing;
+    if (existing && existing.shortEffect !== null) return existing;
     try {
       const data = await fetchJson<PokeApiMove>(`https://pokeapi.co/api/v2/move/${name}`);
       const row: MoveRow = {
@@ -198,7 +198,9 @@ export const PokemonService = {
         pp: data.pp ?? null,
         damageClass: (data.damage_class?.name as MoveRow['damageClass']) ?? null,
         shortEffect:
-          data.effect_entries?.find((e) => e.language?.name === 'en')?.short_effect ?? null,
+          data.effect_entries?.find((e) => e.language?.name === 'es')?.short_effect
+          ?? data.effect_entries?.find((e) => e.language?.name === 'en')?.short_effect
+          ?? null,
         target: data.target?.name ?? null,
         displayName: data.names?.find((n) => n.language?.name === 'es')?.name ?? null,
       };
