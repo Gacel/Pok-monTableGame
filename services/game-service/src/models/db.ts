@@ -269,6 +269,13 @@ async function openAndMigrate(): Promise<Database> {
     await db.exec(`ALTER TABLE moves ADD COLUMN target TEXT`);
   }
 
+  // T11.12: resetear short_effect cacheados en inglés para re-hidratar en español.
+  // Idempotente: solo ejecuta si hay algún short_effect en inglés (heurístico: contiene
+  // "the target" o "user's", que no aparecen en español).
+  await db.run(
+    `UPDATE moves SET short_effect = NULL WHERE short_effect LIKE '%the target%' OR short_effect LIKE "%user's%"`
+  );
+
   // Scope Gen 1 (D11): el juego solo usa los 151. La gacha/loot/starter ya conceden solo
   // Gen 1, pero pudo quedar inventario HEREDADO de Gen 2+ de antes de acotar el pool. Se
   // purga aquí (idempotente): retira del inventario todo lo que no sea Gen 1.
