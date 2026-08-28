@@ -269,7 +269,10 @@ async function showSinglePlayerDraft(level: BotLevel) {
   draftLayer.classList.remove('hidden');
   const view = new DraftView(
     draftLayer,
-    { mode: 'online', playerLabel: 'TU EQUIPO', poolEndpoint: '/api/game/draft-pool' },
+    {
+      mode: 'online', playerLabel: 'TU EQUIPO', poolEndpoint: '/api/game/draft-pool',
+      onBack: () => { draftLayer.classList.add('hidden'); hubLayer.style.display = ''; hubLayer.classList.remove('opacity-0'); showSinglePlayerMenu(); },
+    },
     (teams) => void onSinglePlayerDraftConfirmed(draftLayer, level, teams[0] ?? [])
   );
   await view.render();
