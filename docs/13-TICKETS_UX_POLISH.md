@@ -232,54 +232,66 @@ antes de renderizar; el contador del panel del entrenador también usa la lista 
 
 ---
 
-## 🎟️ T11.6 — Animación de evolución guay (frontend)
+## 🎟️ T11.6 — Animación de evolución épica con audio (frontend)
 
-**Historia de usuario:** Como jugador, quiero que evolucionar a un Pokémon (en el hub
-o en combate) sea un momento épico con una animación vistosa, no solo un flash de ✨.
+**Historia de usuario:** Como jugador, quiero que evolucionar a un Pokémon sea un
+momento cinematográfico MUY elaborado con MUCHA fantasía — con audio, overlay de
+pantalla completa y varias fases visuales espectaculares — no el flash de ✨ actual
+que no tiene ni sonido.
 
 **Objetivos de desarrollo:**
-1. Crear una animación de evolución multi-fase en `FxLayer` o un componente dedicado
-   `utils/EvolutionFx.ts`:
-   - **Fase 1 (0-0.5s):** el sprite del Pokémon se rellena de blanco (silhouette blanca
-     pulsante), con un halo de luz expandiéndose.
-   - **Fase 2 (0.5-1.5s):** el sprite se escala y rota ligeramente; partículas de estrellas
-     salen en espiral.
-   - **Fase 3 (1.5-2.5s):** el sprite vuelve a aparecer como la nueva forma (ya actualizado
-     por el servidor); un flash final y el nombre nuevo aparece flotando.
-2. En **combate** (`GameController.dispatchEvents`, `case 'evolve'`): reemplazar el `flash`
-   actual de L515 por la nueva animación completa sobre el hex del Pokémon.
-3. En el **hub** (`InventoryView` / `PokemonDetailModal`): tras la respuesta exitosa de
-   `POST /api/inventory/{id}/evolve`, lanzar la misma animación antes de refrescar la vista.
-4. Usar únicamente CSS keyframes + Web Animations API (sin librerías externas).
+1. Crear `utils/EvolutionFx.ts` como módulo dedicado. La animación toma control
+   completo de la pantalla (overlay fijo, z-index alto) y tiene cuatro fases:
+   - **Fase 1 — Destello blanco (0-0.6s):** el sprite del Pokémon se rellena
+     progresivamente de blanco hasta convertirse en silueta pura (CSS `brightness`
+     + `saturate`); pulso de luz que se expande desde el centro como onda de choque.
+     Audio: tono grave que sube de frecuencia (síntesis Web Audio: oscilador
+     `sawtooth` + `OscillatorNode` que sube de 80 Hz a 600 Hz en 0.6s).
+   - **Fase 2 — Vórtice de energía (0.6-1.8s):** overlay semitransparente que rota;
+     decenas de partículas CSS en espiral (divs `::before`/`::after` con `transform`
+     animado, `animation-delay` escalonado); la silueta blanca escala a 1.4×.
+     Audio: acorde sostenido con vibrato + ruido de viento filtrado (`BiquadFilterNode`
+     paso bajo barriendo de 200 Hz a 3000 Hz).
+   - **Fase 3 — Flash cegador (1.8-2.0s):** overlay blanco total (opacidad 1).
+     Audio: burst de ruido blanco corto (0.2s) con envolvente rápida.
+   - **Fase 4 — Revelación (2.0-3.2s):** el overlay se desvanece y aparece el sprite
+     de la nueva forma, que entra escalando desde 0.5× a 1× con `easeOutBounce`;
+     el nombre nuevo flota desde abajo con tipografía retro amarilla. Partículas de
+     estrellas ✨ se dispersan por pantalla.
+     Audio: fanfarria retro sintetizada (arpeggio mayor: Do-Mi-Sol-Do en 8 bits,
+     síntesis cuadrada `square`).
+2. En **combate** (`GameController.dispatchEvents`, `case 'evolve'`): reemplazar el
+   `fxLayer.flash(ev.hex, '✨')` por `EvolutionFx.play(ev.from, ev.to)` que recibe
+   los nombres antes/después de la evolución.
+3. En el **hub** (`PokemonDetailModal.ts`): tras la respuesta exitosa de
+   `POST /api/inventory/{id}/evolve`, lanzar `EvolutionFx.play(oldName, newName)`
+   y esperar a que termine (`await`) antes de refrescar el inventario.
+4. Todo en CSS keyframes + Web Animations API + Web Audio API (sin librerías externas).
+5. Un clic en cualquier punto de la animación (o tecla Escape) la salta directamente
+   a la Fase 4 (revelación), deteniendo el audio intermedio.
 
-**Dudas resueltas:** animación CSS/Web Animations (sin deps); se reutiliza en combate y hub;
-el sprite se actualiza solo tras el event (backend ya lo hace).
+**Dudas resueltas:** animación de pantalla completa (no solo en el hex); audio
+multi-fase con síntesis pura; skip con Escape/clic; misma función en combate y hub.
 
 **Criterios de aceptación:**
-- [ ] Al evolucionar en combate, se ve una animación multi-fase vistosa (>1.5s) en el hex.
-- [ ] Al evolucionar en el hub, la misma animación precede al refresh del inventario.
-- [ ] Al final, el sprite muestra la forma evolucionada.
-- [ ] La animación no bloquea otras interacciones (animación no-modal).
+- [ ] La animación dura ≥3s si no se interrumpe y tiene las 4 fases descritas.
+- [ ] Se escucha audio en cada fase (síntesis Web Audio; sin archivos externos).
+- [ ] Al evolucionar en combate, la animación ocupa pantalla completa sobre el tablero.
+- [ ] Al evolucionar en el hub, la animación precede al refresh del inventario.
+- [ ] Escape o clic salta directamente a la revelación (Fase 4) y corta el audio.
+- [ ] Al final, el sprite muestra la nueva forma evolucionada.
 
 **Investigación:**
-- `GameController.dispatchEvents` (`GameController.ts:515-517`): `case 'evolve'` actual
-  (solo `fxLayer.flash(ev.hex, '✨')`).
-- `FxLayer` (`utils/fx.ts`): primitivas `flash`/`floatingNumber`/`tween` como referencia
-  de implementación (Web Animations API, auto-limpieza).
-- `InventoryView.ts:133-136` (botón ✨ EVOLUCIONAR y su handler de refresh).
-- `PokemonDetailModal.ts` (si existe; si no, el botón está en `InventoryView`).
+- `GameController.dispatchEvents` (`GameController.ts`): `case 'evolve'` actual
+  solo hace `fxLayer.flash(ev.hex, '✨')` — reemplazar completamente.
+- `FxLayer` (`utils/fx.ts`): referencia de Web Animations API y auto-limpieza.
+- `GachaAudio.ts` (`views/hub/GachaAudio.ts`): referencia de síntesis Web Audio
+  (osciladores, `OscillatorNode`, `GainNode`, `BiquadFilterNode`) ya usada.
+- `PokemonDetailModal.ts`: botón ✨ EVOLUCIONAR y su handler de refresh.
+- `ShopMenuView.ts` (`attachGachaSkip`, `skipToReveal`): referencia del patrón
+  de skip de animación con dos pasos (mostrar botón → saltar).
 
-**Dependencias:** ninguna (trabaja sobre código ya existente). **Paralelizable:** sí.
-
-### ✅ Resolución (lo realmente hecho)
-
-- [x] Al evolucionar en combate, se ve una animación multi-fase vistosa (>1.5s) en el hex.
-- [x] Al evolucionar en el hub, la misma animación precede al refresh del inventario.
-- [x] Al final, el sprite muestra la forma evolucionada.
-- [x] La animación no bloquea otras interacciones (animación no-modal).
-
-**Implementación:** `EvolutionFx.ts` con 3 fases (halo, estrellas en espiral, flash final
-+ label). Integrado en `dispatchEvents` (case 'evolve') y `doEvolve` (PokemonDetailModal).
+**Dependencias:** ninguna. **Paralelizable:** sí.
 
 ---
 
@@ -693,6 +705,90 @@ vs `onlineMatches.get('arena')`).
 
 ---
 
+## 🎟️ T11.15 — Caramelos Raros en la tienda (subir de nivel a los Pokémon)
+
+**Historia de usuario:** Como jugador, quiero poder comprar Caramelos Raros en la tienda
+y usarlos desde el inventario para subir de nivel a mis Pokémon directamente desde el hub,
+sin tener que jugar una partida.
+
+**Objetivos de desarrollo:**
+
+### Backend
+
+1. Definir la constante `RARE_CANDY_KIND = 'rare_candy'` y `RARE_CANDY_PRICE = 2000`
+   (monedas) en un nuevo fichero `services/game-service/src/services/rareCandies.ts`
+   (análogo a `stones.ts`).
+
+2. Nueva ruta `POST /api/shop/rare-candy` en `ShopController`:
+   - Acepta `{ qty: number }` (1-10, default 1).
+   - Valida saldo: `qty × RARE_CANDY_PRICE ≤ user.coins`.
+   - Llama `ItemModel.add(uid, RARE_CANDY_KIND, 'rare-candy', qty)`.
+   - Devuelve `{ success: true, qty, coins: newBalance }`.
+
+3. Nueva ruta `POST /api/inventory/pokemon/:id/use-candy`:
+   - Verifica que el Pokémon `id` le pertenece al usuario (`OwnedPokemonModel.findById`).
+   - Verifica que el usuario tiene ≥1 Caramelo Raro (`ItemModel.get`).
+   - Descuenta 1 caramelo: `ItemModel.consume(uid, RARE_CANDY_KIND, 'rare-candy', 1)`.
+   - Añade XP fijo al Pokémon para garantizar exactamente 1 nivel: usar
+     `OwnedPokemonModel.addXp(id, xpNeedForNextLevel)` calculando la cantidad
+     necesaria con la función `xpForLevel` ya existente.
+   - Devuelve `{ success: true, levelsGained: 1, level: newLevel, xp: newXp }`.
+
+### Frontend
+
+4. En `ShopMenuView.ts`, añadir en `renderRoot()` un nuevo botón:
+   ```
+   menuButton({ id: 'btn-candy', label: 'CARAMELOS RAROS', icon: '🍬',
+     sublabel: 'Sube de nivel a tus Pokémon · 2000 🪙 c/u', color: 'yellow' })
+   ```
+   Con su sección `renderCandy()` análoga a `renderStones()`: lista los packs
+   (×1, ×3, ×5), selector de cantidad, botón COMPRAR, precio total dinámico.
+
+5. En `InventoryView.ts` (o `PokemonDetailModal.ts`), añadir un botón
+   **🍬 USAR CARAMELO** junto al botón de evolución en la ficha de cada Pokémon:
+   - Solo visible si el jugador tiene ≥1 Caramelo Raro en `owned_items`.
+   - Deshabilitado si el Pokémon ya está en su nivel máximo (nivel 100 o tope de la
+     especie si se define).
+   - Al pulsarlo: `POST /api/inventory/pokemon/{id}/use-candy` → muestra el nivel
+     nuevo con una pequeña animación de subida (floatingNumber `+1 Nv.`), refresca
+     la vista.
+
+**Dudas resueltas:**
+- Los Caramelos Raros van en `owned_items` (igual que las piedras evolutivas), no son
+  los in-match `FIRE_CANDY/WATER_CANDY/GRASS_CANDY` (ephemeral, tablero). Son cosas
+  distintas: los in-match son por tipo y se gastan en evolucionar en partida; los
+  Caramelos Raros son ítems de hub que dan niveles directos.
+- El precio de referencia es 2000 🪙 por caramelo (más barato que una piedra evolutiva
+  de 3000 🪙, pero da progresión sin colección).
+- No se define un nivel máximo estricto en este ticket; si el backend de `addXp` ya
+  tiene un tope (`applyXp`), se respeta automáticamente.
+
+**Criterios de aceptación:**
+- [ ] `POST /api/shop/rare-candy` vende caramelos y descuenta monedas correctamente.
+- [ ] `POST /api/inventory/pokemon/:id/use-candy` sube exactamente 1 nivel al Pokémon.
+- [ ] Si el jugador no tiene caramelos, el endpoint devuelve 400.
+- [ ] La tienda muestra la sección de Caramelos Raros con selector de cantidad y precio.
+- [ ] En el inventario (o ficha modal), el botón 🍬 USAR CARAMELO es visible si hay
+      caramelos disponibles.
+- [ ] El nivel del Pokémon se actualiza visualmente tras usar el caramelo.
+
+**Investigación:**
+- `stones.ts` (`services/game-service/src/services/stones.ts`): patrón exacto a seguir
+  para definir `RARE_CANDY_KIND` y ruta de compra.
+- `ItemModel.add` / `ItemModel.get` / `ItemModel.consume` (`ItemModel.ts`): gestión de
+  `owned_items`; `consume` resta qty y borra la fila si llega a 0.
+- `OwnedPokemonModel.addXp` (`OwnedPokemonModel.ts:228`): acepta `(id, amount)`;
+  devuelve `{ level, xp, levelsGained }`. Usa `applyXp` internamente.
+- `ShopController.buyStone` (`ShopController.ts:81-99`): referencia completa de
+  validación precio + qty + `ItemModel.add`.
+- `ShopMenuView.renderStones()` (`ShopMenuView.ts:101`): referencia de UI de sección
+  de compra con selector qty y precio total.
+- `PokemonDetailModal.ts`: botón de evolución; añadir el botón de caramelo junto a él.
+
+**Dependencias:** ninguna. **Paralelizable:** sí.
+
+---
+
 ## Resumen de tickets
 
 | Ticket | Área | Paralelizable | Dependencias |
@@ -702,7 +798,7 @@ vs `onlineMatches.get('arena')`).
 | T11.3 — Audio de combate | Frontend (combate) | Sí | — |
 | T11.4 — Draft/picker con sprites shiny | Frontend (hub) | Sí | — |
 | T11.5 — Ocultar objetos con qty 0 | Frontend (inventario) | Sí | — |
-| T11.6 — Animación de evolución | Frontend (hub+combate) | Sí | — |
+| T11.6 — Animación de evolución épica con audio | Frontend (hub+combate) | Sí | — |
 | T11.7 — Comprar varias piedras | Backend + Frontend | Sí | — |
 | T11.8 — Panel entrenador compacto | Frontend (inventario) | Sí | — |
 | T11.9 — Selector y confirmación recuperar Pokémon | Backend + Frontend | Sí | — |
@@ -711,6 +807,7 @@ vs `onlineMatches.get('arena')`).
 | T11.12 — Moves en español en ficha modal | Backend + cache | Sí | — |
 | T11.13 — Botón volver en draft | Frontend (hub) | Sí | — |
 | T11.14 — Bug Arena → partida local | Frontend + Backend | Sí | — |
+| T11.15 — Caramelos Raros en la tienda | Backend + Frontend | Sí | — |
 
 > Todos los tickets son independientes entre sí y pueden desarrollarse en paralelo.
 > Se sugiere empezar por los más sencillos (T11.5, T11.11, T11.13) para tener victorias
