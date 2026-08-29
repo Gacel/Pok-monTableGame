@@ -27,7 +27,7 @@ export async function shopRoutes(app: FastifyInstance): Promise<void> {
           required: ['stone'],
           properties: {
             stone: { type: 'string', maxLength: 24 },
-            qty: { type: 'integer', minimum: 1, maximum: 10 },
+            qty: { type: 'integer', minimum: 1, maximum: 99 },
           },
         },
       },

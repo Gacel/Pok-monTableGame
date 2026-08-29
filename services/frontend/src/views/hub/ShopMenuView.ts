@@ -4,6 +4,7 @@ import { getSprite } from '../../net/PokeSprites';
 import { authState } from '../../auth/AuthState';
 import { stoneLabelEs } from '@transcendence/shared';
 import { FONT, hubPanel, panelTitle, panelCard, menuButton, backButton } from './panel';
+import { gameAlert } from './GameModal';
 import { gachaAudio } from './GachaAudio';
 
 /** Sprites reales de pokéballs (bitmap PokeAPI). */
@@ -100,10 +101,10 @@ export class ShopMenuView {
   private renderStones() {
     const coins = this.coins();
     const card = (s: (typeof STONES)[number]) => {
-      const afford = coins >= s.price && !this.busy;
+      const afford = coins >= s.price;
       return `
       <div class="stone-card flex flex-col items-center justify-between gap-2 rounded border-4 border-gray-800 shadow-[4px_4px_0_#000] ${
-        afford ? 'bg-white' : 'bg-gray-300 opacity-60'
+        afford ? 'bg-white' : 'bg-gray-300 opacity-60 pointer-events-none'
       }" style="padding:16px 12px;">
         <img src="${BALL_SPRITE}/${s.key}.png" alt="${s.key}" class="w-16 h-16 object-contain" style="image-rendering: pixelated;" />
         <span class="text-black text-center" style="${FONT} font-size:8px;">${stoneLabelEs(s.key)}</span>
@@ -141,7 +142,7 @@ export class ShopMenuView {
       btn.addEventListener('click', () => {
         const key = btn.dataset.stone!;
         const delta = Number(btn.dataset.delta);
-        qtys[key] = Math.max(1, Math.min(10, (qtys[key] ?? 1) + delta));
+        qtys[key] = Math.max(1, Math.min(99, (qtys[key] ?? 1) + delta));
         const qtyEl = this.container.querySelector(`[data-stone-qty="${key}"]`);
         if (qtyEl) qtyEl.textContent = String(qtys[key]);
         const stone = STONES.find(s => s.key === key);
@@ -149,7 +150,7 @@ export class ShopMenuView {
         if (totalEl && stone) totalEl.textContent = `${stone.price * qtys[key]} 🪙`;
         const buyBtn = this.container.querySelector<HTMLButtonElement>(`[data-buy-stone="${key}"]`);
         if (buyBtn && stone) {
-          const canAfford = coins >= stone.price * qtys[key] && !this.busy;
+          const canAfford = coins >= stone.price * qtys[key];
           buyBtn.disabled = !canAfford;
         }
       });
@@ -176,13 +177,13 @@ export class ShopMenuView {
       const data = await res.json();
       if (res.ok && data.success) {
         if (authState.user) authState.user.coins = data.coins;
-        alert(`💎 ${qty}× ${stoneLabelEs(stone)} comprada(s) · saldo ${data.coins} 🪙`);
+        void gameAlert(`${qty}x ${stoneLabelEs(stone)} comprada(s) · saldo ${data.coins}`);
         this.render();
       } else {
-        alert(data.error ?? 'No se pudo comprar');
+        void gameAlert(data.error ?? 'No se pudo comprar');
       }
     } catch {
-      alert('Error de red al comprar');
+      void gameAlert('Error de red al comprar');
     } finally {
       this.busy = false;
     }
@@ -196,7 +197,7 @@ export class ShopMenuView {
       const data = await res.json();
       const lost: Array<{ id: string; name: string; level: number; price: number }> = data.pokemon ?? [];
       if (lost.length === 0) {
-        alert('No tienes Pokémon perdidos.');
+        void gameAlert('No tienes Pokémon perdidos.');
         this.busy = false;
         return;
       }
@@ -204,7 +205,7 @@ export class ShopMenuView {
       await Promise.all(lost.map(async (p) => { sprites[p.name] = await getSprite(p.name); }));
       this.showLostPicker(lost, sprites);
     } catch {
-      alert('Error de red');
+      void gameAlert('Error de red');
     } finally {
       this.busy = false;
     }
@@ -275,14 +276,14 @@ export class ShopMenuView {
       if (res.ok && data.success) {
         if (authState.user) authState.user.coins = data.coins;
         const p = data.pokemon ?? {};
-        alert(`💾 Recuperado: ${String(p.name ?? '').toUpperCase()} (Lv.${p.level ?? 1}) · saldo ${data.coins} 🪙`);
+        void gameAlert(`Recuperado: ${String(p.name ?? '').toUpperCase()} (Lv.${p.level ?? 1}) · saldo ${data.coins}`);
         this.step = 'root';
         this.render();
       } else {
-        alert(data.error ?? 'No se pudo recuperar');
+        void gameAlert(data.error ?? 'No se pudo recuperar');
       }
     } catch {
-      alert('Error de red al recuperar');
+      void gameAlert('Error de red al recuperar');
     } finally {
       this.busy = false;
     }

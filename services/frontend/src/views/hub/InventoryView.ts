@@ -8,6 +8,7 @@ import { AuctionApi } from '../../net/AuctionApi';
 import { escapeHtml } from '../../utils/html';
 import { stoneLabelEs } from '@transcendence/shared';
 import type { PokemonType } from '../../models/Types';
+import { gameAlert, gameConfirm } from './GameModal';
 
 interface InvPokemon {
   id: string;
@@ -352,7 +353,7 @@ export class InventoryView {
         void (async () => {
           const toUserId = btn.dataset.uid ?? '';
           const uname = btn.textContent?.trim() || 'ese jugador';
-          if (!confirm(`¿Regalar ${subject} a ${uname}? No podrás deshacerlo.`)) return;
+          if (!(await gameConfirm(`¿Regalar ${subject} a ${uname}? No podrás deshacerlo.`))) return;
           const r = await doGift(toUserId);
           if (r.ok) {
             close();
@@ -389,13 +390,13 @@ export class InventoryView {
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.success) {
         const name = String(data.pokemon?.name ?? '').toUpperCase();
-        alert(`¡Has conseguido ${name}!`);
+        void gameAlert(`Has conseguido ${name}!`);
         await this.render();
       } else {
-        alert(data.error ?? 'No se pudo abrir la bola');
+        void gameAlert(data.error ?? 'No se pudo abrir la bola');
       }
     } catch {
-      alert('Error de red al abrir la bola');
+      void gameAlert('Error de red al abrir la bola');
     }
   }
 

@@ -3,6 +3,7 @@ import { getSprite } from '../../net/PokeSprites';
 import { escapeHtml } from '../../utils/html';
 import { playEvolutionFx } from '../../utils/EvolutionFx';
 import { FONT } from './panel';
+import { gameAlert } from './GameModal';
 import { POKEMON_TYPES, typeAdvantage, typeLabelEs } from '@transcendence/shared';
 import type { PokemonMove, PokemonType } from '../../models/Types';
 
@@ -351,9 +352,9 @@ async function doEvolve(seed: PokemonDetailSeed): Promise<void> {
       closePokemonDetail();
       seed.onEvolved?.();
     } else {
-      alert(json.error ?? 'No se pudo evolucionar');
+      void gameAlert(json.error ?? 'No se pudo evolucionar');
     }
   } catch {
-    alert('Error de red al evolucionar');
+    void gameAlert('Error de red al evolucionar');
   }
 }

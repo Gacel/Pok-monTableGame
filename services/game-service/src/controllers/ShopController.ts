@@ -83,8 +83,8 @@ export const ShopController = {
     if (!stone) return reply.code(400).send({ success: false, error: 'Piedra inválida' });
 
     const qty = Math.floor(Number(request.body?.qty) || 1);
-    if (qty < 1 || qty > 10) {
-      return reply.code(400).send({ success: false, error: 'Cantidad inválida (1-10)' });
+    if (qty < 1 || qty > 99) {
+      return reply.code(400).send({ success: false, error: 'Cantidad inválida (1-99)' });
     }
 
     const totalPrice = stone.price * qty;

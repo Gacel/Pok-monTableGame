@@ -28,6 +28,7 @@ import { LobbyView } from './views/hub/LobbyView';
 import { DraftView } from './views/hub/DraftView';
 import { WelcomeView } from './views/hub/WelcomeView';
 import { playClickSound } from './utils/audio';
+import { gameAlert } from './views/hub/GameModal';
 
 const hubLayer = document.getElementById('hub-layer') as HTMLElement;
 const inventoryLayer = document.getElementById('inventory-layer') as HTMLElement;
@@ -241,11 +242,11 @@ async function onLocalDraftConfirmed(
     });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      alert(data.error ?? 'No se pudo iniciar la partida');
+      void gameAlert(data.error ?? 'No se pudo iniciar la partida');
       return;
     }
   } catch {
-    alert('Error de red al iniciar la partida');
+    void gameAlert('Error de red al iniciar la partida');
     return;
   }
   draftLayer.classList.add('hidden');
@@ -295,7 +296,7 @@ async function onSinglePlayerDraftConfirmed(
     /* sin pool: se maneja abajo */
   }
   if (aiTeam.length < 3) {
-    alert('No se pudo formar el equipo de la IA');
+    void gameAlert('No se pudo formar el equipo de la IA');
     return;
   }
   try {
@@ -305,11 +306,11 @@ async function onSinglePlayerDraftConfirmed(
     });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      alert(data.error ?? 'No se pudo iniciar la partida');
+      void gameAlert(data.error ?? 'No se pudo iniciar la partida');
       return;
     }
   } catch {
-    alert('Error de red al iniciar la partida');
+    void gameAlert('Error de red al iniciar la partida');
     return;
   }
   draftLayer.classList.add('hidden');
@@ -355,7 +356,7 @@ async function onSurvivalConfirmed(draftLayer: HTMLElement, level: BotLevel, own
     /* sin pool: se maneja abajo */
   }
   if (aiTeam.length < 3) {
-    alert('No se pudo formar el equipo salvaje');
+    void gameAlert('No se pudo formar el equipo salvaje');
     return;
   }
   try {
@@ -365,11 +366,11 @@ async function onSurvivalConfirmed(draftLayer: HTMLElement, level: BotLevel, own
     });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      alert(data.error ?? 'No se pudo iniciar Survival');
+      void gameAlert(data.error ?? 'No se pudo iniciar Survival');
       return;
     }
   } catch {
-    alert('Error de red al iniciar Survival');
+    void gameAlert('Error de red al iniciar Survival');
     return;
   }
   draftLayer.classList.add('hidden');
@@ -414,10 +415,10 @@ export function startArena() {
           if (res.ok && data.room) {
             enterOnlineGame(data.room as RoomInfo);
           } else {
-            alert(data.error ?? 'No se pudo entrar en la ARENA');
+            void gameAlert(data.error ?? 'No se pudo entrar en la ARENA');
           }
         } catch {
-          alert('Error de red al entrar en la ARENA');
+          void gameAlert('Error de red al entrar en la ARENA');
         }
       })();
     },
@@ -436,10 +437,10 @@ function submitOnlineTeam(room: RoomInfo, names: string[]) {
       if (res.ok && data.success) {
         currentLobby?.setRoom(data.room as RoomInfo);
       } else {
-        alert(data.error ?? 'No se pudo guardar el equipo');
+        void gameAlert(data.error ?? 'No se pudo guardar el equipo');
       }
     } catch {
-      alert('Error de red al guardar el equipo');
+      void gameAlert('Error de red al guardar el equipo');
     }
   })();
 }

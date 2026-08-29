@@ -18,6 +18,7 @@ import { decideBotAction, hexDistance, pickCastMove } from './botStrategy';
 import { combatAudio } from '../utils/CombatAudio';
 import { playEvolutionFx } from '../utils/EvolutionFx';
 import type { BotLevel, BotPieceOptions, EnemyPiece } from './botStrategy';
+import { gameConfirm } from '../views/hub/GameModal';
 
 /**
  * Capa CONTROLADOR (frontend): traduce input del usuario a peticiones al servidor
@@ -258,13 +259,20 @@ export class GameController {
    * Devuelve `false` si ningún movimiento alcanza (para que el turno avance sin congelar).
    */
   private async botCast(from: Hex, target: Hex): Promise<boolean> {
-    const caster = this.state.match?.tiles.find(
+    const m = this.state.match;
+    const caster = m?.tiles.find(
       (t) => t.hex.q === from.q && t.hex.r === from.r,
     )?.occupant;
     const moves = caster?.moves ?? [];
-    if (!moves.length) return false;
+    if (!moves.length || !m) return false;
 
-    const bestIdx = pickCastMove(moves, hexDistance(from, target));
+    // Large (7 hexes): medir desde el hex del cuerpo más cercano al objetivo.
+    const bodyHexes = caster
+      ? m.tiles.filter(t => t.occupant?.id === caster.id).map(t => t.hex)
+      : [from];
+    const dist = Math.min(...bodyHexes.map(h => hexDistance(h, target)));
+
+    const bestIdx = pickCastMove(moves, dist);
     if (bestIdx < 0) return false;
     return this.performCast(from, target, bestIdx);
   }
@@ -685,9 +693,9 @@ export class GameController {
     document.getElementById('btn-win-menu')?.addEventListener('click', () => this.exitToMenu());
     document.getElementById('btn-end-turn')?.addEventListener('click', () => this.endTurn());
     document.getElementById('btn-abandon')?.addEventListener('click', () => {
-      if (confirm('¿Estás seguro de que quieres abandonar la partida? (Esto equivaldrá a una derrota)')) {
-        this.abandonGame();
-      }
+      void gameConfirm('¿Abandonar la partida? Equivaldrá a una derrota.').then((ok) => {
+        if (ok) this.abandonGame();
+      });
     });
 
     document.getElementById('chat-form')?.addEventListener('submit', (e) => {
