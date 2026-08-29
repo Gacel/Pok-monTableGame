@@ -232,66 +232,54 @@ antes de renderizar; el contador del panel del entrenador también usa la lista 
 
 ---
 
-## 🎟️ T11.6 — Animación de evolución épica con audio (frontend)
+## 🎟️ T11.6 — Animación de evolución guay (frontend)
 
-**Historia de usuario:** Como jugador, quiero que evolucionar a un Pokémon sea un
-momento cinematográfico MUY elaborado con MUCHA fantasía — con audio, overlay de
-pantalla completa y varias fases visuales espectaculares — no el flash de ✨ actual
-que no tiene ni sonido.
+**Historia de usuario:** Como jugador, quiero que evolucionar a un Pokémon (en el hub
+o en combate) sea un momento épico con una animación vistosa, no solo un flash de ✨.
 
 **Objetivos de desarrollo:**
-1. Crear `utils/EvolutionFx.ts` como módulo dedicado. La animación toma control
-   completo de la pantalla (overlay fijo, z-index alto) y tiene cuatro fases:
-   - **Fase 1 — Destello blanco (0-0.6s):** el sprite del Pokémon se rellena
-     progresivamente de blanco hasta convertirse en silueta pura (CSS `brightness`
-     + `saturate`); pulso de luz que se expande desde el centro como onda de choque.
-     Audio: tono grave que sube de frecuencia (síntesis Web Audio: oscilador
-     `sawtooth` + `OscillatorNode` que sube de 80 Hz a 600 Hz en 0.6s).
-   - **Fase 2 — Vórtice de energía (0.6-1.8s):** overlay semitransparente que rota;
-     decenas de partículas CSS en espiral (divs `::before`/`::after` con `transform`
-     animado, `animation-delay` escalonado); la silueta blanca escala a 1.4×.
-     Audio: acorde sostenido con vibrato + ruido de viento filtrado (`BiquadFilterNode`
-     paso bajo barriendo de 200 Hz a 3000 Hz).
-   - **Fase 3 — Flash cegador (1.8-2.0s):** overlay blanco total (opacidad 1).
-     Audio: burst de ruido blanco corto (0.2s) con envolvente rápida.
-   - **Fase 4 — Revelación (2.0-3.2s):** el overlay se desvanece y aparece el sprite
-     de la nueva forma, que entra escalando desde 0.5× a 1× con `easeOutBounce`;
-     el nombre nuevo flota desde abajo con tipografía retro amarilla. Partículas de
-     estrellas ✨ se dispersan por pantalla.
-     Audio: fanfarria retro sintetizada (arpeggio mayor: Do-Mi-Sol-Do en 8 bits,
-     síntesis cuadrada `square`).
-2. En **combate** (`GameController.dispatchEvents`, `case 'evolve'`): reemplazar el
-   `fxLayer.flash(ev.hex, '✨')` por `EvolutionFx.play(ev.from, ev.to)` que recibe
-   los nombres antes/después de la evolución.
-3. En el **hub** (`PokemonDetailModal.ts`): tras la respuesta exitosa de
-   `POST /api/inventory/{id}/evolve`, lanzar `EvolutionFx.play(oldName, newName)`
-   y esperar a que termine (`await`) antes de refrescar el inventario.
-4. Todo en CSS keyframes + Web Animations API + Web Audio API (sin librerías externas).
-5. Un clic en cualquier punto de la animación (o tecla Escape) la salta directamente
-   a la Fase 4 (revelación), deteniendo el audio intermedio.
+1. Crear una animación de evolución multi-fase en `FxLayer` o un componente dedicado
+   `utils/EvolutionFx.ts`:
+   - **Fase 1 (0-0.5s):** el sprite del Pokémon se rellena de blanco (silhouette blanca
+     pulsante), con un halo de luz expandiéndose.
+   - **Fase 2 (0.5-1.5s):** el sprite se escala y rota ligeramente; partículas de estrellas
+     salen en espiral.
+   - **Fase 3 (1.5-2.5s):** el sprite vuelve a aparecer como la nueva forma (ya actualizado
+     por el servidor); un flash final y el nombre nuevo aparece flotando.
+2. En **combate** (`GameController.dispatchEvents`, `case 'evolve'`): reemplazar el `flash`
+   actual de L515 por la nueva animación completa sobre el hex del Pokémon.
+3. En el **hub** (`InventoryView` / `PokemonDetailModal`): tras la respuesta exitosa de
+   `POST /api/inventory/{id}/evolve`, lanzar la misma animación antes de refrescar la vista.
+4. Usar únicamente CSS keyframes + Web Animations API (sin librerías externas).
 
-**Dudas resueltas:** animación de pantalla completa (no solo en el hex); audio
-multi-fase con síntesis pura; skip con Escape/clic; misma función en combate y hub.
+**Dudas resueltas:** animación CSS/Web Animations (sin deps); se reutiliza en combate y hub;
+el sprite se actualiza solo tras el event (backend ya lo hace).
 
 **Criterios de aceptación:**
-- [ ] La animación dura ≥3s si no se interrumpe y tiene las 4 fases descritas.
-- [ ] Se escucha audio en cada fase (síntesis Web Audio; sin archivos externos).
-- [ ] Al evolucionar en combate, la animación ocupa pantalla completa sobre el tablero.
-- [ ] Al evolucionar en el hub, la animación precede al refresh del inventario.
-- [ ] Escape o clic salta directamente a la revelación (Fase 4) y corta el audio.
-- [ ] Al final, el sprite muestra la nueva forma evolucionada.
+- [ ] Al evolucionar en combate, se ve una animación multi-fase vistosa (>1.5s) en el hex.
+- [ ] Al evolucionar en el hub, la misma animación precede al refresh del inventario.
+- [ ] Al final, el sprite muestra la forma evolucionada.
+- [ ] La animación no bloquea otras interacciones (animación no-modal).
 
 **Investigación:**
-- `GameController.dispatchEvents` (`GameController.ts`): `case 'evolve'` actual
-  solo hace `fxLayer.flash(ev.hex, '✨')` — reemplazar completamente.
-- `FxLayer` (`utils/fx.ts`): referencia de Web Animations API y auto-limpieza.
-- `GachaAudio.ts` (`views/hub/GachaAudio.ts`): referencia de síntesis Web Audio
-  (osciladores, `OscillatorNode`, `GainNode`, `BiquadFilterNode`) ya usada.
-- `PokemonDetailModal.ts`: botón ✨ EVOLUCIONAR y su handler de refresh.
-- `ShopMenuView.ts` (`attachGachaSkip`, `skipToReveal`): referencia del patrón
-  de skip de animación con dos pasos (mostrar botón → saltar).
+- `GameController.dispatchEvents` (`GameController.ts:515-517`): `case 'evolve'` actual
+  (solo `fxLayer.flash(ev.hex, '✨')`).
+- `FxLayer` (`utils/fx.ts`): primitivas `flash`/`floatingNumber`/`tween` como referencia
+  de implementación (Web Animations API, auto-limpieza).
+- `InventoryView.ts:133-136` (botón ✨ EVOLUCIONAR y su handler de refresh).
+- `PokemonDetailModal.ts` (si existe; si no, el botón está en `InventoryView`).
 
-**Dependencias:** ninguna. **Paralelizable:** sí.
+**Dependencias:** ninguna (trabaja sobre código ya existente). **Paralelizable:** sí.
+
+### ✅ Resolución (lo realmente hecho)
+
+- [x] Al evolucionar en combate, se ve una animación multi-fase vistosa (>1.5s) en el hex.
+- [x] Al evolucionar en el hub, la misma animación precede al refresh del inventario.
+- [x] Al final, el sprite muestra la forma evolucionada.
+- [x] La animación no bloquea otras interacciones (animación no-modal).
+
+**Implementación:** `EvolutionFx.ts` con 3 fases (halo, estrellas en espiral, flash final
++ label). Integrado en `dispatchEvents` (case 'evolve') y `doEvolve` (PokemonDetailModal).
 
 ---
 
@@ -705,6 +693,65 @@ vs `onlineMatches.get('arena')`).
 
 ---
 
+## 🎟️ T11.16 — Animación de evolución cinematográfica con audio
+
+**Historia de usuario:** Como jugador, quiero que evolucionar a un Pokémon sea un
+momento cinematográfico MUY elaborado con MUCHA fantasía — pantalla completa, varias
+fases visuales espectaculares y audio sintetizado en cada fase — sustituyendo la
+animación básica de T11.6 que no tiene sonido.
+
+**Objetivos de desarrollo:**
+1. Crear `utils/EvolutionFx.ts` (reemplaza o extiende el creado en T11.6) como módulo
+   dedicado con overlay de pantalla completa (`position: fixed`, `z-index` máximo) y
+   cuatro fases:
+   - **Fase 1 — Destello blanco (0-0.6s):** el sprite se rellena progresivamente de
+     blanco hasta convertirse en silueta pura (CSS `brightness` + `saturate`); pulso
+     de luz que se expande como onda de choque.
+     Audio: oscilador `sawtooth` que sube de 80 Hz a 600 Hz en 0.6s + `GainNode`.
+   - **Fase 2 — Vórtice de energía (0.6-1.8s):** overlay semitransparente rotatorio;
+     decenas de partículas CSS en espiral (`animation-delay` escalonado); silueta
+     blanca escalada a 1.4×.
+     Audio: acorde sostenido con vibrato + ruido filtrado (`BiquadFilterNode` paso
+     bajo barriendo de 200 Hz a 3000 Hz).
+   - **Fase 3 — Flash cegador (1.8-2.0s):** overlay blanco total (opacidad 1).
+     Audio: burst de ruido blanco (0.2s) con envolvente rápida.
+   - **Fase 4 — Revelación (2.0-3.2s):** overlay se desvanece; sprite de la nueva
+     forma entra escalando 0.5× → 1× con `easeOutBounce`; nombre nuevo flota desde
+     abajo en tipografía retro amarilla; estrellas ✨ se dispersan.
+     Audio: fanfarria retro (arpeggio mayor Do-Mi-Sol-Do, síntesis cuadrada `square`).
+2. En **combate** (`GameController.dispatchEvents`, `case 'evolve'`): sustituir el
+   `EvolutionFx` básico de T11.6 por esta versión con audio y overlay completo.
+3. En el **hub** (`PokemonDetailModal.ts`): lanzar `await EvolutionFx.play(oldName,
+   newName)` antes de refrescar el inventario.
+4. Escape o clic durante las fases 1-3 salta directamente a la Fase 4, cortando el
+   audio intermedio (patrón análogo al skip de gacha de T11.10).
+5. Todo en CSS keyframes + Web Animations API + Web Audio API. Sin librerías externas.
+
+**Dudas resueltas:** overlay de pantalla completa (no solo el hex del tablero); audio
+multi-fase con síntesis pura (sin archivos mp3); skip con Escape/clic; misma función
+en combate y hub.
+
+**Criterios de aceptación:**
+- [ ] La animación dura ≥3s sin interrumpir y muestra las 4 fases.
+- [ ] Se escucha audio sintetizado en cada fase (sin archivos externos).
+- [ ] En combate, el overlay ocupa pantalla completa sobre el tablero.
+- [ ] En el hub, la animación precede al refresh del inventario.
+- [ ] Escape o clic salta a la Fase 4 (revelación) cortando el audio previo.
+- [ ] Al final, el sprite muestra la nueva forma evolucionada.
+
+**Investigación:**
+- `utils/EvolutionFx.ts` (creado en T11.6): base a extender con audio y fases nuevas.
+- `GameController.dispatchEvents` (`GameController.ts`): `case 'evolve'` — ya usa
+  `EvolutionFx` de T11.6; extender la llamada.
+- `GachaAudio.ts` (`views/hub/GachaAudio.ts`): referencia de síntesis Web Audio
+  (`OscillatorNode`, `GainNode`, `BiquadFilterNode`) ya usada en el proyecto.
+- `ShopMenuView.ts` (`attachGachaSkip`, `skipToReveal`): patrón de skip de animación.
+- `PokemonDetailModal.ts`: punto de llamada desde el hub.
+
+**Dependencias:** →T11.6 (base de `EvolutionFx.ts`). **Paralelizable:** no (depende de T11.6).
+
+---
+
 ## 🎟️ T11.15 — Caramelos Raros en la tienda (subir de nivel a los Pokémon)
 
 **Historia de usuario:** Como jugador, quiero poder comprar Caramelos Raros en la tienda
@@ -798,7 +845,7 @@ sin tener que jugar una partida.
 | T11.3 — Audio de combate | Frontend (combate) | Sí | — |
 | T11.4 — Draft/picker con sprites shiny | Frontend (hub) | Sí | — |
 | T11.5 — Ocultar objetos con qty 0 | Frontend (inventario) | Sí | — |
-| T11.6 — Animación de evolución épica con audio | Frontend (hub+combate) | Sí | — |
+| T11.6 — Animación de evolución | Frontend (hub+combate) | Sí | — |
 | T11.7 — Comprar varias piedras | Backend + Frontend | Sí | — |
 | T11.8 — Panel entrenador compacto | Frontend (inventario) | Sí | — |
 | T11.9 — Selector y confirmación recuperar Pokémon | Backend + Frontend | Sí | — |
@@ -808,6 +855,7 @@ sin tener que jugar una partida.
 | T11.13 — Botón volver en draft | Frontend (hub) | Sí | — |
 | T11.14 — Bug Arena → partida local | Frontend + Backend | Sí | — |
 | T11.15 — Caramelos Raros en la tienda | Backend + Frontend | Sí | — |
+| T11.16 — Evolución cinematográfica con audio | Frontend (hub+combate) | No | →T11.6 |
 
 > Todos los tickets son independientes entre sí y pueden desarrollarse en paralelo.
 > Se sugiere empezar por los más sencillos (T11.5, T11.11, T11.13) para tener victorias
