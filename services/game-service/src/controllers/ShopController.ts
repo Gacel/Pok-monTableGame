@@ -4,7 +4,9 @@ import { OwnedPokemonModel } from '../models/OwnedPokemonModel.js';
 import { BALLS, rollTier, pickFromTier } from '../services/loot.js';
 import { LOOT_POOL_TIERS } from '../services/lootPool.js';
 import { STONES, STONE_KIND, stoneByKey } from '../services/stones.js';
+import { RARE_CANDY_KIND, RARE_CANDY_KEY, RARE_CANDY_PRICE } from '../services/rareCandies.js';
 import { ItemModel } from '../models/ItemModel.js';
+import { xpToNext } from '../engine/progression.js';
 
 interface BuyBody {
   ball?: string;
@@ -131,5 +133,55 @@ export const ShopController = {
       pokemon: { name: recovered.name, level: recovered.level },
       coins: user.coins - RECOVER_PRICE,
     };
+  },
+
+  async buyCandy(request: FastifyRequest<{ Body: { qty?: number } }>, reply: FastifyReply) {
+    const uid = userId(request);
+    if (!uid) return reply.code(401).send({ success: false, error: 'No autenticado' });
+
+    const qty = Math.floor(Number(request.body?.qty) || 1);
+    if (qty < 1 || qty > 99) {
+      return reply.code(400).send({ success: false, error: 'Cantidad inválida (1-99)' });
+    }
+
+    const totalPrice = RARE_CANDY_PRICE * qty;
+    const user = await UserModel.findById(uid);
+    if (!user) return reply.code(404).send({ success: false, error: 'Usuario no encontrado' });
+    if (user.coins < totalPrice) {
+      return reply.code(402).send({ success: false, error: 'Monedas insuficientes', coins: user.coins });
+    }
+
+    await UserModel.addCoins(uid, -totalPrice);
+    await ItemModel.add(uid, RARE_CANDY_KIND, RARE_CANDY_KEY, qty);
+    return { success: true, qty, coins: user.coins - totalPrice };
+  },
+
+  async useCandy(request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) {
+    const uid = userId(request);
+    if (!uid) return reply.code(401).send({ success: false, error: 'No autenticado' });
+
+    const pokemonId = request.params.id;
+    const rec = await OwnedPokemonModel.findById(pokemonId);
+    if (!rec || rec.user_id !== uid) {
+      return reply.code(404).send({ success: false, error: 'Pokémon no encontrado' });
+    }
+
+    const candyQty = await ItemModel.getQty(uid, RARE_CANDY_KIND, RARE_CANDY_KEY);
+    if (candyQty < 1) {
+      return reply.code(400).send({ success: false, error: 'No tienes Caramelos Raros' });
+    }
+
+    const xpNeeded = xpToNext(rec.level) - (rec.xp ?? 0);
+    if (xpNeeded === Infinity || xpNeeded <= 0) {
+      return reply.code(400).send({ success: false, error: 'Este Pokémon ya está al nivel máximo' });
+    }
+
+    await ItemModel.add(uid, RARE_CANDY_KIND, RARE_CANDY_KEY, -1);
+    const result = await OwnedPokemonModel.addXp(pokemonId, xpNeeded);
+    if (!result) {
+      return reply.code(500).send({ success: false, error: 'Error al subir de nivel' });
+    }
+
+    return { success: true, level: result.level, xp: result.xp, levelsGained: result.levelsGained };
   },
 };
