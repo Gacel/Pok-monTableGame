@@ -50,6 +50,7 @@ export class InventoryView {
   private container: HTMLElement;
   private onClose: () => void;
   private sprites: Record<string, string> = {};
+  private items: InvItem[] = [];
 
   constructor(container: HTMLElement, onClose: () => void) {
     this.container = container;
@@ -68,6 +69,7 @@ export class InventoryView {
     } catch {
       /* red caída */
     }
+    this.items = items;
     await this.preloadSprites(pokemon);
     this.draw(pokemon, items);
   }
@@ -124,8 +126,9 @@ export class InventoryView {
       def: p.def,
       spriteUrl: this.sprites[`${p.name}-${!!p.isShiny}`],
       isShiny: !!p.isShiny,
-      ownedId: p.id, // habilita la evolución meta (T9.3)
-      onEvolved: () => void this.render(), // refresca el inventario tras evolucionar
+      ownedId: p.id,
+      candyCount: this.items.find(i => i.kind === 'rare_candy' && i.itemKey === 'rare-candy')?.qty ?? 0,
+      onEvolved: () => void this.render(),
     });
   }
 
