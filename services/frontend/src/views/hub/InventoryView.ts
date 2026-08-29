@@ -406,11 +406,12 @@ export class InventoryView {
   private itemCell(it: InvItem): string {
     const isBall = it.kind === 'pokeball';
     const isStone = it.kind === 'stone';
-    // Bolas y piedras son objetos de PokeAPI: mismo path de sprites de items.
-    const img = isBall || isStone
+    const isCandy = it.kind === 'rare_candy';
+    const hasSprite = isBall || isStone || isCandy;
+    const img = hasSprite
       ? `<img src="${BALL_SPRITE}/${it.itemKey}.png" alt="${it.itemKey}" class="w-11 h-11 object-contain" style="image-rendering:pixelated;" />`
       : `<div class="w-11 h-11 flex items-center justify-center" style="font-size:24px;">${it.kind === 'cosmetic' ? '🎨' : '📦'}</div>`;
-    const label = isStone ? stoneLabelEs(it.itemKey) : it.itemKey;
+    const label = isCandy ? 'Caramelo Raro' : isStone ? stoneLabelEs(it.itemKey) : it.itemKey;
     // Solo las bolas tienen acciones (Abrir/Vender/Regalar) → celda interactiva.
     const interactive = isBall
       ? `item-cell cursor-pointer transition-colors hover:border-yellow-400 hover:bg-gray-700`
