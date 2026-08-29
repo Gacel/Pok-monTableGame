@@ -199,10 +199,10 @@ export const PokemonService = {
         pp: data.pp ?? null,
         damageClass: (data.damage_class?.name as MoveRow['damageClass']) ?? null,
         shortEffect:
-          data.flavor_text_entries?.find((e) => e.language?.name === 'es')?.flavor_text
+          (data.flavor_text_entries?.filter((e) => e.language?.name === 'es').pop()?.flavor_text
           ?? data.effect_entries?.find((e) => e.language?.name === 'es')?.short_effect
           ?? data.effect_entries?.find((e) => e.language?.name === 'en')?.short_effect
-          ?? null,
+          ?? null)?.replace(/[\n\r\f]+/g, ' ').replace(/\s{2,}/g, ' ').trim() ?? null,
         target: data.target?.name ?? null,
         displayName: data.names?.find((n) => n.language?.name === 'es')?.name ?? '',
       };
