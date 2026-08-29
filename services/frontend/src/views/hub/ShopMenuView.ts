@@ -208,7 +208,7 @@ export class ShopMenuView {
           <div class="candy-card flex flex-col items-center gap-2 rounded border-4 border-gray-800 shadow-[4px_4px_0_#000] ${
             afford ? 'bg-white' : 'bg-gray-300 opacity-60 pointer-events-none'
           }" style="padding:16px 24px;">
-            <span style="font-size:48px;">🍬</span>
+            <img src="${BALL_SPRITE}/rare-candy.png" alt="Rare Candy" class="w-12 h-12 object-contain" style="image-rendering:pixelated;" />
             <span class="text-black text-center" style="${FONT} font-size:10px;">CARAMELO RARO</span>
             <span class="text-gray-600" style="${FONT} font-size:8px;">Sube 1 nivel a un Pokémon</span>
             <span class="text-gray-700" style="${FONT} font-size:10px;">${price} 🪙</span>

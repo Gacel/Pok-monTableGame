@@ -269,11 +269,9 @@ async function openAndMigrate(): Promise<Database> {
     await db.exec(`ALTER TABLE moves ADD COLUMN target TEXT`);
   }
 
-  // T11.12: resetear short_effect cacheados en inglés para re-hidratar en español.
-  // Idempotente: solo ejecuta si hay algún short_effect en inglés (heurístico: contiene
-  // "the target" o "user's", que no aparecen en español).
+  // Forzar re-hidratación de moves sin nombre español o con descripción en inglés.
   await db.run(
-    `UPDATE moves SET short_effect = NULL WHERE short_effect LIKE '%the target%' OR short_effect LIKE "%user's%"`
+    `UPDATE moves SET short_effect = NULL, display_name = NULL WHERE display_name IS NULL OR short_effect LIKE '%the target%' OR short_effect LIKE "%user's%" OR short_effect LIKE '%the user%'`
   );
 
   // Scope Gen 1 (D11): el juego solo usa los 151. La gacha/loot/starter ya conceden solo
