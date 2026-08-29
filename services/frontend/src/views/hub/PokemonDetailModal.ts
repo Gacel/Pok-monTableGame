@@ -50,7 +50,9 @@ export interface PokemonDetailSeed {
   isShiny?: boolean;
   /** Id de instancia (inventario): habilita la evolución meta (T9.3). Ausente en draft. */
   ownedId?: string;
-  /** Callback tras evolucionar (para refrescar el inventario). */
+  /** Cantidad de Caramelos Raros que tiene el jugador (T11.15). */
+  candyCount?: number;
+  /** Callback tras evolucionar o usar caramelo (para refrescar el inventario). */
   onEvolved?: () => void;
 }
 
@@ -139,6 +141,15 @@ function evolveHtml(seed: PokemonDetailSeed, evo?: EvoUi | null): string {
     </div>`;
 }
 
+function candyHtml(seed: PokemonDetailSeed): string {
+  if (!seed.ownedId || !seed.candyCount || seed.candyCount < 1) return '';
+  if (seed.xpToNext == null) return '';
+  return `
+    <button id="pkmn-candy-btn" class="w-full mt-2 py-2 rounded border-b-4 bg-yellow-500 hover:bg-yellow-400 text-black border-yellow-700 active:border-b-0" style="${FONT} font-size:9px; box-shadow:0 3px 0 #000;">
+      🍬 USAR CARAMELO RARO <span class="text-yellow-900" style="font-size:7px;">(${seed.candyCount})</span>
+    </button>`;
+}
+
 function statChip(label: string, val: number | undefined, color: string): string {
   return `
     <div class="flex flex-col items-center rounded bg-gray-800/80 border border-gray-700" style="padding:4px 8px;">
@@ -223,6 +234,7 @@ function bodyHtml(
     </div>
 
     ${evolveHtml(seed, evo)}
+    ${candyHtml(seed)}
 
     <h4 class="text-white mt-4 mb-1.5" style="${FONT} font-size:8px;">ATAQUES APRENDIDOS</h4>
     ${movesHtml}
@@ -285,10 +297,13 @@ export function openPokemonDetail(seed: PokemonDetailSeed): void {
     if (e.target === overlay) closePokemonDetail();
   });
   overlay.querySelector('#pkmn-modal-close')?.addEventListener('click', () => closePokemonDetail());
-  // Evolución meta (T9.3): botón dentro del cuerpo (se re-pinta), por delegación.
   overlay.addEventListener('click', (e) => {
     const btn = (e.target as HTMLElement).closest('#pkmn-evolve-btn');
     if (btn && seed.ownedId && evo?.canEvolve) void doEvolve(seed);
+  });
+  overlay.addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement).closest('#pkmn-candy-btn');
+    if (btn && seed.ownedId && seed.candyCount && seed.candyCount > 0) void doUseCandy(seed);
   });
   document.addEventListener('keydown', onKey);
 
@@ -333,6 +348,23 @@ export function openPokemonDetail(seed: PokemonDetailSeed): void {
         /* sin info de evolución */
       }
     })();
+  }
+}
+
+async function doUseCandy(seed: PokemonDetailSeed): Promise<void> {
+  if (!seed.ownedId) return;
+  try {
+    const res = await apiFetch(`/api/inventory/pokemon/${seed.ownedId}/use-candy`, { method: 'POST' });
+    const json = await res.json();
+    if (res.ok && json.success) {
+      void gameAlert(`¡Subió a nivel ${json.level}!`);
+      closePokemonDetail();
+      seed.onEvolved?.();
+    } else {
+      void gameAlert(json.error ?? 'No se pudo usar el caramelo');
+    }
+  } catch {
+    void gameAlert('Error de red al usar caramelo');
   }
 }
 

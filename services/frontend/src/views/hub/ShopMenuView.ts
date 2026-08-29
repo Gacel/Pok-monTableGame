@@ -35,7 +35,7 @@ const TIER_COLOR: Record<number, string> = { 1: '#9ca3af', 2: '#60a5fa', 3: '#c0
  */
 export class ShopMenuView {
   private container: HTMLElement;
-  private step: 'root' | 'balls' | 'stones' | 'opening' | 'sky_cinematic' | 'fullscreen_reveal' | 'reveal' = 'root';
+  private step: 'root' | 'balls' | 'stones' | 'candy' | 'opening' | 'sky_cinematic' | 'fullscreen_reveal' | 'reveal' = 'root';
   private openingBall: string | null = null;
   private notice = '';
   private busy = false;
@@ -59,6 +59,7 @@ export class ShopMenuView {
   public render() {
     if (this.step === 'balls') return this.renderBalls();
     if (this.step === 'stones') return this.renderStones();
+    if (this.step === 'candy') return this.renderCandy();
     if (this.step === 'opening') return this.renderOpening();
     if (this.step === 'sky_cinematic') return this.renderSkyCinematic();
     if (this.step === 'fullscreen_reveal') return this.renderFullscreenReveal();
@@ -75,6 +76,7 @@ export class ShopMenuView {
           ${menuButton({ label: 'COSMÉTICOS', icon: '🎨', color: 'purple', disabled: true })}
           ${menuButton({ id: 'btn-balls', label: 'POKÉBALL SORPRESA', icon: '🎁', color: 'red' })}
           ${menuButton({ id: 'btn-stones', label: 'PIEDRAS EVOLUTIVAS', icon: '💎', sublabel: 'Evoluciona a tus Pokémon · 3000 🪙', color: 'blue' })}
+          ${menuButton({ id: 'btn-candy', label: 'CARAMELOS RAROS', icon: '🍬', sublabel: 'Sube de nivel a tus Pokémon · 2000 🪙', color: 'yellow' })}
           ${menuButton({ id: 'btn-recover', label: 'RECUPERA UN POKÉMON', icon: '💾', sublabel: 'Solo perdido en Survival (single) · 10000 🪙', color: 'blue' })}
           ${menuButton({ label: 'ENVIAR OFERTA DE RECUPERACIÓN', icon: '🤝', sublabel: 'Con contraoferta del otro jugador', color: 'green', disabled: true })}
           ${menuButton({ label: 'PLAN PREMIUM', icon: '⭐', color: 'yellow', disabled: true })}
@@ -91,6 +93,10 @@ export class ShopMenuView {
     });
     document.getElementById('btn-stones')?.addEventListener('click', () => {
       this.step = 'stones';
+      this.render();
+    });
+    document.getElementById('btn-candy')?.addEventListener('click', () => {
+      this.step = 'candy';
       this.render();
     });
     document.getElementById('btn-recover')?.addEventListener('click', () => void this.recoverPokemon());
@@ -178,6 +184,82 @@ export class ShopMenuView {
       if (res.ok && data.success) {
         if (authState.user) authState.user.coins = data.coins;
         void gameAlert(`${qty}x ${stoneLabelEs(stone)} comprada(s) · saldo ${data.coins}`);
+        this.render();
+      } else {
+        void gameAlert(data.error ?? 'No se pudo comprar');
+      }
+    } catch {
+      void gameAlert('Error de red al comprar');
+    } finally {
+      this.busy = false;
+    }
+  }
+
+  private renderCandy() {
+    const coins = this.coins();
+    const price = 2000;
+    const afford = coins >= price;
+    this.container.innerHTML = hubPanel(
+      `
+      ${panelTitle('CARAMELOS RAROS')}
+      <p class="text-white text-center mb-3" style="${FONT} font-size:11px;">Tu saldo: <span class="text-yellow-300">${coins} 🪙</span></p>
+      ${panelCard(
+        `<div class="flex flex-col items-center gap-4 w-full max-w-md">
+          <div class="candy-card flex flex-col items-center gap-2 rounded border-4 border-gray-800 shadow-[4px_4px_0_#000] ${
+            afford ? 'bg-white' : 'bg-gray-300 opacity-60 pointer-events-none'
+          }" style="padding:16px 24px;">
+            <span style="font-size:48px;">🍬</span>
+            <span class="text-black text-center" style="${FONT} font-size:10px;">CARAMELO RARO</span>
+            <span class="text-gray-600" style="${FONT} font-size:8px;">Sube 1 nivel a un Pokémon</span>
+            <span class="text-gray-700" style="${FONT} font-size:10px;">${price} 🪙</span>
+            <div class="flex items-center gap-1 mt-1">
+              <button id="candy-minus" class="w-6 h-6 rounded bg-gray-700 text-white" style="${FONT} font-size:10px;">-</button>
+              <span id="candy-qty" class="text-black" style="${FONT} font-size:10px; min-width:20px; text-align:center;">1</span>
+              <button id="candy-plus" class="w-6 h-6 rounded bg-gray-700 text-white" style="${FONT} font-size:10px;">+</button>
+            </div>
+            <span id="candy-total" class="text-gray-600" style="${FONT} font-size:8px;">${price} 🪙</span>
+            <button id="candy-buy" ${afford ? '' : 'disabled'} class="mt-1 px-3 py-1 rounded border-b-4 ${
+              afford ? 'bg-green-600 hover:bg-green-500 text-white border-green-800 active:border-b-0' : 'bg-gray-400 text-gray-600 border-gray-500 cursor-not-allowed'
+            }" style="${FONT} font-size:8px;">COMPRAR</button>
+          </div>
+          <p class="text-gray-500 text-center" style="${FONT} font-size:7px;">Úsalos desde la ficha de un Pokémon en el inventario.</p>
+        </div>`,
+        'flex flex-col items-center'
+      )}
+      ${backButton()}
+      `,
+      { minHeight: 600 }
+    );
+
+    let qty = 1;
+    const qtyEl = document.getElementById('candy-qty')!;
+    const totalEl = document.getElementById('candy-total')!;
+    const buyBtn = document.getElementById('candy-buy') as HTMLButtonElement;
+
+    const updateQty = (delta: number) => {
+      qty = Math.max(1, Math.min(99, qty + delta));
+      qtyEl.textContent = String(qty);
+      totalEl.textContent = `${price * qty} 🪙`;
+      buyBtn.disabled = coins < price * qty;
+    };
+    document.getElementById('candy-minus')?.addEventListener('click', () => updateQty(-1));
+    document.getElementById('candy-plus')?.addEventListener('click', () => updateQty(1));
+    buyBtn.addEventListener('click', () => void this.buyCandy(qty));
+    document.getElementById('btn-back')?.addEventListener('click', () => {
+      this.step = 'root';
+      this.render();
+    });
+  }
+
+  private async buyCandy(qty = 1): Promise<void> {
+    if (this.busy) return;
+    this.busy = true;
+    try {
+      const res = await apiFetch('/api/shop/rare-candy', { method: 'POST', body: JSON.stringify({ qty }) });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        if (authState.user) authState.user.coins = data.coins;
+        void gameAlert(`${qty}x Caramelo(s) Raro(s) comprado(s) · saldo ${data.coins}`);
         this.render();
       } else {
         void gameAlert(data.error ?? 'No se pudo comprar');
