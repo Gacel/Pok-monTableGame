@@ -36,6 +36,7 @@ interface PokeApiMove {
   type?: { name?: string };
   damage_class?: { name?: string };
   effect_entries?: { short_effect?: string; language?: { name?: string } }[];
+  flavor_text_entries?: { flavor_text?: string; language?: { name?: string }; version_group?: { name?: string } }[];
   target?: { name?: string };
   names?: { name: string; language: { name: string } }[];
 }
@@ -187,7 +188,7 @@ export const PokemonService = {
   /** Hidrata (y cachea) los detalles de un movimiento desde PokeAPI. */
   async hydrateMove(name: string): Promise<MoveRow | null> {
     const existing = await MoveModel.findMove(name);
-    if (existing) return existing;
+    if (existing && existing.shortEffect !== null && existing.displayName !== null) return existing;
     try {
       const data = await fetchJson<PokeApiMove>(`https://pokeapi.co/api/v2/move/${name}`);
       const row: MoveRow = {
@@ -198,9 +199,12 @@ export const PokemonService = {
         pp: data.pp ?? null,
         damageClass: (data.damage_class?.name as MoveRow['damageClass']) ?? null,
         shortEffect:
-          data.effect_entries?.find((e) => e.language?.name === 'en')?.short_effect ?? null,
+          (data.flavor_text_entries?.filter((e) => e.language?.name === 'es').pop()?.flavor_text
+          ?? data.effect_entries?.find((e) => e.language?.name === 'es')?.short_effect
+          ?? data.effect_entries?.find((e) => e.language?.name === 'en')?.short_effect
+          ?? null)?.replace(/[\n\r\f]+/g, ' ').replace(/\s{2,}/g, ' ').trim() ?? null,
         target: data.target?.name ?? null,
-        displayName: data.names?.find((n) => n.language?.name === 'es')?.name ?? null,
+        displayName: data.names?.find((n) => n.language?.name === 'es')?.name ?? '',
       };
       await MoveModel.saveMove(row, data);
       return row;

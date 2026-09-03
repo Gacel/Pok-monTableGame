@@ -126,6 +126,8 @@ export interface Pokemon {
   revealed?: boolean;
   /** Ataques curados (≤4) disponibles en la fase de combate. */
   moves?: PokemonMove[];
+  /** Pokémon shiny: usa sprite alternativo. */
+  isShiny?: boolean;
   /** Bola que transporta este Pokémon (recogida de un cofre/suelo). La suelta si es KO. */
   carriedBall?: BallKey;
 }

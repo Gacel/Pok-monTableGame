@@ -1,7 +1,9 @@
 import { apiFetch } from '../../net/api';
 import { getSprite } from '../../net/PokeSprites';
 import { escapeHtml } from '../../utils/html';
+import { playEvolutionFx } from '../../utils/EvolutionFx';
 import { FONT } from './panel';
+import { gameAlert } from './GameModal';
 import { POKEMON_TYPES, typeAdvantage, typeLabelEs } from '@transcendence/shared';
 import type { PokemonMove, PokemonType } from '../../models/Types';
 
@@ -48,7 +50,9 @@ export interface PokemonDetailSeed {
   isShiny?: boolean;
   /** Id de instancia (inventario): habilita la evolución meta (T9.3). Ausente en draft. */
   ownedId?: string;
-  /** Callback tras evolucionar (para refrescar el inventario). */
+  /** Cantidad de Caramelos Raros que tiene el jugador (T11.15). */
+  candyCount?: number;
+  /** Callback tras evolucionar o usar caramelo (para refrescar el inventario). */
   onEvolved?: () => void;
 }
 
@@ -59,8 +63,8 @@ interface EvoUi {
   requirement: string;
 }
 
-/** Ataque curado + su descripción corta (short_effect de PokeAPI, cacheada). */
-type PokedexMove = PokemonMove & { shortEffect?: string | null };
+/** Ataque curado + descripción y nombre en español (cacheados). */
+type PokedexMove = PokemonMove & { shortEffect?: string | null; displayName?: string | null };
 
 interface PokedexData {
   name: string;
@@ -137,6 +141,18 @@ function evolveHtml(seed: PokemonDetailSeed, evo?: EvoUi | null): string {
     </div>`;
 }
 
+const ITEM_SPRITE = 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items';
+
+function candyHtml(seed: PokemonDetailSeed): string {
+  if (!seed.ownedId || !seed.candyCount || seed.candyCount < 1) return '';
+  if (seed.xpToNext == null) return '';
+  return `
+    <button id="pkmn-candy-btn" class="w-full mt-2 py-2 rounded border-b-4 bg-yellow-500 hover:bg-yellow-400 text-black border-yellow-700 active:border-b-0 flex items-center justify-center gap-2" style="${FONT} font-size:9px; box-shadow:0 3px 0 #000;">
+      <img src="${ITEM_SPRITE}/rare-candy.png" alt="Rare Candy" class="w-5 h-5" style="image-rendering:pixelated;" />
+      USAR CARAMELO RARO <span class="text-yellow-900" style="font-size:7px;">(${seed.candyCount})</span>
+    </button>`;
+}
+
 function statChip(label: string, val: number | undefined, color: string): string {
   return `
     <div class="flex flex-col items-center rounded bg-gray-800/80 border border-gray-700" style="padding:4px 8px;">
@@ -172,7 +188,7 @@ function moveRow(m: PokedexMove): string {
     <li class="rounded bg-gray-800/80 border border-gray-700" style="padding:7px 9px;">
       <div class="flex items-center gap-1.5">
         ${typeBadge(m.type, 5)}
-        <span class="text-white uppercase" style="${FONT} font-size:8px; line-height:1.4;">${escapeHtml(m.name.replace(/-/g, ' '))}</span>
+        <span class="text-white uppercase" style="${FONT} font-size:8px; line-height:1.4;">${escapeHtml((m.displayName || m.name).replace(/-/g, ' '))}</span>
       </div>
       <div class="text-gray-400 mt-1" style="${FONT} font-size:6px; line-height:1.5;">${escapeHtml(cls)}${meta ? ` · ${escapeHtml(meta)}` : ''}</div>
       ${desc ? `<p class="text-gray-200 mt-1.5 font-mono" style="font-size:10px; line-height:1.45;">${escapeHtml(desc)}</p>` : ''}
@@ -221,6 +237,7 @@ function bodyHtml(
     </div>
 
     ${evolveHtml(seed, evo)}
+    ${candyHtml(seed)}
 
     <h4 class="text-white mt-4 mb-1.5" style="${FONT} font-size:8px;">ATAQUES APRENDIDOS</h4>
     ${movesHtml}
@@ -283,10 +300,13 @@ export function openPokemonDetail(seed: PokemonDetailSeed): void {
     if (e.target === overlay) closePokemonDetail();
   });
   overlay.querySelector('#pkmn-modal-close')?.addEventListener('click', () => closePokemonDetail());
-  // Evolución meta (T9.3): botón dentro del cuerpo (se re-pinta), por delegación.
   overlay.addEventListener('click', (e) => {
     const btn = (e.target as HTMLElement).closest('#pkmn-evolve-btn');
     if (btn && seed.ownedId && evo?.canEvolve) void doEvolve(seed);
+  });
+  overlay.addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement).closest('#pkmn-candy-btn');
+    if (btn && seed.ownedId && seed.candyCount && seed.candyCount > 0) void doUseCandy(seed);
   });
   document.addEventListener('keydown', onKey);
 
@@ -334,6 +354,23 @@ export function openPokemonDetail(seed: PokemonDetailSeed): void {
   }
 }
 
+async function doUseCandy(seed: PokemonDetailSeed): Promise<void> {
+  if (!seed.ownedId) return;
+  try {
+    const res = await apiFetch(`/api/inventory/pokemon/${seed.ownedId}/use-candy`, { method: 'POST' });
+    const json = await res.json();
+    if (res.ok && json.success) {
+      void gameAlert(`¡Subió a nivel ${json.level}!`);
+      closePokemonDetail();
+      seed.onEvolved?.();
+    } else {
+      void gameAlert(json.error ?? 'No se pudo usar el caramelo');
+    }
+  } catch {
+    void gameAlert('Error de red al usar caramelo');
+  }
+}
+
 /** Ejecuta la evolución meta de la instancia y refresca (T9.3). */
 async function doEvolve(seed: PokemonDetailSeed): Promise<void> {
   if (!seed.ownedId) return;
@@ -341,13 +378,18 @@ async function doEvolve(seed: PokemonDetailSeed): Promise<void> {
     const res = await apiFetch(`/api/inventory/pokemon/${seed.ownedId}/evolve`, { method: 'POST' });
     const json = await res.json();
     if (res.ok && json.success) {
-      alert(`✨ ${String(json.from ?? seed.name).toUpperCase()} evolucionó a ${String(json.evolvedTo ?? '').toUpperCase()}!`);
+      const card = document.getElementById('pkmn-modal-card');
+      if (card) {
+        card.style.position = 'relative';
+        const rect = card.getBoundingClientRect();
+        await playEvolutionFx(card, rect.width / 2, rect.height / 3, String(json.evolvedTo ?? ''));
+      }
       closePokemonDetail();
       seed.onEvolved?.();
     } else {
-      alert(json.error ?? 'No se pudo evolucionar');
+      void gameAlert(json.error ?? 'No se pudo evolucionar');
     }
   } catch {
-    alert('Error de red al evolucionar');
+    void gameAlert('Error de red al evolucionar');
   }
 }

@@ -63,7 +63,7 @@ export class EntityView {
     }
 
     for (const tile of this.state.currentTiles) {
-      if (tile.occupant && tile.occupant.name && this.state.pokeGifs[tile.occupant.name]) {
+      if (tile.occupant && tile.occupant.name && this.state.pokeGifs[tile.occupant.isShiny ? `${tile.occupant.name}:shiny` : tile.occupant.name]) {
           // Ocultación local desde la perspectiva del humano (vs-IA): un Pokémon oculto
           // de un slot que NO es del equipo humano no se renderiza. `hiddenAllySlots`
           // es null en online (server censura) y en hot-seat (pantalla compartida).
@@ -136,7 +136,7 @@ export class EntityView {
           if (!img) {
             img = document.createElement('img');
             img.id = `img-${occupantId}`;
-            img.src = this.state.pokeGifs[tile.occupant.name];
+            img.src = this.state.pokeGifs[tile.occupant.isShiny ? `${tile.occupant.name}:shiny` : tile.occupant.name];
             img.className = 'absolute';
             img.style.imageRendering = 'pixelated';
             this.entitiesLayer.appendChild(img);
@@ -196,7 +196,6 @@ export class EntityView {
             label.style.textShadow = '1px 1px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000';
             this.entitiesLayer.appendChild(label);
           }
-          // Nombre del jugador (username / "Jugador N" / "IA"), no el slot crudo.
           label.textContent = this.state.labelFor(tile.occupant.playerId);
 
           label.style.transition = oLblTr;
@@ -205,15 +204,54 @@ export class EntityView {
           label.style.top = `${screenY - sSize/1.1 - (10 * this.state.zoom) + waterSink}px`;
           label.style.zIndex = Math.floor(screenY + 1).toString();
 
+          // HP bar above the sprite
+          const hpRatio = tile.occupant.maxHp > 0
+            ? tile.occupant.hp / tile.occupant.maxHp
+            : 1;
+          const hpColor = hpRatio >= 0.5 ? '#22c55e'
+            : hpRatio >= 0.25 ? '#eab308'
+            : '#ef4444';
+          const barW = sSize * 0.7;
+          const barH = Math.max(3, 4 * this.state.zoom);
+          const barX = screenX - barW / 2;
+          const barY = screenY - sSize / 1.1 - (6 * this.state.zoom) + waterSink;
+
+          let hpBar = document.getElementById(`hp-${occupantId}`) as HTMLDivElement;
+          if (!hpBar) {
+            hpBar = document.createElement('div');
+            hpBar.id = `hp-${occupantId}`;
+            hpBar.className = 'absolute pointer-events-none';
+            hpBar.style.borderRadius = '2px';
+            hpBar.style.border = '1px solid rgba(0,0,0,0.6)';
+            hpBar.style.overflow = 'hidden';
+            const fill = document.createElement('div');
+            fill.className = 'absolute inset-0';
+            fill.style.transformOrigin = 'left';
+            hpBar.appendChild(fill);
+            this.entitiesLayer.appendChild(hpBar);
+          }
+          hpBar.style.transition = oLblTr;
+          hpBar.style.width = `${barW}px`;
+          hpBar.style.height = `${barH}px`;
+          hpBar.style.left = `${barX}px`;
+          hpBar.style.top = `${barY}px`;
+          hpBar.style.zIndex = Math.floor(screenY + 2).toString();
+          hpBar.style.backgroundColor = 'rgba(0,0,0,0.5)';
+          const fill = hpBar.firstElementChild as HTMLDivElement;
+          fill.style.background = hpColor;
+          fill.style.transform = `scaleX(${Math.max(0, Math.min(1, hpRatio))})`;
+          fill.style.transition = 'transform 0.2s ease-out, background 0.2s ease-out';
+
           const opacity = tile.occupant.isHidden ? '0.4' : '1';
           img.style.opacity = opacity;
           base.style.opacity = opacity;
           label.style.opacity = opacity;
+          hpBar.style.opacity = opacity;
       }
     }
     
     Array.from(this.entitiesLayer.children).forEach(child => {
-       const id = child.id.replace('img-', '').replace('lbl-', '').replace('base-', '').replace('wl-', '');
+       const id = child.id.replace('img-', '').replace('lbl-', '').replace('base-', '').replace('wl-', '').replace('hp-', '');
        if (!currentOccupantIds.has(id)) {
            child.remove();
        }

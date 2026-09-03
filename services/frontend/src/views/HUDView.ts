@@ -145,8 +145,9 @@ export class HUDView {
       const typeColor = this.getTypeColor(p.type);
       const isActive = this.state.selectedReserveId === p.id;
       const borderStyle = isActive ? `border-color: #fff; box-shadow: 0 0 10px ${typeColor}; scale: 1.1;` : `border-color: ${typeColor};`;
-      const spriteUrl = this.state.pokeGifs[p.name ?? ''] ?? '';
-      
+      const spriteKey = p.isShiny ? `${p.name ?? ''}:shiny` : (p.name ?? '');
+      const spriteUrl = this.state.pokeGifs[spriteKey] ?? this.state.pokeGifs[p.name ?? ''] ?? '';
+
       return `
         <div class="reserve-btn flex flex-col items-center justify-center p-2 rounded cursor-pointer border-2 transition-transform hover:scale-105 active:scale-95 min-w-[120px] h-28" style="background-color: ${typeColor}40; ${borderStyle}" data-reserve-id="${p.id}" title="Desplegar a ${p.name}">
           <img src="${spriteUrl}" class="w-12 h-12 object-contain mb-1" style="image-rendering: pixelated;" />
@@ -256,7 +257,10 @@ export class HUDView {
       }
 
       const avatarEl = document.getElementById(`hud-${slot}-avatar`) as HTMLImageElement | null;
-      if (avatarEl && occ.name) avatarEl.src = this.state.pokeGifs[occ.name] ?? '';
+      if (avatarEl && occ.name) {
+        const aKey = occ.isShiny ? `${occ.name}:shiny` : occ.name;
+        avatarEl.src = this.state.pokeGifs[aKey] ?? this.state.pokeGifs[occ.name] ?? '';
+      }
 
       const trainerEl = document.getElementById(`hud-${slot}-trainer`) as HTMLImageElement | null;
       if (trainerEl) {
@@ -310,7 +314,8 @@ export class HUDView {
           teamEl.innerHTML = team.map((p) => {
             const pPct = Math.max(0, Math.min(100, (p.hp / (p.maxHp || 1)) * 100));
             const barBg = pPct > 50 ? 'bg-green-500' : pPct > 20 ? 'bg-yellow-500' : 'bg-red-500';
-            const spriteUrl = this.state.pokeGifs[p.name ?? ''] ?? '';
+            const sKey = p.isShiny ? `${p.name ?? ''}:shiny` : (p.name ?? '');
+            const spriteUrl = this.state.pokeGifs[sKey] ?? this.state.pokeGifs[p.name ?? ''] ?? '';
             return `
               <div data-poke-id="${p.id}" class="flex items-center gap-1.5 flex-1 min-w-0 bg-gray-800 border border-gray-600 rounded px-1.5 py-1 shadow transition-transform hover:scale-105 cursor-pointer ${rightSide ? 'flex-row-reverse' : ''}" title="${p.name ?? 'Pokémon'} · Lv.${p.level ?? 1} (${p.hp}/${p.maxHp})">
                 <img src="${spriteUrl}" class="w-8 h-8 object-contain flex-shrink-0" style="image-rendering: pixelated;" />

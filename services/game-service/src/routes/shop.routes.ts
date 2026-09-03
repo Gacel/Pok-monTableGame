@@ -25,11 +25,45 @@ export async function shopRoutes(app: FastifyInstance): Promise<void> {
         body: {
           type: 'object',
           required: ['stone'],
-          properties: { stone: { type: 'string', maxLength: 24 } },
+          properties: {
+            stone: { type: 'string', maxLength: 24 },
+            qty: { type: 'integer', minimum: 1, maximum: 99 },
+          },
         },
       },
     },
     ShopController.buyStone
   );
-  app.post('/api/shop/recover-pokemon', ShopController.recoverPokemon);
+  app.post(
+    '/api/shop/rare-candy',
+    {
+      schema: {
+        body: {
+          type: 'object',
+          properties: {
+            qty: { type: 'integer', minimum: 1, maximum: 99 },
+          },
+        },
+      },
+    },
+    ShopController.buyCandy
+  );
+  app.post(
+    '/api/inventory/pokemon/:id/use-candy',
+    { schema: { params: { type: 'object', required: ['id'], properties: { id: { type: 'string' } } } } },
+    ShopController.useCandy
+  );
+  app.get('/api/shop/lost-pokemon', ShopController.listLostPokemon);
+  app.post(
+    '/api/shop/recover-pokemon',
+    {
+      schema: {
+        body: {
+          type: 'object',
+          properties: { id: { type: 'string', maxLength: 64 } },
+        },
+      },
+    },
+    ShopController.recoverPokemon
+  );
 }

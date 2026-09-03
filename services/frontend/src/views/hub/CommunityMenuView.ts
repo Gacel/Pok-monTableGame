@@ -4,6 +4,7 @@ import { apiFetch } from '../../net/api';
 import { authState } from '../../auth/AuthState';
 import { WsClient } from '../../net/WsClient';
 import { FONT, hubPanel, panelTitle, panelCard, menuButton, backButton } from './panel';
+import { gameAlert } from './GameModal';
 import { spriteOf } from '../../utils/trainer';
 import { escapeHtml } from '../../utils/html';
 
@@ -227,7 +228,7 @@ export class CommunityMenuView {
     const act = async (url: string) => {
       const res = await apiFetch(url, { method: 'POST' });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.success) alert(data.error ?? 'No se pudo');
+      if (!res.ok || !data.success) void gameAlert(data.error ?? 'No se pudo');
       await this.renderTrades();
     };
     this.container.querySelectorAll<HTMLButtonElement>('.trade-accept').forEach((b) =>

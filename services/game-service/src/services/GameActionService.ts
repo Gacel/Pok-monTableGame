@@ -92,7 +92,7 @@ export const GameActionService = {
     let captures: CaptureResult[] = [];
     if (ctx.isLocal) {
       await matchManager.persist();
-      // Survival: el humano (player1) captura a los salvajes que derrota (T8.2).
+      await ProgressionService.awardMatchXp(result.state);
       const meta = matchManager.getLocalMeta();
       if (meta.gameMode === 'survival' && meta.ownerUserId) {
         const slotUser = new Map<string, string | null>([['player1', meta.ownerUserId]]);

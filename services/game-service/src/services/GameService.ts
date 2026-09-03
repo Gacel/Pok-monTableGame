@@ -578,8 +578,10 @@ export class GameService {
     // el hex-centro exacto hacía imposible lanzarlas (las otras 6 daban "fuera de rango").
     const center = isAutocentered(move) ? from : targetHex;
 
-    // Validar rango (distancia geométrica entre centro del caster y el centro del AoE).
-    const dist = hexDistance(from, center);
+    // Validar rango: para large (7 hexes), se mide desde el hex del cuerpo más cercano
+    // al objetivo — no desde el centro, que puede estar a 2 hexes aunque la panza toque.
+    const bodyHexes = this.board.getOccupiedHexes(caster, from);
+    const dist = Math.min(...bodyHexes.map(h => hexDistance(h, center)));
 
     // El centro del AoE debe estar dentro del alcance (también los radiales — TA.1: se
     // acabó el "rango infinito").

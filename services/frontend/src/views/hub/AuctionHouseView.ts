@@ -5,6 +5,7 @@ import { authState } from '../../auth/AuthState';
 import { AuctionApi } from '../../net/AuctionApi';
 import type { Auction } from '../../net/AuctionApi';
 import { escapeHtml } from '../../utils/html';
+import { gamePrompt } from './GameModal';
 
 type Tab = 'market' | 'sell' | 'mine';
 interface InvPokemon { id: string; name: string; level: number; }
@@ -141,7 +142,7 @@ export class AuctionHouseView {
   }
 
   private async doBid(id: string): Promise<void> {
-    const raw = window.prompt('¿Cuántas monedas quieres pujar?');
+    const raw = await gamePrompt('¿Cuántas monedas quieres pujar?');
     if (raw === null) return;
     const amount = parseInt(raw, 10);
     if (!Number.isInteger(amount) || amount <= 0) {

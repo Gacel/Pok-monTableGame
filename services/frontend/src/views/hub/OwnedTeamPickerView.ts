@@ -8,6 +8,7 @@ interface OwnedPokemon {
   name: string;
   level: number;
   type: string;
+  isShiny?: boolean;
 }
 
 const TYPE_COLOR: Record<string, string> = {
@@ -59,11 +60,16 @@ export class OwnedTeamPickerView {
     this.draw();
   }
 
+  private spriteKey(p: OwnedPokemon): string {
+    return p.isShiny ? `${p.name}-shiny` : p.name;
+  }
+
   private async preloadSprites(): Promise<void> {
     await Promise.all(
       this.owned.map(async (p) => {
-        if (this.sprites[p.name]) return;
-        this.sprites[p.name] = await getSprite(p.name);
+        const key = this.spriteKey(p);
+        if (this.sprites[key]) return;
+        this.sprites[key] = await getSprite(p.name, !!p.isShiny);
       })
     );
   }
@@ -79,8 +85,8 @@ export class OwnedTeamPickerView {
         <button data-id="${p.id}" class="owned-card flex flex-col items-center rounded border-4 transition-colors ${
           sel ? 'border-yellow-400 bg-yellow-100' : 'border-gray-700 bg-gray-800'
         }" style="padding:6px;">
-          <img src="${this.sprites[p.name] ?? ''}" alt="${p.name}" class="w-14 h-14 sm:w-16 sm:h-16 object-contain" style="image-rendering:pixelated;" />
-          <span class="owned-card-name uppercase text-center leading-tight" style="${FONT} font-size:7px; color:${sel ? '#000' : '#fff'};">${p.name}</span>
+          <img src="${this.sprites[this.spriteKey(p)] ?? ''}" alt="${p.name}" class="w-14 h-14 sm:w-16 sm:h-16 object-contain" style="image-rendering:pixelated;" />
+          <span class="owned-card-name uppercase text-center leading-tight" style="${FONT} font-size:7px; color:${sel ? '#000' : '#fff'};">${p.isShiny ? '✨ ' : ''}${p.name}</span>
           <span style="${FONT} font-size:6px; color:${color};">${typeLabelEs(p.type)} · Lv.${p.level}</span>
         </button>`;
       })

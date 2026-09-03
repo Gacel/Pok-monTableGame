@@ -31,3 +31,13 @@ describe('T9.2 · compra de piedra (lógica de inventario/saldo)', () => {
     expect(items.find((i) => i.item_key === 'water-stone')?.kind).toBe('stone');
   });
 });
+
+describe('T11.7 · compra de varias piedras (qty)', () => {
+  it('añadir qty>1 acumula correctamente', async () => {
+    const uid = crypto.randomUUID();
+    await ItemModel.add(uid, STONE_KIND, 'fire-stone', 3);
+    expect(await ItemModel.getQty(uid, STONE_KIND, 'fire-stone')).toBe(3);
+    await ItemModel.add(uid, STONE_KIND, 'fire-stone', 5);
+    expect(await ItemModel.getQty(uid, STONE_KIND, 'fire-stone')).toBe(8);
+  });
+});

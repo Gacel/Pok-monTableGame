@@ -8,6 +8,7 @@ import { AuctionApi } from '../../net/AuctionApi';
 import { escapeHtml } from '../../utils/html';
 import { stoneLabelEs } from '@transcendence/shared';
 import type { PokemonType } from '../../models/Types';
+import { gameAlert, gameConfirm } from './GameModal';
 
 interface InvPokemon {
   id: string;
@@ -49,6 +50,7 @@ export class InventoryView {
   private container: HTMLElement;
   private onClose: () => void;
   private sprites: Record<string, string> = {};
+  private items: InvItem[] = [];
 
   constructor(container: HTMLElement, onClose: () => void) {
     this.container = container;
@@ -67,6 +69,7 @@ export class InventoryView {
     } catch {
       /* red caída */
     }
+    this.items = items;
     await this.preloadSprites(pokemon);
     this.draw(pokemon, items);
   }
@@ -123,8 +126,9 @@ export class InventoryView {
       def: p.def,
       spriteUrl: this.sprites[`${p.name}-${!!p.isShiny}`],
       isShiny: !!p.isShiny,
-      ownedId: p.id, // habilita la evolución meta (T9.3)
-      onEvolved: () => void this.render(), // refresca el inventario tras evolucionar
+      ownedId: p.id,
+      candyCount: this.items.find(i => i.kind === 'rare_candy' && i.itemKey === 'rare-candy')?.qty ?? 0,
+      onEvolved: () => void this.render(),
     });
   }
 
@@ -352,7 +356,7 @@ export class InventoryView {
         void (async () => {
           const toUserId = btn.dataset.uid ?? '';
           const uname = btn.textContent?.trim() || 'ese jugador';
-          if (!confirm(`¿Regalar ${subject} a ${uname}? No podrás deshacerlo.`)) return;
+          if (!(await gameConfirm(`¿Regalar ${subject} a ${uname}? No podrás deshacerlo.`))) return;
           const r = await doGift(toUserId);
           if (r.ok) {
             close();
@@ -389,24 +393,25 @@ export class InventoryView {
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.success) {
         const name = String(data.pokemon?.name ?? '').toUpperCase();
-        alert(`¡Has conseguido ${name}!`);
+        void gameAlert(`Has conseguido ${name}!`);
         await this.render();
       } else {
-        alert(data.error ?? 'No se pudo abrir la bola');
+        void gameAlert(data.error ?? 'No se pudo abrir la bola');
       }
     } catch {
-      alert('Error de red al abrir la bola');
+      void gameAlert('Error de red al abrir la bola');
     }
   }
 
   private itemCell(it: InvItem): string {
     const isBall = it.kind === 'pokeball';
     const isStone = it.kind === 'stone';
-    // Bolas y piedras son objetos de PokeAPI: mismo path de sprites de items.
-    const img = isBall || isStone
+    const isCandy = it.kind === 'rare_candy';
+    const hasSprite = isBall || isStone || isCandy;
+    const img = hasSprite
       ? `<img src="${BALL_SPRITE}/${it.itemKey}.png" alt="${it.itemKey}" class="w-11 h-11 object-contain" style="image-rendering:pixelated;" />`
       : `<div class="w-11 h-11 flex items-center justify-center" style="font-size:24px;">${it.kind === 'cosmetic' ? '🎨' : '📦'}</div>`;
-    const label = isStone ? stoneLabelEs(it.itemKey) : it.itemKey;
+    const label = isCandy ? 'Caramelo Raro' : isStone ? stoneLabelEs(it.itemKey) : it.itemKey;
     // Solo las bolas tienen acciones (Abrir/Vender/Regalar) → celda interactiva.
     const interactive = isBall
       ? `item-cell cursor-pointer transition-colors hover:border-yellow-400 hover:bg-gray-700`
@@ -429,8 +434,9 @@ export class InventoryView {
     const pokeGrid = pokemon.length
       ? pokemon.map((p) => this.pokemonCell(p)).join('')
       : `<p class="text-gray-400" style="${FONT} font-size:9px;">Sin Pokémon todavía.</p>`;
-    const itemGrid = items.length
-      ? items.map((it) => this.itemCell(it)).join('')
+    const visibleItems = items.filter(it => it.qty > 0);
+    const itemGrid = visibleItems.length
+      ? visibleItems.map((it) => this.itemCell(it)).join('')
       : `<p class="text-gray-400" style="${FONT} font-size:9px;">Sin objetos todavía.</p>`;
 
     this.container.innerHTML = `
@@ -441,14 +447,14 @@ export class InventoryView {
         </div>
 
         <div class="flex flex-col md:flex-row flex-1 gap-3 md:gap-6 min-h-0">
-          <!-- IZQUIERDA: entrenador (>=50% alto) -->
-          <div class="w-full md:w-1/3 flex">
+          <!-- IZQUIERDA: entrenador (compacto) -->
+          <div class="w-full md:w-56 flex-shrink-0 flex">
             ${panelCard(
-              `<div class="w-full h-full flex flex-col items-center justify-center text-center gap-4" style="min-height:min(50vh, 320px);">
-                 <img src="${this.trainerSprite()}" alt="entrenador" class="pixelated block mx-auto" style="width:clamp(120px,30vw,220px);height:clamp(120px,30vw,220px);object-fit:contain;image-rendering:pixelated;" />
-                 <span class="text-black" style="${FONT} font-size:16px;">${u?.username ?? ''}</span>
-                 <span class="text-gray-600" style="${FONT} font-size:11px;">Lv. ${u?.level ?? 1} · 🪙 ${u?.coins ?? 0}</span>
-                 <span class="text-gray-500" style="${FONT} font-size:9px;">${pokemon.length} Pokémon · ${items.length} objetos</span>
+              `<div class="w-full h-full flex flex-col items-center justify-center text-center gap-2" style="min-height:min(30vh, 200px);">
+                 <img src="${this.trainerSprite()}" alt="entrenador" class="pixelated block mx-auto" style="width:clamp(80px,20vw,140px);height:clamp(80px,20vw,140px);object-fit:contain;image-rendering:pixelated;" />
+                 <span class="text-black" style="${FONT} font-size:13px;">${u?.username ?? ''}</span>
+                 <span class="text-gray-600" style="${FONT} font-size:10px;">Lv. ${u?.level ?? 1} · 🪙 ${u?.coins ?? 0}</span>
+                 <span class="text-gray-500" style="${FONT} font-size:8px;">${pokemon.length} Pokémon · ${visibleItems.length} objetos</span>
                </div>`,
               'flex-1 flex w-full'
             )}

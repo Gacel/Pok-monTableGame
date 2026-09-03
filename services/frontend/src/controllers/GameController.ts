@@ -15,7 +15,10 @@ import { BALL_SPRITE, BALL_LABEL } from '@transcendence/shared';
 import type { CaptureResult } from '@transcendence/shared';
 import { authState } from '../auth/AuthState';
 import { decideBotAction, hexDistance, pickCastMove } from './botStrategy';
+import { combatAudio } from '../utils/CombatAudio';
+import { playEvolutionFx } from '../utils/EvolutionFx';
 import type { BotLevel, BotPieceOptions, EnemyPiece } from './botStrategy';
+import { gameConfirm } from '../views/hub/GameModal';
 
 /**
  * Capa CONTROLADOR (frontend): traduce input del usuario a peticiones al servidor
@@ -107,6 +110,11 @@ export class GameController {
     // Online: la "revancha" ya lleva al menú → sobra el botón MENÚ extra.
     const winMenuBtn = document.getElementById('btn-win-menu');
     if (winMenuBtn) winMenuBtn.style.display = session ? 'none' : '';
+  }
+
+  public resetBoard(): void {
+    this.state.clearMatch();
+    this.renderAll();
   }
 
   /** Configura los slots controlados por la IA (solo local). */
@@ -251,13 +259,20 @@ export class GameController {
    * Devuelve `false` si ningún movimiento alcanza (para que el turno avance sin congelar).
    */
   private async botCast(from: Hex, target: Hex): Promise<boolean> {
-    const caster = this.state.match?.tiles.find(
+    const m = this.state.match;
+    const caster = m?.tiles.find(
       (t) => t.hex.q === from.q && t.hex.r === from.r,
     )?.occupant;
     const moves = caster?.moves ?? [];
-    if (!moves.length) return false;
+    if (!moves.length || !m) return false;
 
-    const bestIdx = pickCastMove(moves, hexDistance(from, target));
+    // Large (7 hexes): medir desde el hex del cuerpo más cercano al objetivo.
+    const bodyHexes = caster
+      ? m.tiles.filter(t => t.occupant?.id === caster.id).map(t => t.hex)
+      : [from];
+    const dist = Math.min(...bodyHexes.map(h => hexDistance(h, target)));
+
+    const bestIdx = pickCastMove(moves, dist);
     if (bestIdx < 0) return false;
     return this.performCast(from, target, bestIdx);
   }
@@ -471,7 +486,7 @@ export class GameController {
            const centerTile = newState.tiles.find(t => t.hex.q === centerQ && t.hex.r === centerR) || newState.tiles.find(t => t.hex.q === zones[0].q && t.hex.r === zones[0].r);
            this.centerOnTile(centerTile, animateCamera && !!oldPlayer);
         }
-      } else {
+      } else if (this.panKeys.size === 0) {
         const targetTile = this.state.getLastInteractedTile(newState.currentPlayer);
         this.centerOnTile(targetTile, animateCamera && !!oldPlayer);
       }
@@ -499,12 +514,16 @@ export class GameController {
     if (sig === this.lastEventsSig) return;
     this.lastEventsSig = sig;
 
+    const allies = this.state.hiddenAllySlots;
     for (const ev of events) {
       if (!ev.hex) continue;
+      const evTile = state.tiles.find(t => t.hex.q === ev.hex!.q && t.hex.r === ev.hex!.r);
+      const inFog = evTile?.occupant?.isHidden && allies && !allies.includes(evTile.occupant.playerId);
       switch (ev.kind) {
         case 'damage':
           this.fxLayer.floatingNumber(ev.hex, String(ev.delta ?? 0), 'damage');
-          if (ev.blocked) this.fxLayer.flash(ev.hex, '🛡️'); // intercepción de un coloso (T4.4)
+          if (ev.blocked) this.fxLayer.flash(ev.hex, '🛡️');
+          if (!inFog) combatAudio.playHit();
           break;
         case 'heal':
           this.fxLayer.floatingNumber(ev.hex, `+${ev.delta ?? 0}`, 'heal'); // +N verde (T2.3)
@@ -512,16 +531,26 @@ export class GameController {
         case 'reveal':
           this.fxLayer.flash(ev.hex); // "!" de emboscada revelada (T1.2)
           break;
-        case 'evolve':
-          this.fxLayer.flash(ev.hex, '✨'); // evolución in-match (T9.4); el sprite cambia solo
+        case 'evolve': {
+          const fxLayer = document.getElementById('fx-layer');
+          if (fxLayer) {
+            const pos = this.boardView.hexToScreen(ev.hex!);
+            const evolvedTile = state.tiles.find(t => t.hex.q === ev.hex!.q && t.hex.r === ev.hex!.r);
+            playEvolutionFx(fxLayer, pos.x, pos.y, evolvedTile?.occupant?.name);
+          }
           break;
+        }
         case 'knockback':
         case 'dash':
-          // Deslizamiento del sprite (T3.2/T3.4): se marca el id para que EntityView use
-          // una transición de posición larga en el render que lo mueve a su nuevo hex.
           if (ev.pokemonId) this.state.slidingIds.add(ev.pokemonId);
+          if (!this.isMyTurn() && this.panKeys.size === 0) {
+            const evTile = state.tiles.find(t => t.hex.q === ev.hex!.q && t.hex.r === ev.hex!.r);
+            this.centerOnTile(evTile);
+          }
           break;
-        // capture → su ticket (T8.5).
+        case 'ko':
+          if (!inFog) combatAudio.playDeath();
+          break;
         default:
           break;
       }
@@ -529,22 +558,29 @@ export class GameController {
   }
 
   private async preloadSprites(state: MatchState): Promise<void> {
-    const names = new Set<string>();
-    for (const t of state.tiles) if (t.occupant?.name) names.add(t.occupant.name);
+    const keys = new Set<string>();
+    for (const t of state.tiles) {
+      if (t.occupant?.name) keys.add(t.occupant.isShiny ? `${t.occupant.name}:shiny` : t.occupant.name);
+    }
     if (state.reserve) {
       for (const playerReserve of Object.values(state.reserve)) {
-        for (const p of playerReserve) if (p.name) names.add(p.name);
+        for (const p of playerReserve) if (p.name) keys.add(p.isShiny ? `${p.name}:shiny` : p.name);
       }
     }
-    await Promise.all(Array.from(names).map((n) => this.loadPokeSprite(n)));
+    await Promise.all(Array.from(keys).map((k) => {
+      const shiny = k.endsWith(':shiny');
+      const name = shiny ? k.slice(0, -6) : k;
+      return this.loadPokeSprite(name, shiny);
+    }));
   }
 
-  private async loadPokeSprite(name: string): Promise<string | null> {
-    if (this.state.pokeGifs[name]) return this.state.pokeGifs[name] ?? null;
-    const { gif, static: staticUrl } = await getSpritePair(name);
+  private async loadPokeSprite(name: string, shiny = false): Promise<string | null> {
+    const key = shiny ? `${name}:shiny` : name;
+    if (this.state.pokeGifs[key]) return this.state.pokeGifs[key] ?? null;
+    const { gif, static: staticUrl } = await getSpritePair(name, shiny);
     if (!gif) return null;
-    this.state.pokeGifs[name] = gif;
-    this.state.pokeStatic[name] = staticUrl;
+    this.state.pokeGifs[key] = gif;
+    this.state.pokeStatic[key] = staticUrl;
     return gif;
   }
 
@@ -664,9 +700,9 @@ export class GameController {
     document.getElementById('btn-win-menu')?.addEventListener('click', () => this.exitToMenu());
     document.getElementById('btn-end-turn')?.addEventListener('click', () => this.endTurn());
     document.getElementById('btn-abandon')?.addEventListener('click', () => {
-      if (confirm('¿Estás seguro de que quieres abandonar la partida? (Esto equivaldrá a una derrota)')) {
-        this.abandonGame();
-      }
+      void gameConfirm('¿Abandonar la partida? Equivaldrá a una derrota.').then((ok) => {
+        if (ok) this.abandonGame();
+      });
     });
 
     document.getElementById('chat-form')?.addEventListener('submit', (e) => {
@@ -970,8 +1006,9 @@ export class GameController {
       if (res.ok && data.success) {
         this.state.selectedHex = null;
         const state = data.state as MatchState;
-        this.applyMatchState(state);
         // ARENA: si te llevas bolas al abandonar, muéstralas antes de salir.
+        // No pintamos el estado de arena (applyMatchState) para evitar que el
+        // canvas quede con el mapa grande si el usuario inicia una local después.
         const slot = this.session?.mySlot ?? 'player1';
         const balls = state.rewards?.find((r) => r.slot === slot)?.balls ?? [];
         // Quien abandona sale SIEMPRE al menú principal (la partida sigue para

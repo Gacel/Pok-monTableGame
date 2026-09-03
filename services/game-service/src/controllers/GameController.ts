@@ -131,7 +131,7 @@ export const GameController = {
     const moves = await Promise.all(
       curated.map(async (m) => {
         const row = await MoveModel.findMove(m.name);
-        return { ...m, shortEffect: row?.shortEffect ?? null };
+        return { ...m, shortEffect: row?.shortEffect ?? null, displayName: row?.displayName ?? null };
       })
     );
     return {
