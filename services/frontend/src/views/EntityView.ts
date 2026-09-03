@@ -63,7 +63,7 @@ export class EntityView {
     }
 
     for (const tile of this.state.currentTiles) {
-      if (tile.occupant && tile.occupant.name && this.state.pokeGifs[tile.occupant.name]) {
+      if (tile.occupant && tile.occupant.name && this.state.pokeGifs[tile.occupant.isShiny ? `${tile.occupant.name}:shiny` : tile.occupant.name]) {
           // Ocultación local desde la perspectiva del humano (vs-IA): un Pokémon oculto
           // de un slot que NO es del equipo humano no se renderiza. `hiddenAllySlots`
           // es null en online (server censura) y en hot-seat (pantalla compartida).
@@ -136,7 +136,7 @@ export class EntityView {
           if (!img) {
             img = document.createElement('img');
             img.id = `img-${occupantId}`;
-            img.src = this.state.pokeGifs[tile.occupant.name];
+            img.src = this.state.pokeGifs[tile.occupant.isShiny ? `${tile.occupant.name}:shiny` : tile.occupant.name];
             img.className = 'absolute';
             img.style.imageRendering = 'pixelated';
             this.entitiesLayer.appendChild(img);

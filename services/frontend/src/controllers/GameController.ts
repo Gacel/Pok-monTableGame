@@ -558,22 +558,29 @@ export class GameController {
   }
 
   private async preloadSprites(state: MatchState): Promise<void> {
-    const names = new Set<string>();
-    for (const t of state.tiles) if (t.occupant?.name) names.add(t.occupant.name);
+    const keys = new Set<string>();
+    for (const t of state.tiles) {
+      if (t.occupant?.name) keys.add(t.occupant.isShiny ? `${t.occupant.name}:shiny` : t.occupant.name);
+    }
     if (state.reserve) {
       for (const playerReserve of Object.values(state.reserve)) {
-        for (const p of playerReserve) if (p.name) names.add(p.name);
+        for (const p of playerReserve) if (p.name) keys.add(p.isShiny ? `${p.name}:shiny` : p.name);
       }
     }
-    await Promise.all(Array.from(names).map((n) => this.loadPokeSprite(n)));
+    await Promise.all(Array.from(keys).map((k) => {
+      const shiny = k.endsWith(':shiny');
+      const name = shiny ? k.slice(0, -6) : k;
+      return this.loadPokeSprite(name, shiny);
+    }));
   }
 
-  private async loadPokeSprite(name: string): Promise<string | null> {
-    if (this.state.pokeGifs[name]) return this.state.pokeGifs[name] ?? null;
-    const { gif, static: staticUrl } = await getSpritePair(name);
+  private async loadPokeSprite(name: string, shiny = false): Promise<string | null> {
+    const key = shiny ? `${name}:shiny` : name;
+    if (this.state.pokeGifs[key]) return this.state.pokeGifs[key] ?? null;
+    const { gif, static: staticUrl } = await getSpritePair(name, shiny);
     if (!gif) return null;
-    this.state.pokeGifs[name] = gif;
-    this.state.pokeStatic[name] = staticUrl;
+    this.state.pokeGifs[key] = gif;
+    this.state.pokeStatic[key] = staticUrl;
     return gif;
   }
 

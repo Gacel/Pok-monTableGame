@@ -20,7 +20,7 @@ import { isGen1, randomGen1Names } from '../engine/gen1.js';
  * (`ownedId`) y su nivel real. Las piezas de draft/roster son plantillas planas (sin
  * estos campos); las de equipos por instancia (T6.3) los llevan.
  */
-type TeamPiece = PokemonTemplate & { ownedId?: string; level?: number };
+type TeamPiece = PokemonTemplate & { ownedId?: string; level?: number; isShiny?: boolean };
 
 const DEFAULT_MATCH_ID = 'default';
 /** Mundo ARENA persistente: un único matchId global, siempre vivo, sin sala/host. */
@@ -149,6 +149,7 @@ export class MatchManager {
         // Stats escaladas por nivel (T6.2): a Lv.1 no altera nada (draft intacto).
         ...scaledVitals(tpl, level),
         ...(tpl.ownedId ? { ownedId: tpl.ownedId } : {}),
+        ...(tpl.isShiny ? { isShiny: true } : {}),
       };
     };
 
@@ -281,7 +282,7 @@ export class MatchManager {
     return Promise.all(
       records.map(async (rec) => {
         const tpl = await PokemonService.getTemplate(rec.name);
-        return { ...tpl, ownedId: rec.id, level: rec.level };
+        return { ...tpl, ownedId: rec.id, level: rec.level, isShiny: rec.is_shiny === 1 };
       })
     );
   }
@@ -420,6 +421,7 @@ export class MatchManager {
       level,
       ...scaledVitals(tpl, level), // stats escaladas por nivel (T6.2)
       ...(tpl.ownedId ? { ownedId: tpl.ownedId } : {}),
+      ...(tpl.isShiny ? { isShiny: true } : {}),
     };
   }
 
