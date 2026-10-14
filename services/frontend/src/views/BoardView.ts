@@ -68,13 +68,16 @@ export class BoardView {
    * asi que en vez de redibujar miles de hexes por frame al alejar (textura + gradientes
    * + decenas de arcos por transicion), se compone una vez y se vuelca con un unico
    * drawImage. El relieve y todos los overlays dinamicos siguen pintandose por frame.
-   * Se invalida por REFERENCIA del array de tiles, igual que geomCache.
+   * Se clava por IDENTIDAD del tablero (id de partida), no por la referencia del array:
+   * los biomas no cambian durante una partida aunque el array de tiles si (ocupantes,
+   * cofres, loot), de modo clave en ARENA (mundo vivo) para no re-hornear por accion.
    */
   private terrainCache: {
-    tiles: Tile[];
+    key: string;
     canvas: HTMLCanvasElement;
     originX: number;
     originY: number;
+    scale: number;
   } | null = null;
 
   private getGeom(): { order: { tile: Tile; x: number; y: number }[]; tileMap: Map<string, Tile> } {
@@ -92,16 +95,20 @@ export class BoardView {
   }
 
   /**
-   * Devuelve (construyendo y cacheando si hace falta) la capa de terreno estatico. null
-   * si no conviene cachear: texturas aun sin cargar, o tablero demasiado grande (ARENA)
-   * donde el offscreen excederia el presupuesto de memoria -> se cae al dibujo en vivo.
+   * Devuelve (construyendo y cacheando si hace falta) la capa de terreno estatico. La
+   * clave es la IDENTIDAD del tablero (id de partida + nº de tiles), NO la referencia del
+   * array: en ARENA el mundo esta vivo (ocupantes/cofres/loot cambian el array cada
+   * estado) pero los BIOMAS no, asi que la capa se hornea una vez por partida. En tableros
+   * grandes se hornea a resolucion reducida para acotar memoria; como solo se usa alejado,
+   * el downscale es invisible. null si las texturas aun no cargaron o ni reducido cabe.
    */
   private getTerrainLayer(
     order: { tile: Tile; x: number; y: number }[],
     tileMap: Map<string, Tile>
-  ): { canvas: HTMLCanvasElement; originX: number; originY: number } | null {
+  ): { canvas: HTMLCanvasElement; originX: number; originY: number; scale: number } | null {
     const tiles = this.state.currentTiles;
-    if (this.terrainCache && this.terrainCache.tiles === tiles) return this.terrainCache;
+    const key = `${this.state.match?.id ?? '?'}:${tiles.length}`;
+    if (this.terrainCache && this.terrainCache.key === key) return this.terrainCache;
 
     // Las texturas deben estar cargadas; si no, no horneamos (se reintenta al cargar).
     const texturesReady = Object.values(this.textures).every(
@@ -116,15 +123,27 @@ export class BoardView {
       if (y < minY) minY = y;
       if (y > maxY) maxY = y;
     }
-    // Margen para el relleno del hex (ancho/alto iso + relieve de profundidad de drawHex).
+    // Margen para el relleno del hex (ancho/alto iso + profundidad de drawHex).
     const mX = this.HEX_SIZE * 2;
     const mY = this.HEX_SIZE * 1.5;
-    const w = Math.ceil(maxX - minX + mX * 2);
-    const h = Math.ceil(maxY - minY + mY * 2);
-    // Presupuesto: evita offscreens gigantes (p.ej. ARENA ~5400 hexes) -> fallback en vivo.
+    const worldW = maxX - minX + mX * 2;
+    const worldH = maxY - minY + mY * 2;
+    if (worldW <= 0 || worldH <= 0) return null;
+
+    // Resolucion del offscreen acotada por area (memoria) y lado maximo de canvas. En
+    // tableros normales scale=1 (nitido); en ARENA baja a ~0.6 (invisible estando alejado).
     const MAX_SIDE = 8192;
-    const MAX_AREA = 24_000_000;
-    if (w <= 0 || h <= 0 || w > MAX_SIDE || h > MAX_SIDE || w * h > MAX_AREA) return null;
+    const MAX_AREA = 8_000_000;
+    const scale = Math.min(
+      1,
+      Math.sqrt(MAX_AREA / (worldW * worldH)),
+      MAX_SIDE / worldW,
+      MAX_SIDE / worldH
+    );
+    if (!(scale > 0) || scale < 0.25) return null; // tablero desorbitado: dibujo en vivo
+
+    const w = Math.max(1, Math.ceil(worldW * scale));
+    const h = Math.max(1, Math.ceil(worldH * scale));
 
     const off = document.createElement('canvas');
     off.width = w;
@@ -135,6 +154,7 @@ export class BoardView {
 
     const originX = minX - mX;
     const originY = minY - mY;
+    octx.scale(scale, scale);
     octx.translate(-originX, -originY);
 
     // Reutilizamos drawHex/drawBiomeTransitions (operan sobre this.ctx) apuntandolos
@@ -150,7 +170,7 @@ export class BoardView {
       this.ctx = mainCtx;
     }
 
-    this.terrainCache = { tiles, canvas: off, originX, originY };
+    this.terrainCache = { key, canvas: off, originX, originY, scale };
     return this.terrainCache;
   }
 
@@ -562,8 +582,16 @@ export class BoardView {
       ? this.state.currentTiles.find((t) => t.hex.q === selHex.q && t.hex.r === selHex.r)?.occupant?.id ?? null
       : null;
 
-    // Un solo blit del terreno estatico (reemplaza miles de drawHex + transiciones).
-    if (terrain) this.ctx.drawImage(terrain.canvas, terrain.originX, terrain.originY);
+    // Un solo blit del terreno estatico (reemplaza miles de drawHex + transiciones). Se
+    // reescala de la resolucion horneada al tamaño de mundo (identidad si scale=1).
+    if (terrain) {
+      this.ctx.drawImage(
+        terrain.canvas,
+        0, 0, terrain.canvas.width, terrain.canvas.height,
+        terrain.originX, terrain.originY,
+        terrain.canvas.width / terrain.scale, terrain.canvas.height / terrain.scale
+      );
+    }
 
     for (const { tile, x, y } of order) {
       if (x < minX || x > maxX || y < minY || y > maxY) continue;
