@@ -31,13 +31,13 @@ down: ## Para y elimina contenedores y red
 ps: ## Estado de los servicios
 	$(COMPOSE) ps
 
-logs: guard-s ## Logs en vivo de un servicio: make logs s=hello
+logs: ## Logs en vivo (todos, o uno: make logs s=hello)
 	$(COMPOSE) logs -f $(s)
 
 sh: guard-s ## Shell dentro de un contenedor: make sh s=hello
 	$(COMPOSE) exec $(s) sh
 
-rebuild: guard-s ## Reconstruye un servicio: make rebuild s=hello
+rebuild: ## Reconstruye el stack, o uno: make rebuild s=hello
 	$(COMPOSE) up --build -d $(s)
 
 test: guard-s ## Tests de un servicio: make test s=hello
