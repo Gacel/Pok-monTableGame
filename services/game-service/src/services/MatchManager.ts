@@ -392,7 +392,9 @@ export class MatchManager {
     this.onlineMatches.set(id, game);
     await this.persistMatch(id);
     
-    setTimeout(() => {
+    // Red de seguridad del despliegue online (42s). Guarda por id + status para no
+    // arrancar un juego que ya avanzo. unref(): no mantener vivo el proceso por este timer.
+    const deployTimer = setTimeout(() => {
       const g = this.onlineMatches.get(id);
       if (g && g.getStateDTO().status === 'deployment') {
          g.forceStart();
@@ -400,6 +402,7 @@ export class MatchManager {
          import('../realtime/hub.js').then(m => m.hub.broadcastPersonalized(id, (ctx) => ({ type: 'state', state: g.getStateDTO(ctx.slot ?? undefined) }))).catch(console.error);
       }
     }, 42000);
+    deployTimer.unref?.();
     
     return game;
   }
