@@ -1,6 +1,5 @@
 import { authState } from '../../auth/AuthState';
-import { showMainMenu } from '../../main';
-import { gameAlert } from './GameModal';
+import { showMainMenu, showRanking } from '../../main';
 
 /**
  * Capa VISTA: configuración. De momento acoge el ranking (placeholder hasta
@@ -51,9 +50,7 @@ export class SettingsView {
       </div>
     `;
 
-    document.getElementById('btn-ranking')?.addEventListener('click', () => {
-      void gameAlert('El ranking global llegará con el user-service. Próximamente!');
-    });
+    document.getElementById('btn-ranking')?.addEventListener('click', () => showRanking());
     document.getElementById('btn-logout-settings')?.addEventListener('click', () => {
       authState.logout();
     });

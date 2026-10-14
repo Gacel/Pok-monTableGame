@@ -231,6 +231,14 @@ async function openAndMigrate(): Promise<Database> {
   if (!userNames.has('totp_secret')) await db.exec(`ALTER TABLE users ADD COLUMN totp_secret TEXT`);
   if (!userNames.has('two_factor_enabled'))
     await db.exec(`ALTER TABLE users ADD COLUMN two_factor_enabled INTEGER NOT NULL DEFAULT 0`);
+  if (!userNames.has('wins'))
+    await db.exec(`ALTER TABLE users ADD COLUMN wins INTEGER NOT NULL DEFAULT 0`);
+  if (!userNames.has('losses'))
+    await db.exec(`ALTER TABLE users ADD COLUMN losses INTEGER NOT NULL DEFAULT 0`);
+  if (!userNames.has('abandons'))
+    await db.exec(`ALTER TABLE users ADD COLUMN abandons INTEGER NOT NULL DEFAULT 0`);
+  if (!userNames.has('last_active'))
+    await db.exec(`ALTER TABLE users ADD COLUMN last_active TEXT`);
   // Índice único de email (múltiples NULL permitidos en SQLite).
   await db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email)`);
 

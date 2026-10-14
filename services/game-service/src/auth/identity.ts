@@ -15,6 +15,7 @@ export async function resolveUser(token: string | undefined | null): Promise<Use
   const payload = verifyToken(clean);
   if (!payload) return null;
   const user = await UserModel.findById(payload.sub);
+  if (user) UserModel.touchActive(user.id).catch(() => {});
   return user ?? null;
 }
 

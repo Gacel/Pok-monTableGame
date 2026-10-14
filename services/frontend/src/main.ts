@@ -24,6 +24,7 @@ import type { BotLevel } from './controllers/botStrategy';
 import { pickAiTeam } from './controllers/aiDraft';
 import type { RosterMon } from './controllers/aiDraft';
 import { SettingsView } from './views/hub/SettingsView';
+import { RankingView } from './views/hub/RankingView';
 import { LobbyView } from './views/hub/LobbyView';
 import { DraftView } from './views/hub/DraftView';
 import { WelcomeView } from './views/hub/WelcomeView';
@@ -172,6 +173,11 @@ export function showLocalSetup() {
 export function showSettings() {
   resetHubLayer();
   new SettingsView(hubLayer).render();
+}
+
+export function showRanking() {
+  resetHubLayer();
+  void new RankingView(hubLayer, showSettings).render();
 }
 
 export function showPrivacyPolicy(onBack: () => void = showMainMenu) {

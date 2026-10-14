@@ -13,6 +13,10 @@ export interface UserRecord {
   two_factor_enabled?: number; // 0/1
   level: number;
   coins: number;
+  wins: number;
+  losses: number;
+  abandons: number;
+  last_active?: string | null;
   created_at?: string;
 }
 
@@ -27,6 +31,18 @@ export interface SafeUser {
   twoFactorEnabled: boolean;
   level: number;
   coins: number;
+  wins: number;
+  losses: number;
+  abandons: number;
+}
+
+export interface RankingEntry {
+  username: string;
+  avatarUrl: string | null;
+  level: number;
+  wins: number;
+  losses: number;
+  abandons: number;
 }
 
 export interface NewAccount {
@@ -52,6 +68,9 @@ export const UserModel = {
       twoFactorEnabled: !!u.two_factor_enabled,
       level: u.level,
       coins: u.coins,
+      wins: u.wins ?? 0,
+      losses: u.losses ?? 0,
+      abandons: u.abandons ?? 0,
     };
   },
 
@@ -125,5 +144,39 @@ export const UserModel = {
   async setTwoFactor(id: string, enabled: boolean): Promise<void> {
     const db = await getDb();
     await db.run('UPDATE users SET two_factor_enabled = ? WHERE id = ?', enabled ? 1 : 0, id);
+  },
+
+  async incrementWins(id: string): Promise<void> {
+    const db = await getDb();
+    await db.run('UPDATE users SET wins = wins + 1 WHERE id = ?', id);
+  },
+
+  async incrementLosses(id: string): Promise<void> {
+    const db = await getDb();
+    await db.run('UPDATE users SET losses = losses + 1 WHERE id = ?', id);
+  },
+
+  async incrementAbandons(id: string): Promise<void> {
+    const db = await getDb();
+    await db.run('UPDATE users SET abandons = abandons + 1 WHERE id = ?', id);
+  },
+
+  async touchActive(id: string): Promise<void> {
+    const db = await getDb();
+    await db.run("UPDATE users SET last_active = datetime('now') WHERE id = ?", id);
+  },
+
+  async getRanking(hoursBack = 48): Promise<RankingEntry[]> {
+    const db = await getDb();
+    return db.all<RankingEntry[]>(
+      `SELECT username, avatarUrl, level, wins, losses, abandons
+       FROM users
+       WHERE username IS NOT NULL
+         AND last_active IS NOT NULL
+         AND last_active >= datetime('now', ? || ' hours')
+       ORDER BY wins DESC, losses ASC, abandons ASC
+       LIMIT 50`,
+      `-${hoursBack}`
+    );
   },
 };

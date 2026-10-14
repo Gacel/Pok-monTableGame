@@ -1,4 +1,4 @@
-import type { Hex } from '@transcendence/shared';
+import type { Hex, PlayerSlot } from '@transcendence/shared';
 import { GameService, PlayResult } from './GameService.js';
 import { matchManager } from './MatchManager.js';
 import { EconomyService } from './EconomyService.js';
@@ -7,9 +7,12 @@ import { CaptureService } from './CaptureService.js';
 import { RoomService } from './RoomService.js';
 import { PokemonService } from './PokemonService.js';
 import { OwnedPokemonModel } from '../models/OwnedPokemonModel.js';
+import { UserModel } from '../models/UserModel.js';
 import { hub } from '../realtime/hub.js';
 import type { CaptureResult } from '@transcendence/shared';
 import type { Hex as HexT } from '@transcendence/shared';
+
+const abandonedUsers = new Map<string, Set<string>>();
 
 export type GameAction =
   | { type: 'move'; from: Hex; to: Hex }
@@ -106,6 +109,32 @@ export const GameActionService = {
       if ((await RoomService.gameModeOf(ctx.matchId)) === 'br') {
         const slotUser = new Map<string, string | null>(await RoomService.slotUserMap(ctx.matchId));
         captures = await CaptureService.resolve('br', slotUser, result.state);
+      }
+    }
+
+    if (!ctx.isLocal && ctx.matchId) {
+      if (action.type === 'abandon' && result.ok) {
+        const bySlot = await RoomService.slotUserMap(ctx.matchId);
+        const uid = bySlot.get(ctx.actor as PlayerSlot);
+        if (uid) {
+          await UserModel.incrementAbandons(uid);
+          let set = abandonedUsers.get(ctx.matchId);
+          if (!set) { set = new Set(); abandonedUsers.set(ctx.matchId, set); }
+          set.add(uid);
+        }
+      }
+      if (result.state.status === 'finished' && result.state.winner) {
+        const bySlot = await RoomService.slotUserMap(ctx.matchId);
+        const winnerSlots = new Set(result.state.winner.split(' & '));
+        const abandoned = abandonedUsers.get(ctx.matchId);
+        for (const [slot, uid] of bySlot) {
+          if (winnerSlots.has(slot)) {
+            await UserModel.incrementWins(uid);
+          } else if (!abandoned?.has(uid)) {
+            await UserModel.incrementLosses(uid);
+          }
+        }
+        abandonedUsers.delete(ctx.matchId);
       }
     }
 
