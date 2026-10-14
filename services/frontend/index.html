@@ -24,14 +24,6 @@
       <!-- CAPA DE DRAFT (selección de equipos) — también a tamaño real. -->
       <div id="draft-layer" class="absolute inset-0 z-[85] hidden overflow-y-auto overscroll-contain bg-gray-900"></div>
 
-      <!-- OVERLAY DE ROTACIÓN — se muestra sobre el TABLERO en móvil vertical
-           (el tablero 16:10 no es jugable en portrait). Controlado desde main.ts. -->
-      <div id="rotate-overlay" class="absolute inset-0 z-[95] hidden flex-col items-center justify-center gap-6 bg-black text-center px-8">
-        <div class="text-6xl animate-pulse">📱 ↻</div>
-        <p class="text-yellow-400 text-sm sm:text-base leading-relaxed" style="font-family:'Press Start 2P',monospace;">GIRA EL DISPOSITIVO</p>
-        <p class="text-gray-300 text-[10px] sm:text-xs leading-relaxed max-w-xs" style="font-family:'Press Start 2P',monospace;">El tablero se juega en horizontal</p>
-      </div>
-
       <!-- CONTENEDOR GENERAL ESCALABLE -->
       <div id="game-container" class="relative flex items-center justify-center gap-6" style="transform-origin: center; transition: transform 0.2s ease;">
         
