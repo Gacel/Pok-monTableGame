@@ -62,6 +62,21 @@ export class BoardView {
     tileMap: Map<string, Tile>;
   } | null = null;
 
+  /**
+   * Capa de TERRENO estatico (hex base + transiciones de bioma) pre-renderizada a un
+   * canvas offscreen en coordenadas de MUNDO. El terreno no cambia durante la partida,
+   * asi que en vez de redibujar miles de hexes por frame al alejar (textura + gradientes
+   * + decenas de arcos por transicion), se compone una vez y se vuelca con un unico
+   * drawImage. El relieve y todos los overlays dinamicos siguen pintandose por frame.
+   * Se invalida por REFERENCIA del array de tiles, igual que geomCache.
+   */
+  private terrainCache: {
+    tiles: Tile[];
+    canvas: HTMLCanvasElement;
+    originX: number;
+    originY: number;
+  } | null = null;
+
   private getGeom(): { order: { tile: Tile; x: number; y: number }[]; tileMap: Map<string, Tile> } {
     const tiles = this.state.currentTiles;
     if (this.geomCache && this.geomCache.tiles === tiles) return this.geomCache;
@@ -74,6 +89,69 @@ export class BoardView {
     for (const t of tiles) tileMap.set(`${t.hex.q},${t.hex.r}`, t);
     this.geomCache = { tiles, order, tileMap };
     return this.geomCache;
+  }
+
+  /**
+   * Devuelve (construyendo y cacheando si hace falta) la capa de terreno estatico. null
+   * si no conviene cachear: texturas aun sin cargar, o tablero demasiado grande (ARENA)
+   * donde el offscreen excederia el presupuesto de memoria -> se cae al dibujo en vivo.
+   */
+  private getTerrainLayer(
+    order: { tile: Tile; x: number; y: number }[],
+    tileMap: Map<string, Tile>
+  ): { canvas: HTMLCanvasElement; originX: number; originY: number } | null {
+    const tiles = this.state.currentTiles;
+    if (this.terrainCache && this.terrainCache.tiles === tiles) return this.terrainCache;
+
+    // Las texturas deben estar cargadas; si no, no horneamos (se reintenta al cargar).
+    const texturesReady = Object.values(this.textures).every(
+      (img) => img.complete && img.naturalHeight !== 0
+    );
+    if (!texturesReady || order.length === 0) return null;
+
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const { x, y } of order) {
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    }
+    // Margen para el relleno del hex (ancho/alto iso + relieve de profundidad de drawHex).
+    const mX = this.HEX_SIZE * 2;
+    const mY = this.HEX_SIZE * 1.5;
+    const w = Math.ceil(maxX - minX + mX * 2);
+    const h = Math.ceil(maxY - minY + mY * 2);
+    // Presupuesto: evita offscreens gigantes (p.ej. ARENA ~5400 hexes) -> fallback en vivo.
+    const MAX_SIDE = 8192;
+    const MAX_AREA = 24_000_000;
+    if (w <= 0 || h <= 0 || w > MAX_SIDE || h > MAX_SIDE || w * h > MAX_AREA) return null;
+
+    const off = document.createElement('canvas');
+    off.width = w;
+    off.height = h;
+    const octx = off.getContext('2d');
+    if (!octx) return null;
+    octx.imageSmoothingEnabled = false;
+
+    const originX = minX - mX;
+    const originY = minY - mY;
+    octx.translate(-originX, -originY);
+
+    // Reutilizamos drawHex/drawBiomeTransitions (operan sobre this.ctx) apuntandolos
+    // temporalmente al contexto offscreen. Render sincrono: el swap es seguro.
+    const mainCtx = this.ctx;
+    this.ctx = octx;
+    try {
+      for (const { tile, x, y } of order) {
+        this.drawHex(x, y, this.getBiomeTexture(tile.biome));
+        this.drawBiomeTransitions(tile, x, y, tileMap);
+      }
+    } finally {
+      this.ctx = mainCtx;
+    }
+
+    this.terrainCache = { tiles, canvas: off, originX, originY };
+    return this.terrainCache;
   }
 
   constructor(canvas: HTMLCanvasElement, state: GameState) {
@@ -444,6 +522,14 @@ export class BoardView {
 
     const { order, tileMap } = this.getGeom();
 
+    // Capa de terreno cacheada: solo al ALEJAR (zoom <= 1), que es donde se dibujan muchos
+    // hexes y duele. Al acercar hay pocos hexes visibles -> dibujo vectorial en vivo (mas
+    // nitido). Nunca durante el despliegue (la niebla va acoplada al relieve).
+    const terrain =
+      this.state.match?.status !== 'deployment' && this.state.zoom <= 1
+        ? this.getTerrainLayer(order, tileMap)
+        : null;
+
     this.ctx.save();
     this.ctx.translate(this.CENTER_X, this.CENTER_Y);
     this.ctx.scale(this.state.zoom, this.state.zoom);
@@ -476,6 +562,9 @@ export class BoardView {
       ? this.state.currentTiles.find((t) => t.hex.q === selHex.q && t.hex.r === selHex.r)?.occupant?.id ?? null
       : null;
 
+    // Un solo blit del terreno estatico (reemplaza miles de drawHex + transiciones).
+    if (terrain) this.ctx.drawImage(terrain.canvas, terrain.originX, terrain.originY);
+
     for (const { tile, x, y } of order) {
       if (x < minX || x > maxX || y < minY || y > maxY) continue;
 
@@ -490,8 +579,12 @@ export class BoardView {
       // Niebla de despliegue: casillas fuera de la zona (y no seleccionadas) se oscurecen.
       const fogged = this.state.match?.status === 'deployment' && !isSelected && !isDeploymentZone;
 
-      this.drawHex(x, y, this.getBiomeTexture(tile.biome));
-      this.drawBiomeTransitions(tile, x, y, tileMap);
+      // Hex base + transiciones: solo si NO vienen ya de la capa de terreno cacheada.
+      if (!terrain) {
+        this.drawHex(x, y, this.getBiomeTexture(tile.biome));
+        this.drawBiomeTransitions(tile, x, y, tileMap);
+      }
+      // El relieve se pinta siempre por frame: preserva la oclusion por orden de pintado.
       this.drawRelief(tile, x, y, !!fogged);
 
       // Casilla(s) ocupada(s) por CUALQUIER Pokémon: se tiñen con el color de su jugador
