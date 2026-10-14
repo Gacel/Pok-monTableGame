@@ -519,7 +519,7 @@ export class BoardView {
   private buildDeployPreview(): { hexes: Set<string>; valid: boolean } | null {
     const m = this.state.match;
     if (m?.status !== 'deployment' || !this.state.selectedReserveId || !this.state.hoverHex) return null;
-    const player = m.currentPlayer;
+    const player = this.state.mySlot ?? m.currentPlayer;
     const p = m.reserve?.[player]?.find((r) => r.id === this.state.selectedReserveId);
     if (!p) return null;
 

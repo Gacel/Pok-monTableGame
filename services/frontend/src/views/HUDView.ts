@@ -355,8 +355,15 @@ export class HUDView {
     if (match.status === 'finished' && match.winner) {
       overlay.classList.remove('hidden');
       overlay.classList.add('flex');
-      // El ganador puede ser un equipo ("player2 & player4") → nombres visibles.
       const winners = match.winner.split(' & ');
+      const mySlot = this.state.mySlot ?? 'player1';
+      const iWon = winners.includes(mySlot);
+      const heading = document.getElementById('win-heading');
+      if (heading) {
+        heading.textContent = iWon ? '¡VICTORIA!' : 'DERROTA';
+        heading.className = heading.className.replace(/text-(?:yellow|red)-400/g, '');
+        heading.classList.add(iWon ? 'text-yellow-400' : 'text-red-400');
+      }
       const label = winners.map((p) => this.state.labelFor(p).toUpperCase()).join(' & ');
       text.textContent = `${label} gana la partida`;
       if (rewardsEl) rewardsEl.innerHTML = this.rewardSummaryHtml(match, winners);

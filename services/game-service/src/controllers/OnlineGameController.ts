@@ -142,6 +142,12 @@ export const OnlineGameController = {
     return apply(actor, { type: 'end_turn' }, reply);
   },
 
+  async forceStart(request: FastifyRequest<{ Params: MatchParams }>, reply: FastifyReply) {
+    const actor = await resolveActor(request, reply);
+    if (!actor) return;
+    return apply(actor, { type: 'forceStart' }, reply);
+  },
+
   async abandon(request: FastifyRequest<{ Params: MatchParams }>, reply: FastifyReply) {
     const actor = await resolveActor(request, reply);
     if (!actor) return;

@@ -180,6 +180,11 @@ export async function gameRoutes(app: FastifyInstance): Promise<void> {
     OnlineGameController.endTurn
   );
   app.post(
+    '/api/game/:matchId/force-start',
+    { schema: { params: matchParamsSchema } },
+    OnlineGameController.forceStart
+  );
+  app.post(
     '/api/game/:matchId/abandon',
     { schema: { params: matchParamsSchema } },
     OnlineGameController.abandon
