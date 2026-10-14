@@ -39,7 +39,7 @@ export class MainMenuView {
       `
       ${panelTitle('MENÚ PRINCIPAL')}
 
-      <!-- Barra del entrenador -->
+      <!-- Barra del entrenador (ancho completo) -->
       ${panelCard(
         `
         <div class="flex justify-between items-center gap-6">
@@ -57,36 +57,44 @@ export class MainMenuView {
         'mb-6'
       )}
 
-      <!-- Secciones en lista vertical -->
-      ${panelCard(
-        `<div class="flex flex-col gap-3 sm:gap-4 w-full max-w-xl">
-          ${menuButton({ id: 'btn-play', label: 'JUGAR', icon: '🎮', sublabel: 'Un jugador (vs IA) o multijugador', color: 'red' })}
-          ${menuButton({ id: 'btn-community', label: 'COMUNIDAD', icon: '👥', sublabel: 'Amigos · añadir · enviar regalo', color: 'blue' })}
-          ${menuButton({ id: 'btn-shop', label: 'TIENDA', icon: '🛒', sublabel: 'Cosméticos · pokéballs · recuperar', color: 'yellow' })}
-          ${menuButton({ id: 'btn-auction', label: 'CASA DE SUBASTAS', icon: '⚖️', sublabel: 'Todo lo comercializable', color: 'purple' })}
-        </div>`,
-        'flex flex-col items-center'
-      )}
+      <!-- Layout a dos columnas: ranking izq · menú der -->
+      <div class="flex flex-col sm:flex-row gap-4 sm:gap-6 w-full">
 
-      <!-- Ranking inline -->
-      ${panelCard(
-        `<h3 class="text-black text-center mb-3 border-b-2 border-gray-300 pb-2" style="${FONT} font-size:clamp(10px, 2vw, 13px);">🏆 RANKING</h3>
-         <p class="text-gray-400 text-center mb-2" style="${FONT} font-size:clamp(6px, 1.2vw, 8px);">Active trainers · last 48h</p>
-         <div id="ranking-slot">
-           <p class="text-gray-400 text-center animate-pulse" style="${FONT} font-size:9px;">Loading...</p>
-         </div>`,
-        'mt-4'
-      )}
+        <!-- Columna izquierda: Ranking -->
+        <div class="w-full sm:w-5/12">
+          ${panelCard(
+            `<h3 class="text-black text-center mb-3 border-b-2 border-gray-300 pb-2" style="${FONT} font-size:clamp(10px, 2vw, 13px);">🏆 RANKING</h3>
+             <p class="text-gray-400 text-center mb-2" style="${FONT} font-size:clamp(6px, 1.2vw, 8px);">Active trainers · last 48h</p>
+             <div id="ranking-slot">
+               <p class="text-gray-400 text-center animate-pulse" style="${FONT} font-size:9px;">Loading...</p>
+             </div>`,
+            'h-full'
+          )}
+        </div>
 
-      <!-- Acciones secundarias -->
-      <div class="flex items-center gap-6 mt-8">
-        <button id="btn-settings" class="text-white hover:text-yellow-300 flex items-center gap-2" style="${FONT} font-size:13px;">⚙️ CONFIGURACIÓN</button>
-        <span class="text-gray-500">·</span>
-        <button id="btn-logout" class="text-white hover:text-red-400 underline" style="${FONT} font-size:13px;">CERRAR SESIÓN</button>
+        <!-- Columna derecha: Menú + acciones -->
+        <div class="w-full sm:w-7/12 flex flex-col gap-4">
+          ${panelCard(
+            `<div class="flex flex-col gap-3 sm:gap-4 w-full">
+              ${menuButton({ id: 'btn-play', label: 'JUGAR', icon: '🎮', sublabel: 'Un jugador (vs IA) o multijugador', color: 'red' })}
+              ${menuButton({ id: 'btn-community', label: 'COMUNIDAD', icon: '👥', sublabel: 'Amigos · añadir · enviar regalo', color: 'blue' })}
+              ${menuButton({ id: 'btn-shop', label: 'TIENDA', icon: '🛒', sublabel: 'Cosméticos · pokéballs · recuperar', color: 'yellow' })}
+              ${menuButton({ id: 'btn-auction', label: 'CASA DE SUBASTAS', icon: '⚖️', sublabel: 'Todo lo comercializable', color: 'purple' })}
+            </div>`,
+            'flex flex-col items-center'
+          )}
+
+          <div class="flex items-center justify-center gap-6">
+            <button id="btn-settings" class="text-white hover:text-yellow-300 flex items-center gap-2" style="${FONT} font-size:13px;">⚙️ CONFIGURACIÓN</button>
+            <span class="text-gray-500">·</span>
+            <button id="btn-logout" class="text-white hover:text-red-400 underline" style="${FONT} font-size:13px;">CERRAR SESIÓN</button>
+          </div>
+        </div>
+
       </div>
 
       <!-- Legal links -->
-      <div class="flex items-center gap-4 mt-4">
+      <div class="flex items-center gap-4 mt-6">
         <button id="btn-privacy" class="text-gray-400 hover:text-yellow-300 underline" style="${FONT} font-size:9px;">Privacy Policy</button>
         <span class="text-gray-600">·</span>
         <button id="btn-terms" class="text-gray-400 hover:text-yellow-300 underline" style="${FONT} font-size:9px;">Terms of Service</button>
