@@ -600,9 +600,11 @@ export class BoardView {
         ? tile.occupant?.id === selOccId
         : !!(selHex && selHex.q === tile.hex.q && selHex.r === tile.hex.r);
 
+      const deploySlot = this.state.mySlot ?? this.state.match?.currentPlayer;
       const isDeploymentZone =
         this.state.match?.status === 'deployment' &&
-        this.state.match?.deploymentZones?.[this.state.match.currentPlayer]?.some(z => z.q === tile.hex.q && z.r === tile.hex.r);
+        deploySlot != null &&
+        this.state.match?.deploymentZones?.[deploySlot]?.some(z => z.q === tile.hex.q && z.r === tile.hex.r);
 
       // Niebla de despliegue: casillas fuera de la zona (y no seleccionadas) se oscurecen.
       const fogged = this.state.match?.status === 'deployment' && !isSelected && !isDeploymentZone;

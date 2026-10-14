@@ -27,6 +27,8 @@ import { SettingsView } from './views/hub/SettingsView';
 import { LobbyView } from './views/hub/LobbyView';
 import { DraftView } from './views/hub/DraftView';
 import { WelcomeView } from './views/hub/WelcomeView';
+import { PrivacyPolicyView } from './views/hub/PrivacyPolicyView';
+import { TermsOfServiceView } from './views/hub/TermsOfServiceView';
 import { playClickSound } from './utils/audio';
 import { gameAlert } from './views/hub/GameModal';
 
@@ -93,7 +95,7 @@ function showWelcome() {
   }
 }
 
-function showLogin() {
+export function showLogin() {
   resetHubLayer();
   const loginView = new LoginView(hubLayer);
   loginView.render();
@@ -170,6 +172,16 @@ export function showLocalSetup() {
 export function showSettings() {
   resetHubLayer();
   new SettingsView(hubLayer).render();
+}
+
+export function showPrivacyPolicy(onBack: () => void = showMainMenu) {
+  resetHubLayer();
+  new PrivacyPolicyView(hubLayer, onBack).render();
+}
+
+export function showTermsOfService(onBack: () => void = showMainMenu) {
+  resetHubLayer();
+  new TermsOfServiceView(hubLayer, onBack).render();
 }
 
 // Resolución interna del área de juego

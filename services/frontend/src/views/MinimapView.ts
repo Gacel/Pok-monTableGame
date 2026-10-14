@@ -137,7 +137,8 @@ export class MinimapView {
 
     const cell = Math.max(2, this.boardView.HEX_SIZE * 1.9 * scale);
     const isDeployment = this.state.match?.status === 'deployment';
-    const deploymentZones = this.state.match?.deploymentZones?.[this.state.match.currentPlayer] ?? [];
+    const deploySlot = this.state.mySlot ?? this.state.match?.currentPlayer;
+    const deploymentZones = (isDeployment && deploySlot != null ? this.state.match?.deploymentZones?.[deploySlot] : null) ?? [];
 
     // Sombreado de la fase de despliegue: oscurece las casillas FUERA de la zona
     // del jugador actual (sobre la capa de biomas ya pintada).
@@ -188,7 +189,7 @@ export class MinimapView {
     const grouped = new Map<string, { occ: NonNullable<Tile['occupant']>; sx: number; sy: number; n: number }>();
     for (const t of tiles) {
       if (!t.occupant) continue;
-      if (isDeployment && t.occupant.playerId !== this.state.match?.currentPlayer) continue;
+      if (isDeployment && deploySlot != null && t.occupant.playerId !== deploySlot) continue;
       // Misma ocultación que el tablero: no revelar en el minimapa los ocultos del
       // enemigo (vs-IA). `hiddenAllySlots` null en online/hot-seat → sin filtro.
       const allies = this.state.hiddenAllySlots;

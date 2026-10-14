@@ -122,13 +122,9 @@ export class HUDView {
   }
 
   private renderDeploymentPanel(panel: HTMLElement, match: NonNullable<GameState['match']>): void {
-    const isMe = this.state.mySlot === null || this.state.mySlot === match.currentPlayer;
-    if (!isMe) {
-      panel.classList.add('hidden');
-      return;
-    }
+    const deploySlot = this.state.mySlot ?? match.currentPlayer;
 
-    const myReserve = match.reserve?.[match.currentPlayer] ?? [];
+    const myReserve = match.reserve?.[deploySlot] ?? [];
     if (myReserve.length === 0) {
       panel.classList.remove('hidden');
       panel.innerHTML = `

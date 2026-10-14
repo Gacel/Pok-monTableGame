@@ -477,7 +477,8 @@ export class GameController {
 
     if (!oldPlayer || oldPlayer !== newState.currentPlayer || oldTurn !== newState.turn) {
       if (newState.status === 'deployment' && newState.deploymentZones) {
-        const zones = newState.deploymentZones[newState.currentPlayer];
+        const deploySlot = this.state.mySlot ?? newState.currentPlayer;
+        const zones = newState.deploymentZones[deploySlot];
         if (zones && zones.length > 0) {
            let sumQ = 0, sumR = 0;
            for (const z of zones) { sumQ += z.q; sumR += z.r; }
@@ -726,14 +727,8 @@ export class GameController {
       return;
     }
     
-    // En fase de despliegue, también debes ser el jugador de turno o es local (todos los turnos permitidos al ser compartidos, pero el match.currentPlayer dicta quién despliega ahora)
-    if (match.status === 'deployment') {
-      const isMe = this.state.mySlot === null || this.state.mySlot === match.currentPlayer;
-      if (!isMe) {
-        this.hudView.flashToast(`Turno de despliegue de ${this.turnOwnerLabel()}`);
-        return;
-      }
-    }
+    // Despliegue simultáneo: ambos jugadores pueden colocar a la vez.
+    // Solo se bloquea si no hay slot asignado en online (espectador).
 
     const rect = this.canvas.getBoundingClientRect();
     const scaleX = this.canvas.width / rect.width;
@@ -755,7 +750,8 @@ export class GameController {
 
     if (match.status === 'deployment') {
       if (this.state.selectedReserveId) {
-        const zones = match.deploymentZones?.[match.currentPlayer] ?? [];
+        const myDeploySlot = this.state.mySlot ?? match.currentPlayer;
+        const zones = match.deploymentZones?.[myDeploySlot] ?? [];
         const valid = zones.some(z => z.q === hex.q && z.r === hex.r);
         if (valid) {
           await this.performDeploy(this.state.selectedReserveId, hex);

@@ -1,4 +1,5 @@
 import { authState } from '../../auth/AuthState';
+import { showPrivacyPolicy, showTermsOfService, showLogin } from '../../main';
 
 const FONT = "font-family: 'Press Start 2P', monospace;";
 const inputCls =
@@ -28,11 +29,18 @@ export class LoginView {
               POKé<span class="block text-white mt-3" style="font-size: clamp(14px, 4vw, 22px);">TRANSCENDENCE</span>
             </h2>
             <div id="auth-body"></div>
-            <p class="mt-6 text-[9px] text-gray-400 text-center" style="${FONT}">© 2026 jvalle-d, sbenitez</p>
+            <p class="mt-6 text-[9px] text-gray-400 text-center" style="${FONT}">© 2026 jesumore, crmunoz-, sbenitez & jvalle-d</p>
+            <p class="mt-1 text-[8px] text-gray-400 text-center" style="${FONT}">Transcendence Project, 42Malaga Fundacion Telefonica</p>
+            <p class="mt-2 text-[7px] text-gray-500 text-center flex gap-3 justify-center" style="${FONT}">
+              <a id="link-privacy" class="underline cursor-pointer hover:text-yellow-300">Privacy Policy</a>
+              <a id="link-terms" class="underline cursor-pointer hover:text-yellow-300">Terms of Service</a>
+            </p>
           </div>
         </div>
       </div>`;
     this.renderBody();
+    document.getElementById('link-privacy')?.addEventListener('click', () => showPrivacyPolicy(showLogin));
+    document.getElementById('link-terms')?.addEventListener('click', () => showTermsOfService(showLogin));
   }
 
   private renderBody(): void {

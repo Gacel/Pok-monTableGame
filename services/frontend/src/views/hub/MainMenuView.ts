@@ -6,6 +6,8 @@ import {
   showAuctionHouse,
   showSettings,
   showInventory,
+  showPrivacyPolicy,
+  showTermsOfService,
 } from '../../main';
 import { FONT, hubPanel, panelCard, panelTitle, menuButton } from './panel';
 
@@ -68,6 +70,13 @@ export class MainMenuView {
         <span class="text-gray-500">·</span>
         <button id="btn-logout" class="text-white hover:text-red-400 underline" style="${FONT} font-size:13px;">CERRAR SESIÓN</button>
       </div>
+
+      <!-- Legal links -->
+      <div class="flex items-center gap-4 mt-4">
+        <button id="btn-privacy" class="text-gray-400 hover:text-yellow-300 underline" style="${FONT} font-size:9px;">Privacy Policy</button>
+        <span class="text-gray-600">·</span>
+        <button id="btn-terms" class="text-gray-400 hover:text-yellow-300 underline" style="${FONT} font-size:9px;">Terms of Service</button>
+      </div>
       `,
       { minHeight: 820 }
     );
@@ -79,5 +88,7 @@ export class MainMenuView {
     document.getElementById('btn-auction')?.addEventListener('click', () => showAuctionHouse());
     document.getElementById('btn-settings')?.addEventListener('click', () => showSettings());
     document.getElementById('btn-logout')?.addEventListener('click', () => authState.logout());
+    document.getElementById('btn-privacy')?.addEventListener('click', () => showPrivacyPolicy());
+    document.getElementById('btn-terms')?.addEventListener('click', () => showTermsOfService());
   }
 }

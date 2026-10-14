@@ -1,4 +1,5 @@
 import { playClickSound } from '../../utils/audio';
+import { showPrivacyPolicy, showTermsOfService, showLogin } from '../../main';
 
 export class WelcomeView {
   private container: HTMLElement;
@@ -290,7 +291,14 @@ export class WelcomeView {
           </div>
         </div>
 
-        <p class="absolute bottom-6 right-6 text-xs text-white z-10 drop-shadow-lg" style="font-family: 'Press Start 2P', monospace; text-shadow: 2px 2px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000;">© 2026 jvalle-d, sbenitez</p>
+        <div class="absolute bottom-6 right-6 text-xs text-white z-10 drop-shadow-lg text-right" style="font-family: 'Press Start 2P', monospace; text-shadow: 2px 2px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000;">
+          <p>© 2026 jesumore, crmunoz-, sbenitez & jvalle-d</p>
+          <p class="mt-1" style="font-size: 0.6rem;">Transcendence Project, 42Malaga Fundacion Telefonica</p>
+          <p class="mt-2 flex gap-3 justify-end" style="font-size: 0.5rem;">
+            <a id="link-privacy" class="underline cursor-pointer hover:text-yellow-300 pointer-events-auto">Privacy Policy</a>
+            <a id="link-terms" class="underline cursor-pointer hover:text-yellow-300 pointer-events-auto">Terms of Service</a>
+          </p>
+        </div>
         
         <!-- Skip button -->
         <button id="skip-btn" class="hidden absolute bottom-24 right-0 bg-gray-900/90 border-4 border-gray-500 border-r-0 text-white px-5 py-4 z-50 hover:bg-gray-700 transition-colors flex items-center gap-4 text-xs" style="font-family: 'Press Start 2P', monospace; box-shadow: -4px 4px 0 rgba(0,0,0,0.8);">
@@ -494,5 +502,24 @@ export class WelcomeView {
       }
     };
     document.addEventListener('keydown', keydownHandler);
+
+    const welcomeLayer = this.container;
+    const clearWelcome = () => {
+      clearTimeout(readyTimeout);
+      document.removeEventListener('keydown', keydownHandler);
+      audio.pause();
+      welcomeLayer.innerHTML = '';
+      welcomeLayer.classList.add('pointer-events-none');
+    };
+    document.getElementById('link-privacy')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      clearWelcome();
+      showPrivacyPolicy(showLogin);
+    });
+    document.getElementById('link-terms')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      clearWelcome();
+      showTermsOfService(showLogin);
+    });
   }
 }
