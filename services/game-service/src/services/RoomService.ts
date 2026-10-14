@@ -182,6 +182,9 @@ export const RoomService = {
       const teams: Record<string, string[]> = {};
       for (const p of players) teams[p.slot] = p.team!;
       const game = await matchManager.createGame(matchId, teams, row.game_mode);
+      // La partida ya es autoritativa: marca la sala como `active` para que
+      // los clientes (WS `room` y respaldo REST) salgan de la espera y entren al tablero.
+      await MatchModel.updateRoomStatus(matchId, 'active');
       hub.broadcast(matchId, { type: 'room', room: toRoomInfo(await loadRoom(matchId), null) });
       hub.broadcastPersonalized(matchId, (ctx) => ({ type: 'state', state: game.getStateDTO(ctx.slot ?? undefined) }));
     } else {
