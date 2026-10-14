@@ -1,15 +1,23 @@
 # Makefile — atajos de desarrollo local (ver docs/02-LOCAL_DEV.md)
 # Uso: make up | make down | make logs s=hello | make sh s=hello
 
-COMPOSE := docker compose
+# Autodetecta Docker Compose v2 (plugin "docker compose") o v1 (binario "docker-compose")
+COMPOSE := $(shell docker compose version >/dev/null 2>&1 && echo "docker compose" || echo "docker-compose")
 
 .DEFAULT_GOAL := help
 
-.PHONY: help up down ps logs sh rebuild test clean fmt lint typecheck
+.PHONY: help up up-d down ps logs sh rebuild test clean fmt lint typecheck install guard-s
 
 help: ## Muestra esta ayuda
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
+
+# Verifica que se haya pasado s=<servicio> en los targets que lo requieren
+guard-s:
+	@if [ -z "$(s)" ]; then \
+		echo "Error: falta el servicio. Uso: make $(firstword $(MAKECMDGOALS)) s=<servicio> (p.ej. game-service)"; \
+		exit 1; \
+	fi
 
 up: ## Levanta todo el stack (build)
 	$(COMPOSE) up --build
@@ -23,26 +31,32 @@ down: ## Para y elimina contenedores y red
 ps: ## Estado de los servicios
 	$(COMPOSE) ps
 
-logs: ## Logs en vivo de un servicio: make logs s=hello
+logs: guard-s ## Logs en vivo de un servicio: make logs s=hello
 	$(COMPOSE) logs -f $(s)
 
-sh: ## Shell dentro de un contenedor: make sh s=hello
+sh: guard-s ## Shell dentro de un contenedor: make sh s=hello
 	$(COMPOSE) exec $(s) sh
 
-rebuild: ## Reconstruye un servicio: make rebuild s=hello
+rebuild: guard-s ## Reconstruye un servicio: make rebuild s=hello
 	$(COMPOSE) up --build -d $(s)
 
-test: ## Tests de un servicio: make test s=hello
+test: guard-s ## Tests de un servicio: make test s=hello
 	$(COMPOSE) run --rm $(s) npm test
 
 clean: ## Para todo y BORRA volúmenes (resetea las BD)
 	$(COMPOSE) down -v
 
-fmt: ## Formatea el código
+install: ## Instala dependencias del monorepo (node_modules)
+	npm install
+
+node_modules: package.json
+	npm install
+
+fmt: node_modules ## Formatea el código
 	npm run format
 
-lint: ## Linter
+lint: node_modules ## Linter
 	npm run lint
 
-typecheck: ## Comprobación de tipos
+typecheck: node_modules ## Comprobación de tipos
 	npm run typecheck
